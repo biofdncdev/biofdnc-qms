@@ -1,8 +1,9 @@
 [build]
-  base = "frontend"
-  command = "npm ci && npm run build"
-  publish = "dist/qms-app"
+  # Empty base; we will run commands pointing to frontend
+  publish = "frontend/dist/qms-app"
+  command = "npm --prefix frontend ci && CI=false npm --prefix frontend run build"
 
+# Ensure SPA routing
 [[redirects]]
   from = "/*"
   to = "/index.html"
