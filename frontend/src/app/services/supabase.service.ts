@@ -9,18 +9,24 @@ type G = typeof globalThis & { __supabase?: SupabaseClient };
   providedIn: 'root',
 })
 export class SupabaseService {
-  private _client: SupabaseClient;
+  private _client?: SupabaseClient;
 
-  constructor() {
+  constructor() {}
+
+  private ensureClient(): SupabaseClient {
+    if (this._client) return this._client;
+
     const g = globalThis as G;
     if (!g.__supabase) {
-      // globalThis에 클라이언트가 없으면 최초 한 번만 생성합니다.
+      if (!environment.supabaseUrl || !environment.supabaseKey) {
+        throw new Error('Supabase environment variables are missing');
+      }
       g.__supabase = createClient(
         environment.supabaseUrl,
-        environment.supabaseKey, // 기존 environment 파일과 키 이름 일치
+        environment.supabaseKey,
         {
           auth: {
-            storage: localStorage, // window.localStorage -> localStorage
+            storage: localStorage,
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
@@ -28,42 +34,42 @@ export class SupabaseService {
         }
       );
     }
-    // 생성되었거나 이미 존재하는 클라이언트를 서비스 인스턴스에 할당합니다.
     this._client = g.__supabase;
+    return this._client;
   }
 
   getClient() {
-    return this._client;
+    return this.ensureClient();
   }
 
   // Auth helpers
   async signIn(email: string, password: string) {
-    return this._client.auth.signInWithPassword({ email, password });
+    return this.ensureClient().auth.signInWithPassword({ email, password });
   }
 
   async signOut() {
-    return this._client.auth.signOut();
+    return this.ensureClient().auth.signOut();
   }
 
   async getCurrentUser(): Promise<User | null> {
-    const { data } = await this._client.auth.getUser();
+    const { data } = await this.ensureClient().auth.getUser();
     return data.user ?? null;
   }
 
   // Profiles
   async getUserProfile(id: string) {
-    return this._client.from('users').select('id,name,email,role,created_at,updated_at,last_sign_in_at,is_online').eq('id', id).single();
+    return this.ensureClient().from('users').select('id,name,email,role,created_at,updated_at,last_sign_in_at,is_online').eq('id', id).single();
   }
 
   async listUsers() {
-    return this._client.from('users').select('id,name,email,role,created_at,updated_at,last_sign_in_at,is_online').order('created_at', { ascending: false });
+    return this.ensureClient().from('users').select('id,name,email,role,created_at,updated_at,last_sign_in_at,is_online').order('created_at', { ascending: false });
   }
 
   async updateUserRole(id: string, role: string) {
-    return this._client.from('users').update({ role }).eq('id', id);
+    return this.ensureClient().from('users').update({ role }).eq('id', id);
   }
 
   async updateLoginState(id: string, isOnline: boolean) {
-    return this._client.from('users').update({ is_online: isOnline, last_sign_in_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
+    return this.ensureClient().from('users').update({ is_online: isOnline, last_sign_in_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
   }
 }
