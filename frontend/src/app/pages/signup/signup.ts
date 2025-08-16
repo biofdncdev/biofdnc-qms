@@ -77,48 +77,34 @@ export class SignupComponent {
       const { name, email, password } = this.signupForm.value;
 
       try {
-        // 1. Supabase Auth로 사용자 생성
-        const { data: authData, error: authError } = await this.supabaseService
+        // Supabase Auth로 사용자 생성
+        // 이제 'users' 테이블 insert는 DB 트리거가 자동으로 처리합니다.
+        const { error } = await this.supabaseService
           .getClient()
           .auth.signUp({
             email: email,
             password: password,
+            options: {
+              data: {
+                name: name, // 추가 정보를 data 객체에 담아 전달
+              }
+            }
           });
 
-        if (authError) {
-          throw authError;
+        if (error) {
+          throw error;
         }
+        
+        // 회원가입 성공 시 이메일 확인 안내 또는 로그인 페이지로 이동
+        // 여기서는 로그인 페이지로 바로 이동시킵니다.
+        alert('회원가입에 성공했습니다! 로그인 페이지로 이동합니다.');
+        this.router.navigate(['/login']);
 
-        if (authData.user) {
-          // 2. 'users' 테이블에 추가 정보 저장
-          const now = new Date().toISOString();
-          const { error: dbError } = await this.supabaseService
-            .getClient()
-            .from('users')
-            .insert([
-              {
-                id: authData.user.id, // Auth user id와 동일하게 설정
-                name: name,
-                email: email,
-                created_at: now,
-                updated_at: now,
-                last_sign_in_at: now,
-                is_online: true,
-              },
-            ]);
-
-          if (dbError) {
-            throw dbError;
-          }
-
-          // 회원가입 성공 시 로그인 페이지로 이동
-          this.router.navigate(['/login']);
-        }
       } catch (error: any) {
-        if (error.message.includes('unique constraint')) {
-          this.errorMessage = '이미 사용 중인 이메일입니다.';
+        if (error.message.includes('User already registered')) {
+            this.errorMessage = '이미 사용 중인 이메일입니다.';
         } else {
-          this.errorMessage = '회원가입 중 오류가 발생했습니다.';
+            this.errorMessage = `회원가입 중 오류가 발생했습니다: ${error.message}`;
         }
         console.error('Signup error:', error);
       }
