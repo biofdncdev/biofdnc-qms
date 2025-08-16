@@ -1,0 +1,38 @@
+<div class="signup-container">
+  <div class="header">
+    <span>BIO-FD&C QMS</span>
+  </div>
+  <div class="signup-box">
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>회원가입</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <form>
+          <mat-form-field appearance="outline">
+            <mat-label>이름</mat-label>
+            <input matInput required />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>이메일</mat-label>
+            <input matInput type="email" required />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>비밀번호</mat-label>
+            <input matInput type="password" required />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>비밀번호 확인</mat-label>
+            <input matInput type="password" required />
+          </mat-form-field>
+          <button mat-flat-button color="primary" class="signup-button">
+            가입하기
+          </button>
+        </form>
+      </mat-card-content>
+      <mat-card-actions>
+        <a routerLink="/login">이미 계정이 있으신가요? 로그인</a>
+      </mat-card-actions>
+    </mat-card>
+  </div>
+</div>

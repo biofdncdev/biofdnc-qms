@@ -1,28 +1,23 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
-
-// Angular Material Modules
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
+import { RouterLink } from '@angular/router';
 
 @Component({
-  selector: 'app-login',
+  selector: 'app-signup',
   standalone: true,
   imports: [
     CommonModule,
-    RouterModule,
     MatCardModule,
     MatFormFieldModule,
     MatInputModule,
-    MatButtonModule
+    MatButtonModule,
+    RouterLink,
   ],
-  // 실제 파일 이름과 일치시킵니다.
-  templateUrl: './login.html',
-  styleUrls: ['./login.scss']
+  templateUrl: './signup.html',
+  styleUrls: ['./signup.scss'],
 })
-export class LoginComponent {
-
-}
+export class SignupComponent {}

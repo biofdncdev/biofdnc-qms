@@ -1,0 +1,63 @@
+.signup-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 20px 40px;
+  font-weight: bold;
+  font-size: 1.2rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.signup-box {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-grow: 1;
+}
+
+mat-card {
+  width: 400px;
+  padding: 20px;
+}
+
+mat-card-header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+mat-card-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+mat-form-field {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.signup-button {
+  width: 100%;
+  height: 50px;
+  margin-top: 10px;
+}
+
+mat-card-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  a {
+    font-size: 0.9rem;
+    color: #555;
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}

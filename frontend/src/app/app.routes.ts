@@ -1,8 +1,10 @@
 import { Routes } from '@angular/router';
-import { LoginComponent } from './pages/login/login'; // .ts 확장자는 생략합니다.
+// '.component' 부분을 제거하여 실제 파일 이름과 일치시킵니다.
+import { LoginComponent } from './pages/login/login';
+import { SignupComponent } from './pages/signup/signup';
 
 export const routes: Routes = [
-  // 기본 경로를 login 컴포넌트로 설정
-  { path: '', redirectTo: '/login', pathMatch: 'full' },
-  { path: 'login', component: LoginComponent }
+  { path: '', redirectTo: 'login', pathMatch: 'full' },
+  { path: 'login', component: LoginComponent },
+  { path: 'signup', component: SignupComponent },
 ];
