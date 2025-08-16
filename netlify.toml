@@ -1,0 +1,6 @@
+[build]
+  base = "frontend"
+  publish = "dist/qms-app"
+  command = "npm run build"
+
+# SPA redirects are handled via public/_redirects
