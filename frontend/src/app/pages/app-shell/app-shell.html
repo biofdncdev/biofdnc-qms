@@ -1,0 +1,72 @@
+<div class="app-shell">
+  <aside class="nav-rail">
+    <button class="rail-item" [class.active]="selected() === 'home'" mat-icon-button matTooltip="Home" (mouseenter)="selected.set('home')" (click)="navigate('home','/app/home'); openLeft()">
+      <mat-icon>home</mat-icon>
+      <span>Home</span>
+    </button>
+    <button class="rail-item" [class.active]="selected() === 'ingredient'" mat-icon-button matTooltip="Ingredient" (mouseenter)="selected.set('ingredient')" (click)="openLeft('ingredient')">
+      <mat-icon>inventory_2</mat-icon>
+      <span>Ingredient</span>
+    </button>
+    <button class="rail-item" [class.active]="selected() === 'product'" mat-icon-button matTooltip="Product" (mouseenter)="selected.set('product')" (click)="openLeft('product')">
+      <mat-icon>category</mat-icon>
+      <span>Product</span>
+    </button>
+    <button class="rail-item" [class.active]="selected() === 'standard'" mat-icon-button matTooltip="Standard" (mouseenter)="selected.set('standard')" (click)="openLeft('standard')">
+      <mat-icon>tune</mat-icon>
+      <span>Standard</span>
+    </button>
+    <button class="rail-item" [class.active]="selected() === 'record'" mat-icon-button matTooltip="Record" (mouseenter)="selected.set('record')" (click)="openLeft('record')">
+      <mat-icon>description</mat-icon>
+      <span>Record</span>
+    </button>
+    <button class="rail-item" [class.active]="selected() === 'audit'" mat-icon-button matTooltip="Audit" (mouseenter)="selected.set('audit')" (click)="openLeft('audit')">
+      <mat-icon>fact_check</mat-icon>
+      <span>Audit</span>
+    </button>
+    <button class="rail-item" [class.active]="selected() === 'user'" mat-icon-button matTooltip="User" (mouseenter)="selected.set('user')" (click)="openLeft('user')">
+      <mat-icon>group</mat-icon>
+      <span>User</span>
+    </button>
+
+    <div class="rail-spacer"></div>
+
+    <div class="account">
+      <button mat-icon-button (click)="openAccountMenu()">
+        <mat-icon>account_circle</mat-icon>
+      </button>
+    </div>
+  </aside>
+
+  <section class="content">
+    <header class="topbar">
+      <div class="brand">BIO-FD&C QMS</div>
+    </header>
+
+    <main class="viewport">
+      <router-outlet></router-outlet>
+    </main>
+  </section>
+
+  <!-- Left-origin sheet for section menus -->
+  <mat-sidenav-container class="left-sidenav" hasBackdrop [style.visibility]="leftOpen ? 'visible' : 'hidden'">
+    <mat-sidenav mode="over" position="start" [(opened)]="leftOpen">
+      <div class="side-menu">
+        <div class="side-title">{{ selected() | titlecase }}</div>
+        <a class="side-link" *ngFor="let item of sectionMenu" [class.selected]="item.selected" (click)="item.onClick && item.onClick()">{{ item.label }}</a>
+      </div>
+    </mat-sidenav>
+  </mat-sidenav-container>
+
+  <!-- Account-only menu on right -->
+  <mat-sidenav-container class="right-sidenav" hasBackdrop [style.visibility]="accountOpen ? 'visible' : 'hidden'">
+    <mat-sidenav mode="over" position="end" [(opened)]="accountOpen">
+      <div class="side-menu">
+        <div class="side-title">계정</div>
+        <a class="side-link" routerLink="/app/profile">로그인 프로필</a>
+        <a class="side-link" *ngIf="isAdmin" routerLink="/app/admin/roles">사용자정보(관리자)</a>
+        <a class="side-link logout" (click)="logout()">로그아웃</a>
+      </div>
+    </mat-sidenav>
+  </mat-sidenav-container>
+</div>

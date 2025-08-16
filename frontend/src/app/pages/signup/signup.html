@@ -19,12 +19,15 @@
 
           <mat-form-field appearance="outline">
             <mat-label>이메일</mat-label>
-            <input matInput formControlName="email" type="email" required />
-            <mat-error *ngIf="email?.errors?.['required']">
+            <input matInput formControlName="email" type="email" required [errorStateMatcher]="immediateMatcher" />
+            <mat-error *ngIf="email?.errors?.['required'] && (email?.touched || email?.dirty)">
               이메일은 필수 항목입니다.
             </mat-error>
-            <mat-error *ngIf="email?.errors?.['email']">
+            <mat-error *ngIf="email?.errors?.['email'] && email?.dirty">
               올바른 이메일 형식이 아닙니다.
+            </mat-error>
+            <mat-error *ngIf="email?.errors?.['duplicate']">
+              이미 사용 중인 이메일입니다.
             </mat-error>
           </mat-form-field>
 
@@ -35,8 +38,8 @@
 
           <mat-form-field appearance="outline">
             <mat-label>비밀번호 확인</mat-label>
-            <input matInput formControlName="confirmPassword" type="password" required />
-            <mat-error *ngIf="confirmPassword?.errors?.['passwordMismatch']">
+            <input matInput formControlName="confirmPassword" type="password" required [errorStateMatcher]="immediateMatcher" />
+            <mat-error *ngIf="confirmPassword?.errors?.['passwordMismatch'] && confirmPassword?.dirty">
               비밀번호가 일치하지 않습니다.
             </mat-error>
           </mat-form-field>
