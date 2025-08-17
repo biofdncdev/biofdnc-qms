@@ -38,7 +38,7 @@ interface AuditDate { value: string; label: string; }
                 <span class="box"><span class="tick" *ngIf="it.done">✔</span></span>
               </label>
               <div class="meta" *ngIf="it.doneBy">{{ it.doneBy }} · {{ it.doneAt }}</div>
-              <select [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)">
+              <select [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" [ngClass]="statusClass(it.status)">
                 <option value="pending">준비중 / Pending</option>
                 <option value="in-progress">진행중 / In progress</option>
                 <option value="on-hold">보류 / On hold</option>
@@ -46,6 +46,8 @@ interface AuditDate { value: string; label: string; }
                 <option value="impossible">불가 / Not possible</option>
                 <option value="done">완료 / Done</option>
               </select>
+              <span class="save-badge" *ngIf="saving[it.id]==='saving'">저장중…</span>
+              <span class="save-badge saved" *ngIf="saving[it.id]==='saved'">저장됨</span>
             </div>
             <div class="note">
               <textarea [(ngModel)]="it.note" (blur)="saveProgress(it)" rows="2" placeholder="비고 / Notes"></textarea>
@@ -147,6 +149,15 @@ interface AuditDate { value: string; label: string; }
     .state{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     .state .meta{ color:#475569; font-size:.85em; }
     select{ padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; }
+    /* 상태별 색상 */
+    .state select.status-pending{ background:#fff7ed; border-color:#f59e0b; color:#92400e; }
+    .state select.status-in-progress{ background:#eff6ff; border-color:#60a5fa; color:#1d4ed8; }
+    .state select.status-on-hold{ background:#f3f4f6; border-color:#9ca3af; color:#374151; }
+    .state select.status-na{ background:#f8fafc; border-color:#cbd5e1; color:#475569; }
+    .state select.status-impossible{ background:#fee2e2; border-color:#ef4444; color:#991b1b; }
+    .state select.status-done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
+    .save-badge{ margin-left:6px; font-size:.85em; color:#64748b; }
+    .save-badge.saved{ color:#16a34a; }
     textarea{ width:100%; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
 
     .item .details{ grid-column: 1 / -1; overflow:hidden; }
@@ -250,6 +261,7 @@ export class AuditGivaudanComponent {
 
   async saveProgress(it: any){
     try{
+      this.setSaving(it.id, 'saving');
       const payload = {
         number: it.id,
         note: it.note || null,
@@ -259,6 +271,8 @@ export class AuditGivaudanComponent {
         updated_by_name: this.userDisplay,
       };
       await this.supabase.upsertGivaudanProgress(payload);
+      this.setSaving(it.id, 'saved');
+      setTimeout(()=>this.setSaving(it.id,'idle'), 1200);
     }catch{}
   }
 
@@ -287,5 +301,19 @@ export class AuditGivaudanComponent {
   @HostListener('document:keydown.escape') onEsc(){
     if(this.previewing){ this.previewing=false; return; }
     if(this.openItemId!=null){ this.openItemId=null; }
+  }
+
+  // UI helpers
+  saving: Record<number, 'idle'|'saving'|'saved'> = {};
+  private setSaving(id: number, state: 'idle'|'saving'|'saved') { this.saving[id] = state; }
+  statusClass(status: string){
+    return {
+      'status-pending': status==='pending',
+      'status-in-progress': status==='in-progress',
+      'status-on-hold': status==='on-hold',
+      'status-na': status==='na',
+      'status-impossible': status==='impossible',
+      'status-done': status==='done',
+    };
   }
 }
