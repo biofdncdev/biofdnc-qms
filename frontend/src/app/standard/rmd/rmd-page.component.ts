@@ -90,7 +90,16 @@ export class RmdPageComponent {
     }
   }
 
-  clearSearch() { this.query.set(''); this.searching.set(false); this.results.set([]); }
+  clearSearch() {
+    this.query.set('');
+    this.term.set('');
+    this.searching.set(false);
+    this.results.set([]);
+    this.matchTotal.set(0);
+    this.matchIndex.set(0);
+    const frame = document.querySelector<HTMLIFrameElement>('iframe');
+    if (frame?.contentWindow) frame.contentWindow.postMessage({ type:'highlight', term: '' }, '*');
+  }
 
   scrollTop() { this.rightPane?.nativeElement?.scrollTo({ top: 0, behavior: 'smooth' }); }
 

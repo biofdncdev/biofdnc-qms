@@ -1,28 +1,30 @@
 <div class="page">
   <aside class="left">
-    <h2>원료제조팀 규정</h2>
+    <div class="sticky">
+      <h2>원료제조팀 규정</h2>
 
-    <div class="search">
-      <input
-        #searchBox
-        type="search"
-        placeholder="문서 제목/본문 검색"
-        [ngModel]="query()"
-        (ngModelChange)="query.set($event)"
-        (keydown.enter)="runSearch()"
-        (keyup.escape)="clearSearch()"
-        [disabled]="!indexReady()"
-        [class.disabled]="!indexReady()"
-      />
-      <button class="clear" *ngIf="query()" (click)="clearSearch()">×</button>
-      <div class="loader" *ngIf="!indexReady()"></div>
-      <div class="search-nav" *ngIf="indexReady() && term() && matchTotal()>0">
-        <span>{{ matchIndex()+1 }} / {{ matchTotal() }}</span>
-        <button class="nav" (click)="navigate('prev')">▲</button>
-        <button class="nav" (click)="navigate('next')">▼</button>
+      <div class="search">
+        <input
+          #searchBox
+          type="search"
+          placeholder="문서 제목/본문 검색"
+          [ngModel]="query()"
+          (ngModelChange)="query.set($event)"
+          (keydown.enter)="runSearch()"
+          (keyup.escape)="clearSearch()"
+          [disabled]="!indexReady()"
+          [class.disabled]="!indexReady()"
+        />
+        <button class="clear" *ngIf="query()" (click)="clearSearch()">×</button>
+        <div class="loader" *ngIf="!indexReady()"></div>
+        <div class="search-nav" *ngIf="indexReady() && term() && matchTotal()>0">
+          <span>{{ matchIndex()+1 }} / {{ matchTotal() }}</span>
+          <button class="nav" (click)="navigate('prev')">▲</button>
+          <button class="nav" (click)="navigate('next')">▼</button>
+        </div>
       </div>
+      <div class="hint" *ngIf="!indexReady()">규정 본문 색인 중입니다… 잠시만 기다려 주세요.</div>
     </div>
-    <div class="hint" *ngIf="!indexReady()">규정 본문 색인 중입니다… 잠시만 기다려 주세요.</div>
 
     <ng-container *ngIf="searching(); else cats">
       <div *ngIf="results().length===0" class="muted">검색 결과가 없습니다.</div>
