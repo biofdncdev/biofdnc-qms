@@ -46,7 +46,6 @@ interface AuditDate { value: string; label: string; }
               <div class="en">{{ it.titleEn }}</div>
             </div>
             <div class="state">
-              <span class="status-swatch" [style.background]="statusColor(it.status)"></span>
               <select [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" (change)="saveProgress(it)" [ngClass]="statusClass(it.status)" [ngStyle]="statusStyle(it.status)">
                 <option *ngFor="let s of statusOptions" [value]="s.value">{{ s.emoji }} {{ s.label }}</option>
               </select>
@@ -149,16 +148,16 @@ interface AuditDate { value: string; label: string; }
     .status-swatch{ width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #e5e7eb; }
     select{ padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; appearance:none; -webkit-appearance:none; -moz-appearance:none; }
     .dept-select{ min-width: 160px; max-width: 220px; }
-    /* 상태별 색상 */
+    /* 상태별 색상 (진행중=초록, 보류=노랑, 해당없음=회색) */
     .state select.status-pending{ background:#fff7ed; border-color:#f59e0b; color:#92400e; }
-    .state select.status-in-progress{ background:#eff6ff; border-color:#60a5fa; color:#1d4ed8; }
-    .state select.status-on-hold{ background:#f3f4f6; border-color:#9ca3af; color:#374151; }
-    .state select.status-na{ background:#f8fafc; border-color:#cbd5e1; color:#475569; }
+    .state select.status-in-progress{ background:#ecfdf5; border-color:#34d399; color:#065f46; }
+    .state select.status-on-hold{ background:#fffbeb; border-color:#fbbf24; color:#92400e; }
+    .state select.status-na{ background:#f1f5f9; border-color:#cbd5e1; color:#334155; }
     .state select.status-impossible{ background:#fee2e2; border-color:#ef4444; color:#991b1b; }
     .state select.status-done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
     .save-badge{ margin-left:6px; font-size:.85em; color:#64748b; }
     .save-badge.saved{ color:#16a34a; }
-    textarea{ width:100%; max-width: 360px; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
+    textarea{ width:100%; max-width: 280px; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
 
     .item .details{ grid-column: 1 / -1; overflow:hidden; }
     .item.open .details{ animation: slideDown .22s ease-out; }
@@ -188,18 +187,15 @@ interface AuditDate { value: string; label: string; }
     .checkbox.small .box{ width:18px; height:18px; }
     .checkbox.small .tick{ font-size:12px; }
 
-    .resources{ background:#fff; border:1px solid #eee; border-radius:12px; padding:12px; box-shadow:0 8px 22px rgba(2,6,23,.06); height: calc(100vh - 160px); overflow:auto; }
+    .resources{ background:#fff; border:1px solid #eee; border-radius:12px; padding:16px; box-shadow:0 8px 22px rgba(2,6,23,.06); height: calc(100vh - 160px); overflow:auto; }
     .resources .sticky{ position:sticky; top:0; background:#fff; padding-bottom:8px; }
     .re-head{ display:flex; align-items:center; justify-content:space-between; }
-    .resource-card{ border:1px solid #eef2f7; border-radius:10px; padding:8px 10px; margin:8px 4px; }
+    .resource-card{ border:1px solid #e5e7eb; border-radius:12px; padding:10px 12px; margin:10px 6px; background:linear-gradient(180deg,#f8fafc,#ffffff); }
     .resource-card .col{ display:flex; flex-direction:column; gap:8px; }
     .re-row{ display:flex; align-items:center; gap:8px; }
     .re-input{ width:100%; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; }
     .hint{ color:#64748b; margin:8px 0 0 4px; }
-    .resource-card{ display:flex; align-items:center; justify-content:space-between; border:1px solid #f1f5f9; border-radius:12px; padding:10px 12px; margin:8px 4px; }
-    .resource-card .name{ font-weight:700; }
-    .resource-card .type{ color:#64748b; font-size:.9em; }
-    .resource-card button{ padding:6px 10px; border-radius:8px; background:#4f46e5; color:#fff; border:0; }
+    .resource-card button{ padding:6px 10px; border-radius:8px; background:#2563eb; color:#fff; border:0; }
 
     .preview-backdrop{ position:fixed; inset:0; background:rgba(2,6,23,.45); display:flex; align-items:center; justify-content:center; }
     .preview{ width:min(880px,92vw); max-height:80vh; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.2); overflow:hidden; display:flex; flex-direction:column; }
@@ -347,12 +343,12 @@ export class AuditGivaudanComponent {
   saving: Record<number, 'idle'|'saving'|'saved'> = {};
   private setSaving(id: number, state: 'idle'|'saving'|'saved') { this.saving[id] = state; }
   statusOptions = [
-    { value: 'pending', label: '준비중 / Pending', emoji: '🟧' },
-    { value: 'in-progress', label: '진행중 / In progress', emoji: '🟦' },
-    { value: 'on-hold', label: '보류 / On hold', emoji: '⬜' },
-    { value: 'na', label: '해당없음 / N.A.', emoji: '⬜' },
-    { value: 'impossible', label: '불가 / Not possible', emoji: '🟥' },
-    { value: 'done', label: '완료 / Done', emoji: '🟦' },
+    { value: 'pending', label: '준비중 / Pending', emoji: '' },
+    { value: 'in-progress', label: '진행중 / In progress', emoji: '' },
+    { value: 'on-hold', label: '보류 / On hold', emoji: '' },
+    { value: 'na', label: '해당없음 / N.A.', emoji: '' },
+    { value: 'impossible', label: '불가 / Not possible', emoji: '' },
+    { value: 'done', label: '완료 / Done', emoji: '' },
   ];
   statusClass(status: string){
     return {
@@ -390,9 +386,9 @@ export class AuditGivaudanComponent {
   statusColor(status: string){
     switch(status){
       case 'pending': return '#f59e0b';
-      case 'in-progress': return '#60a5fa';
-      case 'on-hold': return '#9ca3af';
-      case 'na': return '#cbd5e1';
+      case 'in-progress': return '#34d399';
+      case 'on-hold': return '#fbbf24';
+      case 'na': return '#94a3b8';
       case 'impossible': return '#ef4444';
       case 'done': return '#3b82f6';
       default: return '#e5e7eb';
