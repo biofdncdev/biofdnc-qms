@@ -4,7 +4,7 @@
             mat-icon-button [matTooltip]="m.label"
             (mouseenter)="onRailMouseEnter(m.key)"
             (click)="onMainClick(m)">
-      <mat-icon>{{m.icon}}</mat-icon>
+      <mat-icon [fontIcon]="m.icon"></mat-icon>
       <span>{{m.label}}</span>
     </button>
 
