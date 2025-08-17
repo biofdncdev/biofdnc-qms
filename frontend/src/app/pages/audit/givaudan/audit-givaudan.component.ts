@@ -46,6 +46,12 @@ interface AuditDate { value: string; label: string; }
                 <option value="impossible">불가 / Not possible</option>
                 <option value="done">완료 / Done</option>
               </select>
+              <select class="dept-select" multiple [(ngModel)]="it.departments" (ngModelChange)="saveProgress(it)" title="담당 부서 선택">
+                <option *ngFor="let d of departments" [value]="d">{{ d }}</option>
+              </select>
+              <div class="chips" *ngIf="it.departments?.length">
+                <span class="chip" *ngFor="let d of it.departments">{{ d }}</span>
+              </div>
               <span class="save-badge" *ngIf="saving[it.id]==='saving'">저장중…</span>
               <span class="save-badge saved" *ngIf="saving[it.id]==='saved'">저장됨</span>
             </div>
@@ -148,7 +154,8 @@ interface AuditDate { value: string; label: string; }
     .en{ color:#64748b; font-size:.92em; }
     .state{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     .state .meta{ color:#475569; font-size:.85em; }
-    select{ padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; }
+    select{ padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; appearance:none; -webkit-appearance:none; -moz-appearance:none; }
+    .dept-select{ min-width: 160px; max-width: 220px; }
     /* 상태별 색상 */
     .state select.status-pending{ background:#fff7ed; border-color:#f59e0b; color:#92400e; }
     .state select.status-in-progress{ background:#eff6ff; border-color:#60a5fa; color:#1d4ed8; }
@@ -158,7 +165,7 @@ interface AuditDate { value: string; label: string; }
     .state select.status-done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
     .save-badge{ margin-left:6px; font-size:.85em; color:#64748b; }
     .save-badge.saved{ color:#16a34a; }
-    textarea{ width:100%; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
+    textarea{ width:100%; max-width: 360px; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
 
     .item .details{ grid-column: 1 / -1; overflow:hidden; }
     .item.open .details{ animation: slideDown .22s ease-out; }
@@ -317,14 +324,16 @@ export class AuditGivaudanComponent {
     };
   }
   statusStyle(status: string){
-    switch(status){
-      case 'pending': return { background:'#fff7ed', borderColor:'#f59e0b', color:'#92400e' };
-      case 'in-progress': return { background:'#eff6ff', borderColor:'#60a5fa', color:'#1d4ed8' };
-      case 'on-hold': return { background:'#f3f4f6', borderColor:'#9ca3af', color:'#374151' };
-      case 'na': return { background:'#f8fafc', borderColor:'#cbd5e1', color:'#475569' };
-      case 'impossible': return { background:'#fee2e2', borderColor:'#ef4444', color:'#991b1b' };
-      case 'done': return { background:'#dbeafe', borderColor:'#3b82f6', color:'#1e40af' };
-      default: return {};
-    }
+    try{
+      switch(status){
+        case 'pending': return { background:'#fff7ed', borderColor:'#f59e0b', color:'#92400e' } as any;
+        case 'in-progress': return { background:'#eff6ff', borderColor:'#60a5fa', color:'#1d4ed8' } as any;
+        case 'on-hold': return { background:'#f3f4f6', borderColor:'#9ca3af', color:'#374151' } as any;
+        case 'na': return { background:'#f8fafc', borderColor:'#cbd5e1', color:'#475569' } as any;
+        case 'impossible': return { background:'#fee2e2', borderColor:'#ef4444', color:'#991b1b' } as any;
+        case 'done': return { background:'#dbeafe', borderColor:'#3b82f6', color:'#1e40af' } as any;
+        default: return {} as any;
+      }
+    } catch { return {} as any; }
   }
 }
