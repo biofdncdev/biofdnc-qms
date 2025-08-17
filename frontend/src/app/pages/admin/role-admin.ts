@@ -15,11 +15,12 @@ import { MatDialogModule } from '@angular/material/dialog';
   styleUrls: ['./role-admin.scss']
 })
 export class RoleAdminComponent implements OnInit {
-  displayedColumns = ['name','email','created_at','updated_at','last_sign_in_at','is_online','role','actions'];
+  displayedColumns = ['name','email','created_at','updated_at','last_sign_in_at','is_online','status','role','actions'];
   rows: any[] = [];
   roles = ['admin','manager','staff','viewer'];
   loading = false;
   pending: Record<string, string> = {};
+  statusFilter: 'all' | 'active' | 'inactive' = 'all';
 
   constructor(private supabase: SupabaseService) {}
 
@@ -30,7 +31,11 @@ export class RoleAdminComponent implements OnInit {
   async load() {
     this.loading = true;
     const { data, error } = await this.supabase.listUsers();
-    if (!error && data) this.rows = data;
+    if (!error && data) {
+      let rows = data.map(r => ({ ...r, status: r.status ?? 'active' }));
+      if (this.statusFilter !== 'all') rows = rows.filter(r => r.status === this.statusFilter);
+      this.rows = rows;
+    }
     this.loading = false;
   }
 
@@ -63,6 +68,12 @@ export class RoleAdminComponent implements OnInit {
   async deleteUser(row: any) {
     if (!confirm('해당 사용자를 삭제하시겠습니까?')) return;
     await this.supabase.deleteUser(row.id);
+    await this.load();
+  }
+
+  async toggleStatus(row: any) {
+    const next = row.status === 'inactive' ? 'active' : 'inactive';
+    await this.supabase.getClient().from('users').update({ status: next, updated_at: new Date().toISOString() }).eq('id', row.id);
     await this.load();
   }
 }

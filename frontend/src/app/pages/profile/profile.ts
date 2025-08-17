@@ -15,6 +15,9 @@ import { SupabaseService } from '../../services/supabase.service';
     <div>가입일시: {{ profile.created_at | date:'yyyy-MM-dd HH:mm' }}</div>
     <div>최종수정일시: {{ profile.updated_at ? (profile.updated_at | date:'yyyy-MM-dd HH:mm') : '-' }}</div>
     <div>마지막 로그인: {{ profile.last_sign_in_at ? (profile.last_sign_in_at | date:'yyyy-MM-dd HH:mm') : '-' }}</div>
+    <div style="margin-top:12px;">
+      <button (click)="sendPasswordReset()">비밀번호 변경 메일 보내기</button>
+    </div>
   </div>
   `,
 })
@@ -27,5 +30,12 @@ export class ProfileComponent implements OnInit {
       const { data } = await this.supabase.getUserProfile(user.id);
       this.profile = data;
     }
+  }
+
+  async sendPasswordReset() {
+    if (!this.profile?.email) return;
+    // Supabase는 비밀번호 재설정을 이메일 링크로 처리합니다.
+    await this.supabase.getClient().auth.resetPasswordForEmail(this.profile.email, { redirectTo: location.origin + '/login' });
+    alert('비밀번호 변경 메일을 보냈습니다. 메일함을 확인하세요.');
   }
 }

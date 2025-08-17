@@ -46,7 +46,7 @@ export class AppShellComponent {
     this.supabase.getCurrentUser().then(async (u) => {
       if (u) {
         const { data } = await this.supabase.getUserProfile(u.id);
-        this.isAdmin = data?.role === 'admin' || data?.role === 'manager';
+        this.isAdmin = data?.role === 'admin';
       }
       this.buildMenus();
     });
