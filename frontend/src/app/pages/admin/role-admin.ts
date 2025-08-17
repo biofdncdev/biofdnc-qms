@@ -32,7 +32,8 @@ export class RoleAdminComponent implements OnInit {
     this.loading = true;
     const { data, error } = await this.supabase.listUsers();
     if (!error && data) {
-      let rows = data.map(r => ({ ...r, status: r.status ?? 'active' }));
+      const rowsRaw = (data as any[]);
+      let rows = rowsRaw.map((r: any) => ({ ...r, status: (r && r.status) ? r.status : 'active' }));
       if (this.statusFilter !== 'all') rows = rows.filter(r => r.status === this.statusFilter);
       this.rows = rows;
     }
