@@ -26,8 +26,10 @@ export class SupabaseService {
         environment.supabaseKey,
         {
           auth: {
-            storage: localStorage,
-            persistSession: true,
+            // 세션을 브라우저에 영구 저장하지 않습니다.
+            // 탭/브라우저가 닫히거나 새로고침되면 자동으로 로그아웃됩니다.
+            storage: undefined,
+            persistSession: false,
             autoRefreshToken: true,
             detectSessionInUrl: true,
           },
@@ -48,7 +50,8 @@ export class SupabaseService {
   }
 
   async signOut() {
-    return this.ensureClient().auth.signOut();
+    // 모든 탭/기기에서 로그아웃
+    await this.ensureClient().auth.signOut({ scope: 'global' });
   }
 
   async getCurrentUser(): Promise<User | null> {
