@@ -41,6 +41,10 @@ export const routes: Routes = [
         path: 'standard/rmd',
         loadComponent: () => import('./standard/rmd/rmd-page.component').then(m => m.RmdPageComponent),
       },
+      {
+        path: 'record/rmd-forms',
+        loadComponent: () => import('./record/rmd-forms/rmd-forms.component').then(m => m.RmdFormsComponent),
+      },
     ]
   },
   {

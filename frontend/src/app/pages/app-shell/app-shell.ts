@@ -65,7 +65,11 @@ export class AppShellComponent {
           { label: '원료제조팀 규정', path: '/app/standard/rmd' }
         ]
       },
-      { key: 'record', icon: 'history_edu', label: 'Record' },
+      {
+        key: 'record', icon: 'history_edu', label: 'Record', submenu: [
+          { label: '원료제조팀 지시·기록서', path: '/app/record/rmd-forms' }
+        ]
+      },
       { key: 'audit', icon: 'rule', label: 'Audit' },
     ];
     if (this.isAdmin) {
