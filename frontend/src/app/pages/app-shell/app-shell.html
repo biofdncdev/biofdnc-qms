@@ -18,7 +18,7 @@
     </div>
   </aside>
 
-  <section class="content">
+  <section class="content" [class.drawer-open]="leftOpen">
     <header class="topbar">
       <div class="brand">BIO-FD&C QMS</div>
     </header>
@@ -32,7 +32,10 @@
   <aside class="section-drawer" [class.open]="leftOpen" aria-label="Section menu">
     <div class="side-menu">
       <div class="side-title">{{ selected() | titlecase }}</div>
-      <a class="side-link" *ngFor="let item of sectionMenu" [class.selected]="item.selected" (click)="onSubClick(item)">{{ item.label }}</a>
+      <a class="side-link" *ngFor="let item of sectionMenu"
+         [class.selected]="item.selected"
+         (mousemove)="($event.target as HTMLElement).style.setProperty('--mx', $event.offsetX + 'px'); ($event.target as HTMLElement).style.setProperty('--my', $event.offsetY + 'px')"
+         (click)="onSubClick(item)">{{ item.label }}</a>
     </div>
   </aside>
 
