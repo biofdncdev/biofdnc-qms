@@ -41,11 +41,10 @@ import { SupabaseService } from '../../services/supabase.service';
 export class AppShellComponent {
   selected = signal<string>('home');
   leftOpen = false;
-  accountOpen = false;
   // Motion tokens derived from M3 motion guidance
   readonly drawerDurationMs = 320;
   readonly drawerEasing = 'cubic-bezier(0.2, 0, 0, 1)';
-  sectionMenu: Array<{ label: string; path?: string; selected?: boolean }> = [];
+  sectionMenu: Array<{ label: string; path?: string; onClick?: () => void; selected?: boolean }> = [];
   menus: Array<{ key: string; icon: string; label: string; path?: string; submenu?: Array<{ label: string; path?: string }> }> = [
     { key: 'home', icon: 'home', label: 'Home', path: '/app/home' },
     { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [
@@ -58,7 +57,7 @@ export class AppShellComponent {
     { key: 'record', icon: 'description', label: 'Record', submenu: [ { label: '업로드' }, { label: '검토' } ] },
     { key: 'audit', icon: 'fact_check', label: 'Audit', submenu: [ { label: '내부 감사' }, { label: '외부 감사' } ] },
     { key: 'user', icon: 'group', label: 'User', submenu: [
-      { label: '프로필', path: '/app/profile' }
+      // 관리자만 사용자 관리 노출 (프로필 제외)
     ] },
   ];
   isAdmin = false;
@@ -81,7 +80,6 @@ export class AppShellComponent {
     const userMenu = this.menus.find(m => m.key === 'user');
     if (userMenu) {
       userMenu.submenu = [
-        { label: '프로필', path: '/app/profile' },
         ...(this.isAdmin ? [{ label: '사용자 관리', path: '/app/admin/roles' }] : [])
       ];
     }
@@ -118,13 +116,22 @@ export class AppShellComponent {
   }
 
   onSubClick(item: { path?: string }) {
+    // run inline action if provided
+    // @ts-ignore
+    if ((item as any).onClick) { (item as any).onClick(); this.leftOpen = true; return; }
     if (item.path) this.router.navigate([item.path]);
     // keep drawer open for submenu navigation
     this.leftOpen = true;
   }
 
-  openAccountMenu() {
-    this.accountOpen = true;
+  openAccountList() {
+    this.selected.set('account');
+    this.sectionMenu = [
+      { label: '로그인 프로필', path: '/app/profile' },
+      ...(this.isAdmin ? [] : []),
+      { label: '로그아웃', onClick: () => this.logout() }
+    ];
+    this.leftOpen = true;
   }
 
   navigate(key: string, path: string) {
