@@ -1,7 +1,7 @@
 [build]
   # Empty base; we will run commands pointing to frontend
   publish = "frontend/dist/qms-app/browser"
-  command = "npm --prefix frontend ci && CI=false npm --prefix frontend run build"
+  command = "printf \"window.__env = {\\n\\tNG_APP_SUPABASE_URL: '%s',\\n\\tNG_APP_SUPABASE_KEY: '%s',\\n\\tNG_APP_PRODUCTION: '%s',\\n};\\n\" \"$NG_APP_SUPABASE_URL\" \"$NG_APP_SUPABASE_KEY\" \"$NG_APP_PRODUCTION\" > frontend/public/env.js && npm --prefix frontend ci && CI=false npm --prefix frontend run build"
 
 # Ensure SPA routing
 [[redirects]]
