@@ -2,3 +2,4 @@
 .role-admin table { width: 100%; }
 .role-admin .header { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 16px; }
 .role-admin h3 { margin: 0; }
+.role-admin ::ng-deep .mat-mdc-select-panel { min-width: 180px !important; }
