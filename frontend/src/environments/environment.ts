@@ -1,10 +1,10 @@
-// For production builds on Netlify, injecting env via import.meta.env is not
-// reliable with the current Angular builder. Since Supabase anon key and URL
-// are safe to expose on the client, we define them directly here so the app
-// runs without runtime env injection issues.
+// Prefer values injected at runtime via public/env.js (window.__env)
+// and fall back to import.meta.env for local builds.
+const metaEnv = (import.meta as any).env || {};
+const runtimeEnv = (globalThis as any).__env || {};
+
 export const environment = {
-  production: true,
-  supabaseUrl: 'https://obutpxyzhshjczbmtlxs.supabase.co',
-  supabaseKey:
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9idXRweHl6aHNoamN6Ym10bHhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUyODkxNjksImV4cCI6MjA3MDg2NTE2OX0.VWLSI3x1dN0QKvIy02iVh_rdjKcuaK1iqW-2RToTb8I',
+  production: (metaEnv.NG_APP_PRODUCTION || runtimeEnv.NG_APP_PRODUCTION) === 'true',
+  supabaseUrl: metaEnv.NG_APP_SUPABASE_URL || runtimeEnv.NG_APP_SUPABASE_URL || '',
+  supabaseKey: metaEnv.NG_APP_SUPABASE_KEY || runtimeEnv.NG_APP_SUPABASE_KEY || '',
 };
