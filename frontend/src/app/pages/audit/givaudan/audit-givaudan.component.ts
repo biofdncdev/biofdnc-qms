@@ -33,20 +33,18 @@ interface AuditDate { value: string; label: string; }
               <div class="en">{{ it.titleEn }}</div>
             </div>
             <div class="state">
-              <label class="checkbox">
-                <input type="checkbox" [(ngModel)]="it.done" (ngModelChange)="markDone(it)">
-                <span class="box"><span class="tick" *ngIf="it.done">✔</span></span>
-              </label>
-              <div class="meta" *ngIf="it.doneBy">{{ it.doneBy }} · {{ it.doneAt }}</div>
               <span class="status-swatch" [style.background]="statusColor(it.status)"></span>
               <select [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" (change)="saveProgress(it)" [ngClass]="statusClass(it.status)" [ngStyle]="statusStyle(it.status)">
                 <option *ngFor="let s of statusOptions" [value]="s.value">{{ s.emoji }} {{ s.label }}</option>
               </select>
-              <select class="dept-select" multiple [(ngModel)]="it.departments" (ngModelChange)="saveProgress(it)" title="담당 부서 선택">
-                <option *ngFor="let d of departments" [value]="d">{{ d }}</option>
+              <select class="dept-select" [ngModel]="''" (ngModelChange)="addDept(it, $event)" title="담당 부서 추가">
+                <option value="" disabled>담당 부서 추가…</option>
+                <option *ngFor="let d of departments" [value]="d" [disabled]="it.departments?.includes(d)">{{ d }}</option>
               </select>
               <div class="chips" *ngIf="it.departments?.length">
-                <span class="chip" *ngFor="let d of it.departments">{{ d }}</span>
+                <span class="chip" *ngFor="let d of it.departments">{{ d }}
+                  <button class="remove" (click)="removeDept(it, d); $event.stopPropagation()">×</button>
+                </span>
               </div>
               <span class="save-badge" *ngIf="saving[it.id]==='saving'">저장중…</span>
               <span class="save-badge saved" *ngIf="saving[it.id]==='saved'">저장됨</span>
@@ -67,34 +65,7 @@ interface AuditDate { value: string; label: string; }
                     <div class="acc">{{ assessment?.acceptance_criteria }}</div>
                   </div>
                 </div>
-                <div class="assign">
-                  <label>담당 부서</label>
-                  <select multiple [(ngModel)]="it.departments" (ngModelChange)="saveProgress(it)">
-                    <option *ngFor="let d of departments" [value]="d">{{ d }}</option>
-                  </select>
-                  <div class="chips">
-                    <span class="chip" *ngFor="let d of it.departments">{{ d }}</span>
-                  </div>
-                </div>
-                <div class="resources-edit">
-                  <div class="re-head">
-                    <h4>대응 자료 / Resources</h4>
-                    <button (click)="addResource(it); $event.stopPropagation()">추가</button>
-                  </div>
-                  <div class="re-list">
-                    <div class="re-item" *ngFor="let r of resources">
-                      <div class="info">
-                        <div class="name">{{ r.name }}</div>
-                        <div class="type">{{ r.type }}</div>
-                      </div>
-                      <div class="act">
-                        <input type="file" (change)="uploadFor(r, $event)" />
-                        <button (click)="openResource(r); $event.stopPropagation()">Open</button>
-                        <button class="danger" (click)="removeResource(r); $event.stopPropagation()">삭제</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                
               </div>
             </div>
           </div>
@@ -173,11 +144,10 @@ interface AuditDate { value: string; label: string; }
     .assessment .acc{ background:#f8fafc; border:1px dashed #e2e8f0; border-radius:8px; padding:8px; }
     .assign select{ min-height: 100px; }
     .chips{ margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
-    .chip{ background:#eef2ff; color:#3730a3; padding:4px 8px; border-radius:999px; font-weight:600; font-size:.85em; }
-    .re-head{ display:flex; align-items:center; justify-content:space-between; }
-    .re-item{ display:flex; align-items:center; justify-content:space-between; border:1px solid #eef2f7; border-radius:10px; padding:8px 10px; margin:6px 0; }
-    .re-item .act button{ margin-left:6px; }
-    .re-item .act .danger{ background:#ef4444; color:#fff; }
+    .chip{ background:#eef2ff; color:#3730a3; padding:4px 8px; border-radius:999px; font-weight:600; font-size:.85em; display:inline-flex; align-items:center; gap:6px; }
+    .chip .remove{ background:transparent; border:0; color:#333; cursor:pointer; line-height:1; padding:0 4px; border-radius:8px; }
+    .chip .remove:hover{ background:#e5e7eb; }
+    /* 내부 resources 편집 섹션 제거로 관련 스타일 삭제 */
 
     @keyframes slideDown { from{ opacity:0; transform: translateY(-6px); } to{ opacity:1; transform:none; } }
 
@@ -279,6 +249,19 @@ export class AuditGivaudanComponent {
       this.setSaving(it.id, 'saved');
       setTimeout(()=>this.setSaving(it.id,'idle'), 1200);
     }catch{}
+  }
+
+  addDept(it: any, dept: string){
+    if(!dept) return;
+    if(!it.departments) it.departments = [];
+    if(!it.departments.includes(dept)){
+      it.departments.push(dept);
+      this.saveProgress(it);
+    }
+  }
+  removeDept(it: any, dept: string){
+    it.departments = (it.departments||[]).filter((d:string)=>d!==dept);
+    this.saveProgress(it);
   }
 
   async addResource(it: any){
