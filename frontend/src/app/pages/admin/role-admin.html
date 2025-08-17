@@ -1,7 +1,7 @@
 <div class="role-admin">
   <h3>권한 관리</h3>
   <div class="toolbar">
-    <button mat-flat-button color="primary" (click)="saveChanges()" [disabled]="!Object.keys(pending).length">저장</button>
+    <button mat-flat-button color="primary" (click)="saveChanges()" [disabled]="!pendingCount">저장</button>
   </div>
   <table mat-table [dataSource]="rows" class="mat-elevation-z1">
     <ng-container matColumnDef="name">

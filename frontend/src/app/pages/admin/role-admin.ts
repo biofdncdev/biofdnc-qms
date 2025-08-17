@@ -47,6 +47,10 @@ export class RoleAdminComponent implements OnInit {
     await this.load();
   }
 
+  get pendingCount() {
+    return Object.keys(this.pending).length;
+  }
+
   async resetPassword(row: any) {
     // 관리자가 비밀번호를 이메일 주소와 동일하게 초기화
     await this.supabase.setUserPassword(row.id, row.email);
