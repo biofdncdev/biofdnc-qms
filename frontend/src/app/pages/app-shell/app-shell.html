@@ -17,7 +17,7 @@
     </div>
   </aside>
 
-  <section class="content" [class.drawer-open]="leftOpen" @routeFade>
+  <section class="content" [class.drawer-open]="leftOpen">
     <header class="topbar">
       <div class="brand">BIO-FD&C QMS</div>
     </header>
@@ -33,7 +33,7 @@
       <div class="side-title">{{ selected() | titlecase }}</div>
       <a class="side-link" *ngFor="let item of sectionMenu"
          [class.selected]="item.selected"
-         (mousemove)="($event.target as HTMLElement).style.setProperty('--mx', $event.offsetX + 'px'); ($event.target as HTMLElement).style.setProperty('--my', $event.offsetY + 'px')"
+         (mousemove)="onHover($event)"
          (click)="onSubClick(item)">{{ item.label }}</a>
     </div>
   </aside>

@@ -1,5 +1,5 @@
 import { Component, signal } from '@angular/core';
-import { trigger, transition, style, animate } from '@angular/animations';
+// Avoid animations dependency for Netlify build; simple JS/CSS transitions are used
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { MatSidenavModule } from '@angular/material/sidenav';
@@ -29,14 +29,7 @@ import { SupabaseService } from '../../services/supabase.service';
   ],
   templateUrl: './app-shell.html',
   styleUrls: ['./app-shell.scss'],
-  animations: [
-    trigger('routeFade', [
-      transition(':enter', [
-        style({ opacity: 0 }),
-        animate('220ms ease', style({ opacity: 1 }))
-      ])
-    ])
-  ]
+  animations: []
 })
 export class AppShellComponent {
   selected = signal<string>('home');
@@ -90,6 +83,13 @@ export class AppShellComponent {
     const menu = this.menus.find(m => m.key === key);
     this.sectionMenu = menu?.submenu ?? [];
     if (this.sectionMenu.length > 0) this.leftOpen = true;
+  }
+
+  onHover(event: MouseEvent) {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    target.style.setProperty('--mx', `${event.offsetX}px`);
+    target.style.setProperty('--my', `${event.offsetY}px`);
   }
 
   onRailMouseEnter(key: string) {
