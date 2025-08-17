@@ -11,7 +11,7 @@
         <form (ngSubmit)="login()" (keydown.enter)="submitOnEnter($event)">
           <mat-form-field appearance="outline">
             <mat-label>이메일</mat-label>
-            <input matInput placeholder="email@example.com" required [(ngModel)]="email" name="email">
+            <input matInput placeholder="email@example.com" required [(ngModel)]="email" name="email" autofocus>
           </mat-form-field>
           <mat-form-field appearance="outline">
             <mat-label>비밀번호</mat-label>

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 
@@ -26,7 +26,7 @@ import { SupabaseService } from '../../services/supabase.service';
   templateUrl: './login.html',
   styleUrls: ['./login.scss']
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   email = '';
   password = '';
 
@@ -72,5 +72,15 @@ export class LoginComponent {
 
     await this.supabase.updateLoginState(user.id, true);
     this.router.navigate(['/app']);
+  }
+
+  ngOnInit(): void {
+    // 일부 환경에서 IME 기본값이 한글일 수 있으므로, 영문 입력 강제는 브라우저/OS 권한 밖입니다.
+    // 대신 페이지 진입 시 email 필드에 포커스가 위치하도록 보장합니다.
+    // Angular의 autofocus가 동작하지 않는 브라우저를 대비해 수동 포커스 시도
+    queueMicrotask(() => {
+      const el = document.querySelector('input[name="email"]') as HTMLInputElement | null;
+      el?.focus();
+    });
   }
 }

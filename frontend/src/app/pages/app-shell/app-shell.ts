@@ -36,7 +36,21 @@ export class AppShellComponent {
   readonly drawerDurationMs = 320;
   readonly drawerEasing = 'cubic-bezier(0.2, 0, 0, 1)';
   sectionMenu: Array<{ label: string; path?: string; selected?: boolean }> = [];
-  menus: Array<{ key: string; icon: string; label: string; path?: string; submenu?: Array<{ label: string; path?: string }> }> = [];
+  menus: Array<{ key: string; icon: string; label: string; path?: string; submenu?: Array<{ label: string; path?: string }> }> = [
+    { key: 'home', icon: 'home', label: 'Home', path: '/app/home' },
+    { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [
+      { label: '목록' }, { label: '등록' }, { label: '승인' }
+    ] },
+    { key: 'product', icon: 'category', label: 'Product', submenu: [
+      { label: '목록' }, { label: '등록' }
+    ] },
+    { key: 'standard', icon: 'tune', label: 'Standard', submenu: [ { label: '개정 관리' } ] },
+    { key: 'record', icon: 'description', label: 'Record', submenu: [ { label: '업로드' }, { label: '검토' } ] },
+    { key: 'audit', icon: 'fact_check', label: 'Audit', submenu: [ { label: '내부 감사' }, { label: '외부 감사' } ] },
+    { key: 'user', icon: 'group', label: 'User', submenu: [
+      { label: '프로필', path: '/app/profile' }
+    ] },
+  ];
   isAdmin = false;
 
   constructor(private router: Router, private supabase: SupabaseService) {
@@ -53,22 +67,14 @@ export class AppShellComponent {
   }
 
   private buildMenus() {
-    this.menus = [
-      { key: 'home', icon: 'home', label: 'Home', path: '/app/home' },
-      { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [
-        { label: '목록' }, { label: '등록' }, { label: '승인' }
-      ] },
-      { key: 'product', icon: 'category', label: 'Product', submenu: [
-        { label: '목록' }, { label: '등록' }
-      ] },
-      { key: 'standard', icon: 'tune', label: 'Standard', submenu: [ { label: '개정 관리' } ] },
-      { key: 'record', icon: 'description', label: 'Record', submenu: [ { label: '업로드' }, { label: '검토' } ] },
-      { key: 'audit', icon: 'fact_check', label: 'Audit', submenu: [ { label: '내부 감사' }, { label: '외부 감사' } ] },
-      { key: 'user', icon: 'group', label: 'User', submenu: [
+    // ensure admin submenu appended when rights are available
+    const userMenu = this.menus.find(m => m.key === 'user');
+    if (userMenu) {
+      userMenu.submenu = [
         { label: '프로필', path: '/app/profile' },
         ...(this.isAdmin ? [{ label: '사용자 관리', path: '/app/admin/roles' }] : [])
-      ] },
-    ];
+      ];
+    }
   }
 
   private openLeftForKey(key: string) {
