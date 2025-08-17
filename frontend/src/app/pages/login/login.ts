@@ -32,7 +32,7 @@ export class LoginComponent {
 
   constructor(private router: Router, private supabase: SupabaseService) {}
 
-  submitOnEnter(event: KeyboardEvent) {
+  submitOnEnter(event: Event) {
     event.preventDefault();
     this.login();
   }
