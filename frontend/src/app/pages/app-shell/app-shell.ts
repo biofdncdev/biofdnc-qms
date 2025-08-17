@@ -59,9 +59,14 @@ export class AppShellComponent {
       { key: 'home', icon: 'home', label: 'Home', path: '/app/home' },
       { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [ { label: '목록' }, { label: '등록' }, { label: '승인' } ] },
       { key: 'product', icon: 'category', label: 'Product', submenu: [ { label: '목록' }, { label: '등록' } ] },
-      { key: 'standard', icon: 'tune', label: 'Standard', submenu: [ { label: '개정 관리' } ] },
-      { key: 'record', icon: 'description', label: 'Record', submenu: [ { label: '업로드' }, { label: '검토' } ] },
-      { key: 'audit', icon: 'fact_check', label: 'Audit', submenu: [ { label: '내부 감사' }, { label: '외부 감사' } ] },
+      {
+        key: 'standard', icon: 'gavel', label: 'Standard',
+        submenu: [
+          { label: '원료제조팀 규정', path: '/app/standard/rmd' }
+        ]
+      },
+      { key: 'record', icon: 'history_edu', label: 'Record' },
+      { key: 'audit', icon: 'rule', label: 'Audit' },
     ];
     if (this.isAdmin) {
       this.menus.push({ key: 'user', icon: 'group', label: 'User', submenu: [ { label: '사용자 관리', path: '/app/admin/roles' } ] });

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RMD Document</title>
+  <link rel="stylesheet" href="/rmd/rmd-doc.css" />
+  <style>
+    mark.__hl{ background: yellow; padding:0 2px; }
+    mark.__hl.__cur{ background: #ffbf47; }
+  </style>
+</head>
+<body>
+  <main id="content" class="doc-container"></main>
+  <script>
+    (function(){
+      const qs = new URLSearchParams(location.search);
+      const id = qs.get('id');
+      const initialQ = (qs.get('q')||'').trim();
+      const host = window.parent;
+      const content = document.getElementById('content');
+      if(!id){ content.innerHTML = '<p>잘못된 요청입니다.</p>'; return; }
+      const path = `/rmd/${id}.html`;
+
+      let loaded = false; let matches = []; let cur = 0; let term = '';
+
+      function postStatus(){ host.postMessage({type:'highlight:result', total:matches.length, index: matches.length?cur:0}, '*'); }
+
+      function clearMarks(){
+        const m = content.querySelectorAll('mark.__hl');
+        m.forEach(x => { const t = document.createTextNode(x.textContent); x.replaceWith(t); });
+      }
+
+      function highlight(t){
+        term = (t||'').trim();
+        clearMarks(); matches = []; cur = 0;
+        if(!term){ postStatus(); return; }
+        if(!loaded){ return; }
+        const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, null);
+        const nodes = []; let n; while(n = walker.nextNode()) nodes.push(n);
+        const re = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        nodes.forEach(node => {
+          const txt = node.nodeValue; if(!txt || !re.test(txt)) return; re.lastIndex = 0;
+          const frag = document.createDocumentFragment();
+          let last = 0; let m; while(m = re.exec(txt)){
+            const before = txt.slice(last, m.index); if(before) frag.appendChild(document.createTextNode(before));
+            const mk = document.createElement('mark'); mk.className='__hl'; mk.textContent = m[0]; frag.appendChild(mk);
+            matches.push(mk); last = m.index + m[0].length;
+          }
+          const rest = txt.slice(last); if(rest) frag.appendChild(document.createTextNode(rest));
+          node.parentNode.replaceChild(frag, node);
+        });
+        if(matches.length){ cur = 0; setCurrent(); }
+        postStatus();
+      }
+
+      function setCurrent(){ matches.forEach(x => x.classList.remove('__cur')); if(matches[cur]){ matches[cur].classList.add('__cur'); matches[cur].scrollIntoView({behavior:'smooth', block:'center'});} }
+      function nav(dir){ if(!matches.length) return; cur = (dir==='next')? (cur+1)%matches.length : (cur-1+matches.length)%matches.length; setCurrent(); postStatus(); }
+
+      fetch(path)
+        .then(r => r.text())
+        .then(html => { content.innerHTML = html; loaded = true; host.postMessage({type:'ready'}, '*'); if(initialQ){ highlight(initialQ); } else if(term){ highlight(term); } })
+        .catch(() => { content.innerHTML = `<p style="color:#c00">문서를 불러올 수 없습니다. (${id})</p>`; loaded = true; host.postMessage({type:'ready'}, '*'); });
+
+      window.addEventListener('message', e => {
+        const d = e.data || {}; if(d.type==='highlight'){ highlight(d.term); } else if(d.type==='nav'){ nav(d.dir); }
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -7,20 +7,44 @@ import { HomeComponent } from './pages/home/home';
 import { ProfileComponent } from './pages/profile/profile';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'login', pathMatch: 'full' },
-  { path: 'login', component: LoginComponent },
-  { path: 'signup', component: SignupComponent },
-
+  {
+    path: '',
+    redirectTo: 'app',
+    pathMatch: 'full',
+  },
+  {
+    path: 'login',
+    loadComponent: () => import('./pages/login/login').then(m => m.LoginComponent),
+  },
+  {
+    path: 'signup',
+    loadComponent: () => import('./pages/signup/signup').then(m => m.SignupComponent),
+  },
   {
     path: 'app',
-    component: AppShellComponent,
+    loadComponent: () => import('./pages/app-shell/app-shell').then(m => m.AppShellComponent),
     children: [
       { path: '', redirectTo: 'home', pathMatch: 'full' },
-      { path: 'home', component: HomeComponent },
-      { path: 'profile', component: ProfileComponent },
-      { path: 'admin/roles', component: RoleAdminComponent },
-    ],
+      {
+        path: 'home',
+        loadComponent: () => import('./pages/home/home').then(m => m.HomeComponent),
+      },
+      {
+        path: 'admin/roles',
+        loadComponent: () => import('./pages/admin/role-admin').then(m => m.RoleAdminComponent),
+      },
+      {
+        path: 'profile',
+        loadComponent: () => import('./pages/profile/profile').then(m => m.ProfileComponent),
+      },
+      {
+        path: 'standard/rmd',
+        loadComponent: () => import('./standard/rmd/rmd-page.component').then(m => m.RmdPageComponent),
+      },
+    ]
   },
-
-  { path: '**', redirectTo: 'login' },
+  {
+    path: '**',
+    redirectTo: 'app',
+  }
 ];

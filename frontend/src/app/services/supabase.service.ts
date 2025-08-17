@@ -58,11 +58,18 @@ export class SupabaseService {
 
   // Profiles
   async getUserProfile(id: string) {
-    return this.ensureClient().from('users').select('id,name,email,role,created_at,updated_at,last_sign_in_at,is_online').eq('id', id).single();
+    return this.ensureClient()
+      .from('users')
+      .select('id,name,email,role,status,created_at,updated_at,last_sign_in_at,is_online')
+      .eq('id', id)
+      .single();
   }
 
   async listUsers() {
-    return this.ensureClient().from('users').select('id,name,email,role,created_at,updated_at,last_sign_in_at,is_online').order('created_at', { ascending: false });
+    return this.ensureClient()
+      .from('users')
+      .select('id,name,email,role,status,created_at,updated_at,last_sign_in_at,is_online')
+      .order('created_at', { ascending: false });
   }
 
   async updateUserRole(id: string, role: string) {
@@ -70,7 +77,10 @@ export class SupabaseService {
   }
 
   async updateLoginState(id: string, isOnline: boolean) {
-    return this.ensureClient().from('users').update({ is_online: isOnline, last_sign_in_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
+    return this.ensureClient()
+      .from('users')
+      .update({ is_online: isOnline, last_sign_in_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', id);
   }
 
   // Admin utilities

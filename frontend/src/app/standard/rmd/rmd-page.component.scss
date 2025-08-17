@@ -1,0 +1,37 @@
+.page { display: grid; grid-template-columns: 38% 62%; gap: 0; padding: 16px 24px; height: calc(100vh - 96px); box-sizing: border-box; }
+.left {
+  padding: 0 24px 0 8px; overflow: auto; border-right: 1px solid #e5e7eb;
+  h2 { margin: 8px 0 16px; font-size: 22px; font-weight: 700; }
+  .search { display:flex; align-items:center; gap:8px; margin-bottom:12px; position:relative; }
+  .search input.disabled{ opacity:.5; pointer-events:none; }
+  .search .loader{ width:16px; height:16px; border:2px solid #ddd; border-top-color:#1b5fff; border-radius:50%; animation:spin 1s linear infinite; }
+  .search .search-nav{ display:flex; align-items:center; gap:6px; margin-left:auto; }
+  .search .search-nav .nav{ border:0; background:#eee; width:22px; height:22px; border-radius:4px; cursor:pointer; }
+  @keyframes spin{ to { transform:rotate(360deg)} }
+  input[type=search] { flex: 1; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; }
+  .clear { border: 0; background: #eee; width: 30px; height: 30px; border-radius: 6px; }
+  .cat { font-weight: 700; margin: 14px 0 8px; color: #111827; }
+  .item {
+    display: block; width: 100%; text-align: left; padding: 10px 10px; border: 0; background: transparent;
+    border-radius: 6px; margin-bottom: 6px; cursor: pointer; font-size: 14px;
+    &:hover { background: #f7f7f7; }
+    &.selected { background: #eef3ff; color: #1b5fff; }
+  }
+  .muted { color: #6b7280; }
+}
+.right {
+  padding: 0 16px 0 24px; overflow: hidden; position: relative; background: #fff;
+  .toolbar { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; }
+  .spacer { flex: 1; }
+  .primary { padding: 8px 12px; background: #1b5fff; color: #fff; border: 0; border-radius: 6px; }
+  .content { height: calc(100vh - 140px); overflow: hidden; }
+  iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+}
+
+/* Tables inside loaded docs (when not using iframe) */
+.right .doc-header { display:flex; justify-content: space-between; margin-bottom: 16px; }
+.right table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+.right th, .right td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; font-size: 13px; }
+.right th { background: #f3f4f6; }
+.hint{ color:#6b7280; font-size:.9em; margin:-6px 0 10px; }
+.hint.right{ margin:4px 0 6px; }

@@ -1,0 +1,70 @@
+<div class="page">
+  <aside class="left">
+    <h2>원료제조팀 규정</h2>
+
+    <div class="search">
+      <input
+        #searchBox
+        type="search"
+        placeholder="문서 제목/본문 검색"
+        [ngModel]="query()"
+        (ngModelChange)="query.set($event)"
+        (keydown.enter)="runSearch()"
+        (keyup.escape)="clearSearch()"
+        [disabled]="!indexReady()"
+        [class.disabled]="!indexReady()"
+      />
+      <button class="clear" *ngIf="query()" (click)="clearSearch()">×</button>
+      <div class="loader" *ngIf="!indexReady()"></div>
+      <div class="search-nav" *ngIf="indexReady() && term() && matchTotal()>0">
+        <span>{{ matchIndex()+1 }} / {{ matchTotal() }}</span>
+        <button class="nav" (click)="navigate('prev')">▲</button>
+        <button class="nav" (click)="navigate('next')">▼</button>
+      </div>
+    </div>
+    <div class="hint" *ngIf="!indexReady()">규정 본문 색인 중입니다… 잠시만 기다려 주세요.</div>
+
+    <ng-container *ngIf="searching(); else cats">
+      <div *ngIf="results().length===0" class="muted">검색 결과가 없습니다.</div>
+      <button
+        class="item"
+        *ngFor="let it of results()"
+        (click)="openResult(it)"
+        [class.selected]="selected()?.id === it.id">
+        {{ it.id }}. {{ it.title }}
+      </button>
+    </ng-container>
+
+    <ng-template #cats>
+      <ng-container *ngFor="let cat of filtered()">
+        <hr />
+        <h4 class="cat">{{ cat.category }}</h4>
+        <button
+          class="item"
+          *ngFor="let it of cat.items"
+          (click)="select(it)"
+          [class.selected]="selected()?.id === it.id">
+          {{ it.id }}. {{ it.title }}
+        </button>
+      </ng-container>
+      <p *ngIf="!filtered().length" class="muted">검색 결과가 없습니다.</p>
+    </ng-template>
+  </aside>
+
+  <main class="right" #rightPane>
+    <div class="toolbar">
+      <h3 *ngIf="selected(); else choose"> {{ selected()?.title }} </h3>
+      <div class="spacer"></div>
+      <button class="primary" (click)="print()" [disabled]="!selected()">출력</button>
+    </div>
+    <div class="hint right" *ngIf="highlightPending()">하이라이트 준비 중…</div>
+
+    <ng-template #choose><h3>규정을 선택해주세요.</h3></ng-template>
+
+    <section class="content" [class.loading]="loading()">
+      <div *ngIf="loading()" class="loading">로딩 중...</div>
+      <iframe *ngIf="docUrl(); else empty" [src]="docUrl()" style="width:100%;height:70vh;border:0;"></iframe>
+      <ng-template #empty></ng-template>
+    </section>
+  </main>
+</div>
