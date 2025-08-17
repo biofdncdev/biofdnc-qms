@@ -72,4 +72,16 @@ export class SupabaseService {
   async updateLoginState(id: string, isOnline: boolean) {
     return this.ensureClient().from('users').update({ is_online: isOnline, last_sign_in_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
   }
+
+  // Admin utilities
+  async setUserPassword(id: string, newPassword: string) {
+    // Requires supabase service role (admin) on the backend or RPC; if using anon client, implement via edge function.
+    // Here we call a Postgres RPC defined on the server: admin_reset_password(user_id, new_password)
+    return this.ensureClient().rpc('admin_reset_password', { user_id: id, new_password: newPassword });
+  }
+
+  async deleteUser(id: string) {
+    // Requires RPC to delete user both from auth and public.users
+    return this.ensureClient().rpc('admin_delete_user', { user_id: id });
+  }
 }

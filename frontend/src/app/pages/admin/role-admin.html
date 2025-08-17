@@ -1,5 +1,8 @@
 <div class="role-admin">
   <h3>권한 관리</h3>
+  <div class="toolbar">
+    <button mat-flat-button color="primary" (click)="saveChanges()" [disabled]="!Object.keys(pending).length">저장</button>
+  </div>
   <table mat-table [dataSource]="rows" class="mat-elevation-z1">
     <ng-container matColumnDef="name">
       <th mat-header-cell *matHeaderCellDef>이름</th>
@@ -34,15 +37,18 @@
     <ng-container matColumnDef="role">
       <th mat-header-cell *matHeaderCellDef>권한</th>
       <td mat-cell *matCellDef="let r">
-        <mat-select [value]="r.role" (selectionChange)="changeRole(r, $event.value)">
+        <mat-select [value]="pending[r.id] || r.role" (selectionChange)="markRole(r, $event.value)">
           <mat-option *ngFor="let role of roles" [value]="role">{{ role }}</mat-option>
         </mat-select>
       </td>
     </ng-container>
 
     <ng-container matColumnDef="actions">
-      <th mat-header-cell *matHeaderCellDef> </th>
-      <td mat-cell *matCellDef="let r"></td>
+      <th mat-header-cell *matHeaderCellDef>관리</th>
+      <td mat-cell *matCellDef="let r">
+        <button mat-icon-button matTooltip="비밀번호 초기화" (click)="resetPassword(r)"><mat-icon>lock_reset</mat-icon></button>
+        <button mat-icon-button color="warn" matTooltip="사용자 삭제" (click)="deleteUser(r)"><mat-icon>delete</mat-icon></button>
+      </td>
     </ng-container>
 
     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
