@@ -45,6 +45,14 @@ export const routes: Routes = [
         path: 'record/rmd-forms',
         loadComponent: () => import('./record/rmd-forms/rmd-forms.component').then(m => m.RmdFormsComponent),
       },
+      {
+        path: 'audit/amorepacific',
+        loadComponent: () => import('./pages/home/home').then(m => m.HomeComponent),
+      },
+      {
+        path: 'audit/givaudan',
+        loadComponent: () => import('./pages/home/home').then(m => m.HomeComponent),
+      },
     ]
   },
   {

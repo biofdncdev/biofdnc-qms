@@ -70,7 +70,12 @@ export class AppShellComponent {
           { label: '원료제조팀 지시·기록서', path: '/app/record/rmd-forms' }
         ]
       },
-      { key: 'audit', icon: 'rule', label: 'Audit' },
+      {
+        key: 'audit', icon: 'rule', label: 'Audit', submenu: [
+          { label: 'AMOREPACIFIC', path: '/app/audit/amorepacific' },
+          { label: 'GIVAUDAN', path: '/app/audit/givaudan' }
+        ]
+      },
     ];
     if (this.isAdmin) {
       this.menus.push({ key: 'user', icon: 'group', label: 'User', submenu: [ { label: '사용자 관리', path: '/app/admin/roles' } ] });
@@ -114,13 +119,13 @@ export class AppShellComponent {
     this.leftOpen = false;
   }
 
-  onSubClick(item: { path?: string }) {
-    // run inline action if provided
-    // @ts-ignore
-    if ((item as any).onClick) { (item as any).onClick(); this.leftOpen = true; return; }
-    if (item.path) this.router.navigate([item.path]);
-    // keep drawer open for submenu navigation
-    this.leftOpen = true;
+  onSubClick(item: { path?: string; selected?: boolean }) {
+    // clear previous selections
+    this.sectionMenu.forEach(i => i.selected = false);
+    item.selected = true;
+    if (item && item.path) {
+      this.router.navigate([item.path]);
+    }
   }
 
   openAccountList() {
