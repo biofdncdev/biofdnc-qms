@@ -1,11 +1,4 @@
-.landing {
-	height: calc(100vh - 56px);
-	padding: 32px 24px;
-	display: grid;
-	grid-template-rows: auto 1fr;
-	gap: 24px;
-	overflow: hidden; /* no scroll */
-}
+.landing { padding: 32px 24px; display: grid; grid-template-rows: auto auto; gap: 24px; overflow: hidden; }
 .hero {
 	max-width: 880px;
 }
@@ -25,8 +18,6 @@
 .btn.primary { color: white; background: #4f46e5; }
 .btn.primary:hover { background: #4338ca; }
 
-.feature-grid {
-	display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; max-width: 980px;
-}
+.feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; max-width: 980px; }
 .card { background: white; border: 1px solid #eee; border-radius: 16px; padding: 16px; box-shadow: 0 6px 16px rgba(0,0,0,.06); }
 .card h3 { margin: 0 0 8px; }

@@ -15,10 +15,6 @@ import { SupabaseService } from '../../services/supabase.service';
         End‑to‑end quality operations for BIO‑FD&C. Manage documents, audits, training, CAPA, and more –
         all in one streamlined workspace.
       </p>
-      <div class="cta">
-        <a routerLink="/app/profile" class="btn primary">내 프로필</a>
-        <a routerLink="/app/admin/roles" class="btn" *ngIf="isAdmin">사용자 관리</a>
-      </div>
     </div>
     <div class="feature-grid">
       <div class="card">
