@@ -42,9 +42,12 @@ export class RoleAdminComponent implements OnInit {
     const entries = Object.entries(this.pending);
     for (const [id, role] of entries) {
       await this.supabase.updateUserRole(id, role);
+      // 최종수정일시 업데이트
+      await this.supabase.getClient().from('users').update({ updated_at: new Date().toISOString() }).eq('id', id);
     }
     this.pending = {};
     await this.load();
+    alert('저장이 완료되었습니다.');
   }
 
   get pendingCount() {

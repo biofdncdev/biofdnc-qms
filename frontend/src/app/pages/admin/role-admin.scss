@@ -1,3 +1,4 @@
-.role-admin { padding: 8px; }
+.role-admin { padding: 16px; max-width: 1200px; margin: 0 auto; }
 .role-admin table { width: 100%; }
-.role-admin h3 { margin: 8px 0 16px; }
+.role-admin .header { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 16px; }
+.role-admin h3 { margin: 0; }
