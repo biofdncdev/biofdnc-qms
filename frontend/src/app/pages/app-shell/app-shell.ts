@@ -119,10 +119,11 @@ export class AppShellComponent {
     this.leftOpen = false;
   }
 
-  onSubClick(item: { path?: string; selected?: boolean }) {
+  onSubClick(item: { path?: string; onClick?: () => void; selected?: boolean }) {
     // clear previous selections
     this.sectionMenu.forEach(i => i.selected = false);
     item.selected = true;
+    if (item?.onClick) { item.onClick(); return; }
     if (item && item.path) {
       this.router.navigate([item.path]);
     }

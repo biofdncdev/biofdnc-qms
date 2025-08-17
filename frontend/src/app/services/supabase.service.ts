@@ -26,10 +26,9 @@ export class SupabaseService {
         environment.supabaseKey,
         {
           auth: {
-            // 세션을 브라우저에 영구 저장하지 않습니다.
-            // 탭/브라우저가 닫히거나 새로고침되면 자동으로 로그아웃됩니다.
-            storage: undefined,
-            persistSession: false,
+            // F5 새로고침에서는 로그인 유지, 브라우저/탭 종료 시에는 로그아웃 되도록 sessionStorage 사용
+            storage: (globalThis as any).sessionStorage,
+            persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
           },

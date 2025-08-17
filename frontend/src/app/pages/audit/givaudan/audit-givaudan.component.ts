@@ -46,7 +46,7 @@ interface AuditDate { value: string; label: string; }
               <div class="en">{{ it.titleEn }}</div>
             </div>
             <div class="state">
-              <select [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" (change)="saveProgress(it)" [ngClass]="statusClass(it.status)" [ngStyle]="statusStyle(it.status)">
+              <select class="status-select" [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" (change)="saveProgress(it)" [ngClass]="statusClass(it.status)" [ngStyle]="statusStyle(it.status)">
                 <option *ngFor="let s of statusOptions" [value]="s.value">{{ s.emoji }} {{ s.label }}</option>
               </select>
               <select class="dept-select" [ngModel]="''" (ngModelChange)="addDept(it, $event)" title="담당 부서 추가">
@@ -54,15 +54,15 @@ interface AuditDate { value: string; label: string; }
                 <option *ngFor="let d of departments" [value]="d" [disabled]="it.departments.includes(d)">{{ d }}</option>
               </select>
               <div class="chips" *ngIf="it.departments?.length">
-                <span class="chip" *ngFor="let d of it.departments" [ngClass]="teamClass(d)">{{ d }}
+                <span class="chip" *ngFor="let d of it.departments" [ngClass]="teamClass(d)">{{ displayDeptName(d) }}
                   <button class="remove" (click)="removeDept(it, d); $event.stopPropagation()">×</button>
                 </span>
               </div>
               <span class="save-badge" *ngIf="saving[it.id]==='saving'">저장중…</span>
-              <span class="save-badge saved" *ngIf="saving[it.id]==='saved'">저장됨</span>
-            </div>
-            <div class="note">
-              <textarea [(ngModel)]="it.note" (blur)="saveProgress(it)" rows="2" placeholder="비고 / Notes"></textarea>
+              <span class="save-badge saved after-status" *ngIf="saving[it.id]==='saved'">저장됨</span>
+              <div class="note">
+                <textarea spellcheck="false" [(ngModel)]="it.note" (blur)="saveProgress(it)" rows="2" placeholder="비고 / Notes"></textarea>
+              </div>
             </div>
             <div class="details" *ngIf="openItemId===it.id" (click)="$event.stopPropagation()">
               <div class="details-inner">
@@ -139,15 +139,21 @@ interface AuditDate { value: string; label: string; }
     .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 160px); overflow:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
     .group h3{ margin:8px 6px 12px; }
     .filterbar{ display:flex; align-items:center; gap:10px; margin:6px; flex-wrap:wrap; }
-    .item{ display:grid; grid-template-columns: 54px 1fr 280px 1fr; gap:8px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; }
+    .item{ display:grid; grid-template-columns: 54px 1fr 1.6fr; gap:12px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; align-items:start; }
     .id{ font-weight:700; color:#475569; display:flex; align-items:center; justify-content:center; }
     .ko{ font-weight:600; margin-bottom:2px; }
     .en{ color:#64748b; font-size:.92em; }
-    .state{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    /* Left controls: 2x2 grid (row1: status + saved, row2: dept-select + chips + notes below) */
+    .state{ display:grid; grid-template-columns: auto 1fr; grid-template-rows:auto auto auto; align-items:start; column-gap:12px; row-gap:8px; }
+    .state .status-select{ grid-row:1; grid-column:1; }
+    .state .after-status{ grid-row:1; grid-column:2; }
+    .state .dept-select{ grid-row:2; grid-column:1; }
+    .state .chips{ grid-row:2; grid-column:2; margin-top:0; }
+    .state .note{ grid-row:3; grid-column: 1 / span 2; }
     .state .meta{ color:#475569; font-size:.85em; }
     .status-swatch{ width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #e5e7eb; }
     select{ padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; appearance:none; -webkit-appearance:none; -moz-appearance:none; }
-    .dept-select{ min-width: 160px; max-width: 220px; }
+    .status-select, .dept-select{ width: 150px; }
     /* 상태별 색상 (진행중=초록, 보류=주황, 해당없음=회색) */
     .state select.status-pending{ background:#fff7ed; border-color:#f59e0b; color:#92400e; }
     .state select.status-in-progress{ background:#ecfdf5; border-color:#10b981; color:#065f46; }
@@ -157,7 +163,8 @@ interface AuditDate { value: string; label: string; }
     .state select.status-done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
     .save-badge{ margin-left:6px; font-size:.85em; color:#64748b; }
     .save-badge.saved{ color:#16a34a; }
-    textarea{ width:100%; max-width: 260px; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
+    textarea{ width:100%; max-width: none; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
+    .note textarea{ width:500px; max-width:500px; }
 
     .item .details{ grid-column: 1 / -1; overflow:hidden; }
     .item.open .details{ animation: slideDown .22s ease-out; }
@@ -173,7 +180,7 @@ interface AuditDate { value: string; label: string; }
     .chip .remove:hover{ background:#e5e7eb; }
     .chip.team-rmd{ background:#dbeafe; color:#1e40af; } /* 원료제조팀 파랑 */
     .chip.team-cell{ background:#dcfce7; color:#166534; } /* 식물세포배양팀 연두 */
-    .chip.team-qc{ background:#dcfce7; color:#166534; } /* 품질팀 초록 */
+    .chip.team-qc{ background:#cfeffd; color:#0b3f57; } /* 품질 옥색 이미지 색 */
     .chip.team-rnd{ background:#f3e8ff; color:#6b21a8; } /* 연구팀 보라 */
     .chip.team-admin{ background:#fef9c3; color:#92400e; } /* 경영지원팀 노랑 */
     /* 내부 resources 편집 섹션 제거로 관련 스타일 삭제 */
@@ -364,7 +371,7 @@ export class AuditGivaudanComponent {
     try{
       switch(status){
         case 'pending': return { background:'#fff7ed', borderColor:'#f59e0b', color:'#92400e' } as any;
-        case 'in-progress': return { background:'#eff6ff', borderColor:'#60a5fa', color:'#1d4ed8' } as any;
+        case 'in-progress': return { background:'#ecfdf5', borderColor:'#10b981', color:'#065f46' } as any;
         case 'on-hold': return { background:'#f3f4f6', borderColor:'#9ca3af', color:'#374151' } as any;
         case 'na': return { background:'#f8fafc', borderColor:'#cbd5e1', color:'#475569' } as any;
         case 'impossible': return { background:'#fee2e2', borderColor:'#ef4444', color:'#991b1b' } as any;
@@ -393,6 +400,12 @@ export class AuditGivaudanComponent {
       case 'done': return '#3b82f6';
       default: return '#e5e7eb';
     }
+  }
+
+  displayDeptName(name: string){
+    try{
+      return name.replace(/팀$/,'');
+    }catch{ return name; }
   }
 
   pad2(n: number){ return String(n).padStart(2,'0'); }
