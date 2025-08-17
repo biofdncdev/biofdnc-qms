@@ -2,11 +2,14 @@
   <div class="header">
     <h3>사용자 관리</h3>
     <div class="toolbar">
-      <mat-select [(value)]="statusFilter" (selectionChange)="load()">
-        <mat-option value="all">전체</mat-option>
-        <mat-option value="active">사용중</mat-option>
-        <mat-option value="inactive">사용중지</mat-option>
-      </mat-select>
+      <div class="status-filter">
+        <label>상태</label>
+        <mat-select [(value)]="statusFilter" (selectionChange)="load()">
+          <mat-option value="all">전체</mat-option>
+          <mat-option value="active">사용중</mat-option>
+          <mat-option value="inactive">사용중지</mat-option>
+        </mat-select>
+      </div>
       <button mat-flat-button color="primary" (click)="saveChanges()" [disabled]="!pendingCount">저장</button>
     </div>
   </div>
@@ -44,9 +47,9 @@
     <ng-container matColumnDef="status">
       <th mat-header-cell *matHeaderCellDef>상태</th>
       <td mat-cell *matCellDef="let r">
-        <button mat-stroked-button (click)="toggleStatus(r)" [color]="r.status==='inactive' ? 'warn' : undefined">
-          {{ r.status === 'inactive' ? '사용중지' : '사용중' }}
-        </button>
+        <mat-select [value]="r.status" (selectionChange)="changeStatus(r, $event.value)">
+          <mat-option *ngFor="let s of statuses" [value]="s">{{ s === 'active' ? '사용중' : '사용중지' }}</mat-option>
+        </mat-select>
       </td>
     </ng-container>
 
@@ -59,13 +62,6 @@
       </td>
     </ng-container>
 
-    <ng-container matColumnDef="actions">
-      <th mat-header-cell *matHeaderCellDef>관리</th>
-      <td mat-cell *matCellDef="let r">
-        <button mat-icon-button matTooltip="비밀번호 초기화" (click)="resetPassword(r)"><mat-icon>lock_reset</mat-icon></button>
-        <button mat-icon-button color="warn" matTooltip="사용자 삭제" (click)="deleteUser(r)"><mat-icon>delete</mat-icon></button>
-      </td>
-    </ng-container>
 
     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>

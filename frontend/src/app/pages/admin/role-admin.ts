@@ -15,9 +15,10 @@ import { MatDialogModule } from '@angular/material/dialog';
   styleUrls: ['./role-admin.scss']
 })
 export class RoleAdminComponent implements OnInit {
-  displayedColumns = ['name','email','created_at','updated_at','last_sign_in_at','is_online','status','role','actions'];
+  displayedColumns = ['name','email','created_at','updated_at','last_sign_in_at','is_online','status','role'];
   rows: any[] = [];
   roles = ['admin','manager','staff','viewer'];
+  statuses: Array<'active' | 'inactive'> = ['active','inactive'];
   loading = false;
   pending: Record<string, string> = {};
   statusFilter: 'all' | 'active' | 'inactive' = 'all';
@@ -75,6 +76,12 @@ export class RoleAdminComponent implements OnInit {
   async toggleStatus(row: any) {
     const next = row.status === 'inactive' ? 'active' : 'inactive';
     await this.supabase.getClient().from('users').update({ status: next, updated_at: new Date().toISOString() }).eq('id', row.id);
+    await this.load();
+  }
+
+  async changeStatus(row: any, status: 'active' | 'inactive') {
+    if (row.status === status) return;
+    await this.supabase.getClient().from('users').update({ status, updated_at: new Date().toISOString() }).eq('id', row.id);
     await this.load();
   }
 }
