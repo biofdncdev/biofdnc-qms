@@ -8,7 +8,7 @@
         <mat-card-title>BIO-FD&C</mat-card-title>
       </mat-card-header>
       <mat-card-content>
-        <form (ngSubmit)="login()">
+        <form (ngSubmit)="login()" (keydown.enter)="submitOnEnter($event)">
           <mat-form-field appearance="outline">
             <mat-label>이메일</mat-label>
             <input matInput placeholder="email@example.com" required [(ngModel)]="email" name="email">

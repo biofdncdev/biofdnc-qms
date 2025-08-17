@@ -32,6 +32,11 @@ export class LoginComponent {
 
   constructor(private router: Router, private supabase: SupabaseService) {}
 
+  submitOnEnter(event: KeyboardEvent) {
+    event.preventDefault();
+    this.login();
+  }
+
   async login() {
     const email = this.email?.trim().toLowerCase();
     const password = this.password ?? '';
