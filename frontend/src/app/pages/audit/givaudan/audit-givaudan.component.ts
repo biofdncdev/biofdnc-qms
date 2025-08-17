@@ -52,7 +52,7 @@ interface AuditDate { value: string; label: string; }
               </select>
               <select class="dept-select" [ngModel]="''" (ngModelChange)="addDept(it, $event)" title="담당 부서 추가">
                 <option value="" disabled>담당 부서 추가…</option>
-                <option *ngFor="let d of departments" [value]="d" [disabled]="it.departments?.includes(d)">{{ d }}</option>
+                <option *ngFor="let d of departments" [value]="d" [disabled]="it.departments.includes(d)">{{ d }}</option>
               </select>
               <div class="chips" *ngIf="it.departments?.length">
                 <span class="chip" *ngFor="let d of it.departments">{{ d }}
