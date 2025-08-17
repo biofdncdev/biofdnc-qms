@@ -1,6 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+import { SupabaseService } from '../../services/supabase.service';
 
 @Component({
   selector: 'app-home',
@@ -37,4 +38,16 @@ import { RouterModule } from '@angular/router';
   `,
   styleUrls: ['./home.scss']
 })
-export class HomeComponent {}
+export class HomeComponent implements OnInit {
+  isAdmin = false;
+
+  constructor(private supabase: SupabaseService) {}
+
+  async ngOnInit() {
+    const u = await this.supabase.getCurrentUser();
+    if (u) {
+      const { data } = await this.supabase.getUserProfile(u.id);
+      this.isAdmin = (data?.role === 'admin' || data?.role === 'manager');
+    }
+  }
+}
