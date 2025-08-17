@@ -38,7 +38,7 @@ interface AuditDate { value: string; label: string; }
                 <span class="box"><span class="tick" *ngIf="it.done">✔</span></span>
               </label>
               <div class="meta" *ngIf="it.doneBy">{{ it.doneBy }} · {{ it.doneAt }}</div>
-              <select [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" [ngClass]="statusClass(it.status)">
+              <select [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" (change)="saveProgress(it)" [ngClass]="statusClass(it.status)" [ngStyle]="statusStyle(it.status)">
                 <option value="pending">준비중 / Pending</option>
                 <option value="in-progress">진행중 / In progress</option>
                 <option value="on-hold">보류 / On hold</option>
@@ -315,5 +315,16 @@ export class AuditGivaudanComponent {
       'status-impossible': status==='impossible',
       'status-done': status==='done',
     };
+  }
+  statusStyle(status: string){
+    switch(status){
+      case 'pending': return { background:'#fff7ed', borderColor:'#f59e0b', color:'#92400e' };
+      case 'in-progress': return { background:'#eff6ff', borderColor:'#60a5fa', color:'#1d4ed8' };
+      case 'on-hold': return { background:'#f3f4f6', borderColor:'#9ca3af', color:'#374151' };
+      case 'na': return { background:'#f8fafc', borderColor:'#cbd5e1', color:'#475569' };
+      case 'impossible': return { background:'#fee2e2', borderColor:'#ef4444', color:'#991b1b' };
+      case 'done': return { background:'#dbeafe', borderColor:'#3b82f6', color:'#1e40af' };
+      default: return {};
+    }
   }
 }
