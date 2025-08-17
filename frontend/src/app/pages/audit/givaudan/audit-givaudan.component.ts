@@ -133,7 +133,7 @@ interface AuditDate { value: string; label: string; }
     .controls{ display:flex; align-items:center; gap:8px; }
     .controls select{ padding:8px 10px; border-radius:8px; border:1px solid #e5e7eb; }
 
-    .layout{ display:grid; grid-template-columns: minmax(0,1fr) 360px; gap:16px; }
+    .layout{ display:grid; grid-template-columns: minmax(0,1fr) 320px; gap:16px; }
     @media (max-width: 1100px){ .layout{ grid-template-columns: 1fr; } }
 
     .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 160px); overflow:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
@@ -148,10 +148,10 @@ interface AuditDate { value: string; label: string; }
     .status-swatch{ width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #e5e7eb; }
     select{ padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; appearance:none; -webkit-appearance:none; -moz-appearance:none; }
     .dept-select{ min-width: 160px; max-width: 220px; }
-    /* 상태별 색상 (진행중=초록, 보류=노랑, 해당없음=회색) */
+    /* 상태별 색상 (진행중=초록, 보류=주황, 해당없음=회색) */
     .state select.status-pending{ background:#fff7ed; border-color:#f59e0b; color:#92400e; }
-    .state select.status-in-progress{ background:#ecfdf5; border-color:#34d399; color:#065f46; }
-    .state select.status-on-hold{ background:#fffbeb; border-color:#fbbf24; color:#92400e; }
+    .state select.status-in-progress{ background:#ecfdf5; border-color:#10b981; color:#065f46; }
+    .state select.status-on-hold{ background:#fff7ed; border-color:#fb923c; color:#9a3412; }
     .state select.status-na{ background:#f1f5f9; border-color:#cbd5e1; color:#334155; }
     .state select.status-impossible{ background:#fee2e2; border-color:#ef4444; color:#991b1b; }
     .state select.status-done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
@@ -386,8 +386,8 @@ export class AuditGivaudanComponent {
   statusColor(status: string){
     switch(status){
       case 'pending': return '#f59e0b';
-      case 'in-progress': return '#34d399';
-      case 'on-hold': return '#fbbf24';
+      case 'in-progress': return '#10b981';
+      case 'on-hold': return '#fb923c';
       case 'na': return '#94a3b8';
       case 'impossible': return '#ef4444';
       case 'done': return '#3b82f6';
