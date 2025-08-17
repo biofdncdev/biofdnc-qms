@@ -54,7 +54,7 @@ interface AuditDate { value: string; label: string; }
                 <option *ngFor="let d of departments" [value]="d" [disabled]="it.departments.includes(d)">{{ d }}</option>
               </select>
               <div class="chips" *ngIf="it.departments?.length">
-                <span class="chip" *ngFor="let d of it.departments">{{ d }}
+                <span class="chip" *ngFor="let d of it.departments" [ngClass]="teamClass(d)">{{ d }}
                   <button class="remove" (click)="removeDept(it, d); $event.stopPropagation()">×</button>
                 </span>
               </div>
@@ -133,7 +133,7 @@ interface AuditDate { value: string; label: string; }
     .controls{ display:flex; align-items:center; gap:8px; }
     .controls select{ padding:8px 10px; border-radius:8px; border:1px solid #e5e7eb; }
 
-    .layout{ display:grid; grid-template-columns: 1fr 320px; gap:16px; }
+    .layout{ display:grid; grid-template-columns: minmax(0,1fr) 360px; gap:16px; }
     @media (max-width: 1100px){ .layout{ grid-template-columns: 1fr; } }
 
     .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 160px); overflow:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
@@ -157,7 +157,7 @@ interface AuditDate { value: string; label: string; }
     .state select.status-done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
     .save-badge{ margin-left:6px; font-size:.85em; color:#64748b; }
     .save-badge.saved{ color:#16a34a; }
-    textarea{ width:100%; max-width: 280px; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
+    textarea{ width:100%; max-width: 260px; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
 
     .item .details{ grid-column: 1 / -1; overflow:hidden; }
     .item.open .details{ animation: slideDown .22s ease-out; }
@@ -171,11 +171,11 @@ interface AuditDate { value: string; label: string; }
     .chip{ background:#eef2ff; color:#3730a3; padding:4px 8px; border-radius:999px; font-weight:600; font-size:.85em; display:inline-flex; align-items:center; gap:6px; }
     .chip .remove{ background:transparent; border:0; color:#333; cursor:pointer; line-height:1; padding:0 4px; border-radius:8px; }
     .chip .remove:hover{ background:#e5e7eb; }
-    .chip.team-rmd{ background:#ffedd5; color:#9a3412; }
-    .chip.team-cell{ background:#dcfce7; color:#166534; }
-    .chip.team-qc{ background:#e0e7ff; color:#3730a3; }
-    .chip.team-rnd{ background:#fce7f3; color:#9d174d; }
-    .chip.team-admin{ background:#f1f5f9; color:#0f172a; }
+    .chip.team-rmd{ background:#dbeafe; color:#1e40af; } /* 원료제조팀 파랑 */
+    .chip.team-cell{ background:#dcfce7; color:#166534; } /* 식물세포배양팀 연두 */
+    .chip.team-qc{ background:#dcfce7; color:#166534; } /* 품질팀 초록 */
+    .chip.team-rnd{ background:#f3e8ff; color:#6b21a8; } /* 연구팀 보라 */
+    .chip.team-admin{ background:#fef9c3; color:#92400e; } /* 경영지원팀 노랑 */
     /* 내부 resources 편집 섹션 제거로 관련 스타일 삭제 */
 
     @keyframes slideDown { from{ opacity:0; transform: translateY(-6px); } to{ opacity:1; transform:none; } }
@@ -187,10 +187,10 @@ interface AuditDate { value: string; label: string; }
     .checkbox.small .box{ width:18px; height:18px; }
     .checkbox.small .tick{ font-size:12px; }
 
-    .resources{ background:#fff; border:1px solid #eee; border-radius:12px; padding:16px; box-shadow:0 8px 22px rgba(2,6,23,.06); height: calc(100vh - 160px); overflow:auto; }
+    .resources{ background:#fff; border:1px solid #eee; border-radius:16px; padding:16px; box-shadow:0 10px 24px rgba(2,6,23,.06); height: calc(100vh - 160px); overflow:auto; width:100%; box-sizing:border-box; }
     .resources .sticky{ position:sticky; top:0; background:#fff; padding-bottom:8px; }
     .re-head{ display:flex; align-items:center; justify-content:space-between; }
-    .resource-card{ border:1px solid #e5e7eb; border-radius:12px; padding:10px 12px; margin:10px 6px; background:linear-gradient(180deg,#f8fafc,#ffffff); }
+    .resource-card{ border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin:12px 6px; background:linear-gradient(180deg,#f8fafc,#ffffff); box-shadow:0 4px 14px rgba(2,6,23,.05); }
     .resource-card .col{ display:flex; flex-direction:column; gap:8px; }
     .re-row{ display:flex; align-items:center; gap:8px; }
     .re-input{ width:100%; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; }
