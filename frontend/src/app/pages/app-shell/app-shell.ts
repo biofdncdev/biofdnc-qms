@@ -35,7 +35,8 @@ export class AppShellComponent {
   // Motion tokens derived from M3 motion guidance
   readonly drawerDurationMs = 320;
   readonly drawerEasing = 'cubic-bezier(0.2, 0, 0, 1)';
-  sectionMenu: Array<{ label: string; selected?: boolean; onClick?: () => void }> = [];
+  sectionMenu: Array<{ label: string; path?: string; selected?: boolean }> = [];
+  menus: Array<{ key: string; icon: string; label: string; path?: string; submenu?: Array<{ label: string; path?: string }> }> = [];
   isAdmin = false;
 
   constructor(private router: Router, private supabase: SupabaseService) {
@@ -45,17 +46,64 @@ export class AppShellComponent {
         const { data } = await this.supabase.getUserProfile(u.id);
         this.isAdmin = data?.role === 'admin' || data?.role === 'manager';
       }
+      this.buildMenus();
     });
+    // initial menus before profile resolves
+    this.buildMenus();
   }
 
-  openLeft(key?: string) {
-    if (key) this.selected.set(key);
-    // build section-specific submenu (placeholder items)
-    this.sectionMenu = [
-      { label: `${this.selected().toUpperCase()} - 메뉴 1` },
-      { label: `${this.selected().toUpperCase()} - 메뉴 2` },
-      { label: `${this.selected().toUpperCase()} - 메뉴 3` },
+  private buildMenus() {
+    this.menus = [
+      { key: 'home', icon: 'home', label: 'Home', path: '/app/home' },
+      { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [
+        { label: '목록' }, { label: '등록' }, { label: '승인' }
+      ] },
+      { key: 'product', icon: 'category', label: 'Product', submenu: [
+        { label: '목록' }, { label: '등록' }
+      ] },
+      { key: 'standard', icon: 'tune', label: 'Standard', submenu: [ { label: '개정 관리' } ] },
+      { key: 'record', icon: 'description', label: 'Record', submenu: [ { label: '업로드' }, { label: '검토' } ] },
+      { key: 'audit', icon: 'fact_check', label: 'Audit', submenu: [ { label: '내부 감사' }, { label: '외부 감사' } ] },
+      { key: 'user', icon: 'group', label: 'User', submenu: [
+        { label: '프로필', path: '/app/profile' },
+        ...(this.isAdmin ? [{ label: '사용자 관리', path: '/app/admin/roles' }] : [])
+      ] },
     ];
+  }
+
+  private openLeftForKey(key: string) {
+    this.selected.set(key);
+    const menu = this.menus.find(m => m.key === key);
+    this.sectionMenu = menu?.submenu ?? [];
+    if (this.sectionMenu.length > 0) this.leftOpen = true;
+  }
+
+  onRailMouseEnter(key: string) {
+    const menu = this.menus.find(m => m.key === key);
+    if (menu?.submenu && menu.submenu.length > 0) {
+      this.openLeftForKey(key);
+    } else {
+      this.selected.set(key);
+    }
+  }
+
+  onMainClick(menu: { key: string; path?: string; submenu?: Array<{ label: string; path?: string }> }) {
+    this.selected.set(menu.key);
+    if (menu.submenu && menu.submenu.length > 0) {
+      // keep drawer open
+      this.sectionMenu = menu.submenu;
+      this.leftOpen = true;
+      if (menu.path) this.router.navigate([menu.path]);
+      return;
+    }
+    // no submenu → navigate and close drawer
+    if (menu.path) this.router.navigate([menu.path]);
+    this.leftOpen = false;
+  }
+
+  onSubClick(item: { path?: string }) {
+    if (item.path) this.router.navigate([item.path]);
+    // keep drawer open for submenu navigation
     this.leftOpen = true;
   }
 
