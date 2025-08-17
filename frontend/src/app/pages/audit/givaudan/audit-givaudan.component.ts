@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../../services/supabase.service';
 
-interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; doneBy?: string; doneAt?: string; }
+interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; doneBy?: string; doneAt?: string; }
 interface AuditDate { value: string; label: string; }
 
 @Component({
@@ -216,7 +216,8 @@ export class AuditGivaudanComponent {
     titleEn: `Inspection item ${i+1}`,
     done: false,
     status: 'pending',
-    note: ''
+    note: '',
+    departments: []
   })));
 
   resources = [
