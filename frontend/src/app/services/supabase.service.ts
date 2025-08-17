@@ -97,4 +97,72 @@ export class SupabaseService {
     // Requires RPC to delete user both from auth and public.users
     return this.ensureClient().rpc('admin_delete_user', { user_id: id });
   }
+
+  // Givaudan Audit - assessment master
+  async getGivaudanAssessment(number: number) {
+    return this.ensureClient()
+      .from('givaudan_audit_assessment')
+      .select('*')
+      .eq('number', number)
+      .single();
+  }
+
+  // Givaudan Audit - per-item progress
+  async getGivaudanProgress(number: number) {
+    return this.ensureClient()
+      .from('givaudan_audit_progress')
+      .select('*')
+      .eq('number', number)
+      .maybeSingle();
+  }
+
+  async upsertGivaudanProgress(row: {
+    number: number;
+    note?: string | null;
+    status?: string | null;
+    departments?: string[] | null;
+    updated_by?: string | null;
+    updated_by_name?: string | null;
+  }) {
+    return this.ensureClient()
+      .from('givaudan_audit_progress')
+      .upsert(row, { onConflict: 'number' })
+      .select()
+      .single();
+  }
+
+  // Givaudan Audit - resources
+  async listGivaudanResources(number: number) {
+    return this.ensureClient()
+      .from('givaudan_audit_resources')
+      .select('*')
+      .eq('number', number)
+      .order('created_at', { ascending: true });
+  }
+
+  async addGivaudanResource(row: any) {
+    return this.ensureClient()
+      .from('givaudan_audit_resources')
+      .insert(row)
+      .select()
+      .single();
+  }
+
+  async deleteGivaudanResource(id: string) {
+    return this.ensureClient()
+      .from('givaudan_audit_resources')
+      .delete()
+      .eq('id', id);
+  }
+
+  async uploadAuditFile(file: File, path: string) {
+    // Ensure a bucket named 'audit_resources' exists in Supabase Storage
+    const { data, error } = await this.ensureClient()
+      .storage
+      .from('audit_resources')
+      .upload(path, file, { upsert: true });
+    if (error) throw error;
+    const { data: urlData } = this.ensureClient().storage.from('audit_resources').getPublicUrl(data.path);
+    return { path: data.path, publicUrl: urlData.publicUrl };
+  }
 }

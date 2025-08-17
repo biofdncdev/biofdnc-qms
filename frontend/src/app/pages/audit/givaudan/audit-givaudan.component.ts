@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, HostListener, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../../services/supabase.service';
@@ -26,7 +26,7 @@ interface AuditDate { value: string; label: string; }
       <section class="checklist">
         <div class="group">
           <h3>요구사항 / Requirements</h3>
-          <div class="item" *ngFor="let it of items()">
+          <div class="item" *ngFor="let it of items()" (click)="toggleDetails(it)" [class.open]="openItemId===it.id">
             <div class="id">{{ it.id | number:'2.0-0' }}</div>
             <div class="text">
               <div class="ko">{{ it.titleKo }}</div>
@@ -38,7 +38,7 @@ interface AuditDate { value: string; label: string; }
                 <span class="box"><span class="tick" *ngIf="it.done">✔</span></span>
               </label>
               <div class="meta" *ngIf="it.doneBy">{{ it.doneBy }} · {{ it.doneAt }}</div>
-              <select [(ngModel)]="it.status">
+              <select [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)">
                 <option value="pending">준비중 / Pending</option>
                 <option value="in-progress">진행중 / In progress</option>
                 <option value="on-hold">보류 / On hold</option>
@@ -48,7 +48,50 @@ interface AuditDate { value: string; label: string; }
               </select>
             </div>
             <div class="note">
-              <textarea [(ngModel)]="it.note" rows="2" placeholder="비고 / Notes"></textarea>
+              <textarea [(ngModel)]="it.note" (blur)="saveProgress(it)" rows="2" placeholder="비고 / Notes"></textarea>
+            </div>
+            <div class="details" *ngIf="openItemId===it.id" (click)="$event.stopPropagation()">
+              <div class="details-inner">
+                <div class="assessment">
+                  <h4>평가 내용 / Assessment</h4>
+                  <div class="ass-body">
+                    <div class="row"><b>No.</b> <span>{{ assessment?.number }}</span></div>
+                    <div class="row"><b>Category</b> <span>{{ assessment?.category_no }}</span></div>
+                    <div class="row"><b>Title</b> <span>{{ assessment?.title }}</span></div>
+                    <div class="q">{{ assessment?.question }}</div>
+                    <div class="t">{{ assessment?.translation }}</div>
+                    <div class="acc">{{ assessment?.acceptance_criteria }}</div>
+                  </div>
+                </div>
+                <div class="assign">
+                  <label>담당 부서</label>
+                  <select multiple [(ngModel)]="it.departments" (ngModelChange)="saveProgress(it)">
+                    <option *ngFor="let d of departments" [value]="d">{{ d }}</option>
+                  </select>
+                  <div class="chips">
+                    <span class="chip" *ngFor="let d of it.departments">{{ d }}</span>
+                  </div>
+                </div>
+                <div class="resources-edit">
+                  <div class="re-head">
+                    <h4>대응 자료 / Resources</h4>
+                    <button (click)="addResource(it); $event.stopPropagation()">추가</button>
+                  </div>
+                  <div class="re-list">
+                    <div class="re-item" *ngFor="let r of resources">
+                      <div class="info">
+                        <div class="name">{{ r.name }}</div>
+                        <div class="type">{{ r.type }}</div>
+                      </div>
+                      <div class="act">
+                        <input type="file" (change)="uploadFor(r, $event)" />
+                        <button (click)="openResource(r); $event.stopPropagation()">Open</button>
+                        <button class="danger" (click)="removeResource(r); $event.stopPropagation()">삭제</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -97,7 +140,7 @@ interface AuditDate { value: string; label: string; }
 
     .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 160px); overflow:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
     .group h3{ margin:8px 6px 12px; }
-    .item{ display:grid; grid-template-columns: 54px 1fr 280px 1fr; gap:8px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); }
+    .item{ display:grid; grid-template-columns: 54px 1fr 280px 1fr; gap:8px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; }
     .id{ font-weight:700; color:#475569; display:flex; align-items:center; justify-content:center; }
     .ko{ font-weight:600; margin-bottom:2px; }
     .en{ color:#64748b; font-size:.92em; }
@@ -105,6 +148,23 @@ interface AuditDate { value: string; label: string; }
     .state .meta{ color:#475569; font-size:.85em; }
     select{ padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; }
     textarea{ width:100%; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
+
+    .item .details{ grid-column: 1 / -1; overflow:hidden; }
+    .item.open .details{ animation: slideDown .22s ease-out; }
+    .details-inner{ display:grid; grid-template-columns: 1.4fr .8fr 1fr; gap:16px; padding:10px 6px 12px; }
+    .assessment .row{ display:flex; gap:10px; margin:4px 0; }
+    .assessment .q{ margin-top:8px; font-weight:600; }
+    .assessment .t{ color:#475569; margin:6px 0; }
+    .assessment .acc{ background:#f8fafc; border:1px dashed #e2e8f0; border-radius:8px; padding:8px; }
+    .assign select{ min-height: 100px; }
+    .chips{ margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
+    .chip{ background:#eef2ff; color:#3730a3; padding:4px 8px; border-radius:999px; font-weight:600; font-size:.85em; }
+    .re-head{ display:flex; align-items:center; justify-content:space-between; }
+    .re-item{ display:flex; align-items:center; justify-content:space-between; border:1px solid #eef2f7; border-radius:10px; padding:8px 10px; margin:6px 0; }
+    .re-item .act button{ margin-left:6px; }
+    .re-item .act .danger{ background:#ef4444; color:#fff; }
+
+    @keyframes slideDown { from{ opacity:0; transform: translateY(-6px); } to{ opacity:1; transform:none; } }
 
     .checkbox{ display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
     .checkbox input{ display:none; }
@@ -164,4 +224,68 @@ export class AuditGivaudanComponent {
 
   previewing = false; previewItem: any=null;
   preview(r: any){ this.previewItem = r; this.previewing = true; }
+
+  // Slide open state and assessment/progress
+  openItemId: number | null = null;
+  assessment: any = null;
+  departments = ['원료제조팀','식물세포배양팀','품질팀','연구팀','경영지원팀'];
+
+  async toggleDetails(it: any){
+    if(this.openItemId === it.id){ this.openItemId = null; return; }
+    this.openItemId = it.id;
+    // Load assessment master
+    const { data } = await this.supabase.getGivaudanAssessment(it.id);
+    this.assessment = data;
+    // Load progress
+    const { data: prog } = await this.supabase.getGivaudanProgress(it.id);
+    if (prog){
+      it.status = (prog.status as any) || it.status;
+      it.note = prog.note || it.note;
+      it.departments = prog.departments || [];
+    }
+    // Load resources
+    const { data: res } = await this.supabase.listGivaudanResources(it.id);
+    this.resources = res || [];
+  }
+
+  async saveProgress(it: any){
+    try{
+      const payload = {
+        number: it.id,
+        note: it.note || null,
+        status: it.status || null,
+        departments: it.departments || [],
+        updated_by: this.userDisplay,
+        updated_by_name: this.userDisplay,
+      };
+      await this.supabase.upsertGivaudanProgress(payload);
+    }catch{}
+  }
+
+  async addResource(it: any){
+    const row = { number: it.id, name: '새 자료', type: 'Manual', url: null, file_url: null };
+    const { data } = await this.supabase.addGivaudanResource(row);
+    this.resources = [...(this.resources || []), data];
+  }
+
+  async removeResource(r: any){
+    await this.supabase.deleteGivaudanResource(r.id);
+    this.resources = (this.resources || []).filter((x:any)=>x.id!==r.id);
+  }
+
+  async uploadFor(r: any, ev: any){
+    const file: File | undefined = ev?.target?.files?.[0];
+    if(!file) return;
+    const ext = file.name.split('.').pop();
+    const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { publicUrl } = await this.supabase.uploadAuditFile(file, path);
+    r.file_url = publicUrl;
+  }
+
+  openResource(r: any){ this.preview(r); }
+
+  @HostListener('document:keydown.escape') onEsc(){
+    if(this.previewing){ this.previewing=false; return; }
+    if(this.openItemId!=null){ this.openItemId=null; }
+  }
 }
