@@ -32,7 +32,8 @@
     <div class="rail-spacer"></div>
 
     <div class="account">
-      <button mat-icon-button (click)="openAccountMenu()">
+      <!-- M3 pattern: long-press/hover shows tooltip; click toggles end drawer -->
+      <button mat-icon-button matTooltip="Account" (click)="openAccountMenu()">
         <mat-icon>account_circle</mat-icon>
       </button>
     </div>

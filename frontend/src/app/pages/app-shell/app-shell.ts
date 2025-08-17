@@ -32,6 +32,9 @@ export class AppShellComponent {
   selected = signal<string>('home');
   leftOpen = false;
   accountOpen = false;
+  // Motion tokens derived from M3 motion guidance
+  readonly drawerDurationMs = 320;
+  readonly drawerEasing = 'cubic-bezier(0.2, 0, 0, 1)';
   sectionMenu: Array<{ label: string; selected?: boolean; onClick?: () => void }> = [];
   isAdmin = false;
 
