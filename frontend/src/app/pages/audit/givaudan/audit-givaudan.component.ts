@@ -26,9 +26,21 @@ interface AuditDate { value: string; label: string; }
       <section class="checklist">
         <div class="group">
           <h3>요구사항 / Requirements</h3>
-          <div class="item" *ngFor="let it of items()" (click)="toggleDetails(it)" [class.open]="openItemId===it.id">
+          <div class="filterbar">
+            <label>팀 필터</label>
+            <select class="dept-select" [ngModel]="''" (ngModelChange)="addFilterTeam($event)">
+              <option value="" disabled>팀 추가…</option>
+              <option *ngFor="let d of departments" [value]="d" [disabled]="filterTeams.includes(d)">{{ d }}</option>
+            </select>
+            <div class="chips" *ngIf="filterTeams.length">
+              <span class="chip" *ngFor="let d of filterTeams" [ngClass]="teamClass(d)">{{ d }}
+                <button class="remove" (click)="removeFilterTeam(d)">×</button>
+              </span>
+            </div>
+          </div>
+          <div class="item" *ngFor="let it of visibleItems()" [class.open]="openItemId===it.id">
             <div class="id">{{ it.id | number:'2.0-0' }}</div>
-            <div class="text">
+            <div class="text" (click)="toggleDetails(it)">
               <div class="ko">{{ it.titleKo }}</div>
               <div class="en">{{ it.titleEn }}</div>
             </div>
@@ -73,20 +85,31 @@ interface AuditDate { value: string; label: string; }
       </section>
 
       <aside class="resources">
-        <h3>대응 자료 / Resources</h3>
-        <div class="resource-card" *ngFor="let r of resources">
-          <div class="info">
-            <div class="name">{{ r.name }}</div>
-            <div class="type">{{ r.type }}</div>
+        <ng-container *ngIf="openItemId; else emptySel">
+          <div class="re-head sticky">
+            <h3>{{ pad2(openItemId!) }} 자료 / Resources</h3>
+            <button (click)="addResourceByAside()">항목 추가</button>
           </div>
-          <div class="actions">
-            <label class="checkbox small">
-              <input type="checkbox" [(ngModel)]="r.done">
-              <span class="box"><span class="tick" *ngIf="r.done">✔</span></span>
-            </label>
-            <button (click)="preview(r)">Open</button>
+          <div class="resource-card" *ngFor="let r of resources">
+            <div class="col">
+              <input class="re-input" [(ngModel)]="r.name" (blur)="saveResource(r)" placeholder="자료명" />
+              <div class="re-row">
+                <input class="re-input" [(ngModel)]="r.url" (blur)="saveResource(r)" placeholder="링크(규정/지시기록서/외부)" />
+                <button (click)="openLink(r.url)" [disabled]="!r.url">열기</button>
+              </div>
+              <div class="re-row">
+                <input type="file" (change)="uploadFor(r, $event)" />
+                <button (click)="openLink(r.file_url)" [disabled]="!r.file_url">파일 열기</button>
+                <button class="danger" (click)="clearFile(r)" [disabled]="!r.file_url">파일 삭제</button>
+                <button class="danger" (click)="removeResource(r)">항목 삭제</button>
+              </div>
+            </div>
           </div>
-        </div>
+        </ng-container>
+        <ng-template #emptySel>
+          <h3>대응 자료 / Resources</h3>
+          <p class="hint">좌측에서 점검항목을 선택하면 관련 자료가 표시됩니다.</p>
+        </ng-template>
       </aside>
     </div>
 
@@ -115,6 +138,7 @@ interface AuditDate { value: string; label: string; }
 
     .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 160px); overflow:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
     .group h3{ margin:8px 6px 12px; }
+    .filterbar{ display:flex; align-items:center; gap:10px; margin:6px; flex-wrap:wrap; }
     .item{ display:grid; grid-template-columns: 54px 1fr 280px 1fr; gap:8px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; }
     .id{ font-weight:700; color:#475569; display:flex; align-items:center; justify-content:center; }
     .ko{ font-weight:600; margin-bottom:2px; }
@@ -147,6 +171,11 @@ interface AuditDate { value: string; label: string; }
     .chip{ background:#eef2ff; color:#3730a3; padding:4px 8px; border-radius:999px; font-weight:600; font-size:.85em; display:inline-flex; align-items:center; gap:6px; }
     .chip .remove{ background:transparent; border:0; color:#333; cursor:pointer; line-height:1; padding:0 4px; border-radius:8px; }
     .chip .remove:hover{ background:#e5e7eb; }
+    .chip.team-rmd{ background:#ffedd5; color:#9a3412; }
+    .chip.team-cell{ background:#dcfce7; color:#166534; }
+    .chip.team-qc{ background:#e0e7ff; color:#3730a3; }
+    .chip.team-rnd{ background:#fce7f3; color:#9d174d; }
+    .chip.team-admin{ background:#f1f5f9; color:#0f172a; }
     /* 내부 resources 편집 섹션 제거로 관련 스타일 삭제 */
 
     @keyframes slideDown { from{ opacity:0; transform: translateY(-6px); } to{ opacity:1; transform:none; } }
@@ -159,6 +188,13 @@ interface AuditDate { value: string; label: string; }
     .checkbox.small .tick{ font-size:12px; }
 
     .resources{ background:#fff; border:1px solid #eee; border-radius:12px; padding:12px; box-shadow:0 8px 22px rgba(2,6,23,.06); height: calc(100vh - 160px); overflow:auto; }
+    .resources .sticky{ position:sticky; top:0; background:#fff; padding-bottom:8px; }
+    .re-head{ display:flex; align-items:center; justify-content:space-between; }
+    .resource-card{ border:1px solid #eef2f7; border-radius:10px; padding:8px 10px; margin:8px 4px; }
+    .resource-card .col{ display:flex; flex-direction:column; gap:8px; }
+    .re-row{ display:flex; align-items:center; gap:8px; }
+    .re-input{ width:100%; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; }
+    .hint{ color:#64748b; margin:8px 0 0 4px; }
     .resource-card{ display:flex; align-items:center; justify-content:space-between; border:1px solid #f1f5f9; border-radius:12px; padding:10px 12px; margin:8px 4px; }
     .resource-card .name{ font-weight:700; }
     .resource-card .type{ color:#64748b; font-size:.9em; }
@@ -215,9 +251,10 @@ export class AuditGivaudanComponent {
   openItemId: number | null = null;
   assessment: any = null;
   departments = ['원료제조팀','식물세포배양팀','품질팀','연구팀','경영지원팀'];
+  filterTeams: string[] = [];
 
   async toggleDetails(it: any){
-    if(this.openItemId === it.id){ this.openItemId = null; return; }
+    if(this.openItemId === it.id){ return; }
     this.openItemId = it.id;
     // Load assessment master
     const { data } = await this.supabase.getGivaudanAssessment(it.id);
@@ -251,6 +288,15 @@ export class AuditGivaudanComponent {
     }catch{}
   }
 
+  visibleItems(){
+    const arr = this.items();
+    if(this.filterTeams.length===0) return arr;
+    return arr.filter((it:any)=> it.departments?.some((d:string)=> this.filterTeams.includes(d)));
+  }
+
+  addFilterTeam(dept: string){ if(!dept) return; if(!this.filterTeams.includes(dept)) this.filterTeams = [...this.filterTeams, dept]; }
+  removeFilterTeam(dept: string){ this.filterTeams = this.filterTeams.filter(d=>d!==dept); }
+
   addDept(it: any, dept: string){
     if(!dept) return;
     if(!it.departments) it.departments = [];
@@ -270,6 +316,13 @@ export class AuditGivaudanComponent {
     this.resources = [...(this.resources || []), data];
   }
 
+  async addResourceByAside(){
+    if(!this.openItemId) return;
+    const row = { number: this.openItemId, name: '새 자료', type: 'Manual', url: null, file_url: null };
+    const { data } = await this.supabase.addGivaudanResource(row);
+    this.resources = [...(this.resources || []), data];
+  }
+
   async removeResource(r: any){
     await this.supabase.deleteGivaudanResource(r.id);
     this.resources = (this.resources || []).filter((x:any)=>x.id!==r.id);
@@ -285,6 +338,9 @@ export class AuditGivaudanComponent {
   }
 
   openResource(r: any){ this.preview(r); }
+  saveResource(r: any){ /* could call update when implemented; currently saved via upsert on add/upload */ }
+  openLink(url?: string){ if(!url) return; window.open(url, '_blank'); }
+  clearFile(r: any){ r.file_url = null; }
 
   @HostListener('document:keydown.escape') onEsc(){
     if(this.previewing){ this.previewing=false; return; }
@@ -324,6 +380,16 @@ export class AuditGivaudanComponent {
         default: return {} as any;
       }
     } catch { return {} as any; }
+  }
+
+  teamClass(team: string){
+    return {
+      'team-rmd': team==='원료제조팀',
+      'team-cell': team==='식물세포배양팀',
+      'team-qc': team==='품질팀',
+      'team-rnd': team==='연구팀',
+      'team-admin': team==='경영지원팀',
+    } as any;
   }
   statusColor(status: string){
     switch(status){
