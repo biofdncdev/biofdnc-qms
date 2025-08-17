@@ -1,4 +1,5 @@
 import { Component, signal } from '@angular/core';
+import { trigger, transition, style, animate } from '@angular/animations';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { MatSidenavModule } from '@angular/material/sidenav';
@@ -28,6 +29,14 @@ import { SupabaseService } from '../../services/supabase.service';
   ],
   templateUrl: './app-shell.html',
   styleUrls: ['./app-shell.scss'],
+  animations: [
+    trigger('routeFade', [
+      transition(':enter', [
+        style({ opacity: 0 }),
+        animate('220ms ease', style({ opacity: 1 }))
+      ])
+    ])
+  ]
 })
 export class AppShellComponent {
   selected = signal<string>('home');

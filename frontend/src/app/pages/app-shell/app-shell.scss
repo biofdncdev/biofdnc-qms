@@ -83,7 +83,7 @@
 .section-drawer.open { transform: translateX(0); }
 .side-menu { padding: 12px 10px; }
 .side-title { font-weight: 700; margin: 4px 8px 12px; }
-.side-link { display: block; padding: 10px 14px; border-radius: 999px; margin: 6px 8px; color: #374151; text-decoration: none; cursor: pointer; position: relative; overflow: hidden; transition: color 160ms ease; }
+.side-link { display: block; padding: 10px 14px; border-radius: 999px; margin: 6px 8px; color: #374151; text-decoration: none; cursor: pointer; position: relative; overflow: hidden; transition: color 160ms ease; font-family: 'Inter', 'Pretendard Variable', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif; font-weight: 500; }
 .side-link::before { content: ""; position: absolute; inset: 0; border-radius: 999px; background: radial-gradient(120px 60px at var(--mx,50%) var(--my,50%), rgba(99,102,241,.15), transparent 60%); opacity: 0; transition: opacity 220ms ease, transform 220ms ease; transform: scale(.96); }
 .side-link:hover::before { opacity: 1; transform: scale(1); }
 .side-link.selected { background: #ecebff; color: #3730a3; }
