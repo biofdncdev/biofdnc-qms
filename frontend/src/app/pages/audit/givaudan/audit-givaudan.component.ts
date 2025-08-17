@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../../services/supabase.service';
 
 interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; doneBy?: string; doneAt?: string; }
+interface ResourceItem { id?: string; number?: number; name: string; type?: string; url?: string | null; file_url?: string | null; done?: boolean; }
 interface AuditDate { value: string; label: string; }
 
 @Component({
@@ -226,12 +227,7 @@ export class AuditGivaudanComponent {
     departments: []
   })));
 
-  resources = [
-    { name: 'BF-RMD-QC-IR-02 시험 의뢰/성적서 양식', type: 'Form / IR', done: false },
-    { name: 'BF-RMD-PM-IR-02 제조 지시·기록서', type: 'IR', done: false },
-    { name: '표준 작업절차(SOP) 문서', type: 'Regulation', done: false },
-    { name: 'ERP 스크린샷 (입고/출고 로그)', type: 'External', done: false },
-  ];
+  resources: ResourceItem[] = [];
 
   setDate(value: string){ this.selectedDate.set(value); }
 
@@ -313,14 +309,14 @@ export class AuditGivaudanComponent {
   async addResource(it: any){
     const row = { number: it.id, name: '새 자료', type: 'Manual', url: null, file_url: null };
     const { data } = await this.supabase.addGivaudanResource(row);
-    this.resources = [...(this.resources || []), data];
+    this.resources = [...(this.resources || []), data as ResourceItem];
   }
 
   async addResourceByAside(){
     if(!this.openItemId) return;
     const row = { number: this.openItemId, name: '새 자료', type: 'Manual', url: null, file_url: null };
     const { data } = await this.supabase.addGivaudanResource(row);
-    this.resources = [...(this.resources || []), data];
+    this.resources = [...(this.resources || []), data as ResourceItem];
   }
 
   async removeResource(r: any){
@@ -337,10 +333,10 @@ export class AuditGivaudanComponent {
     r.file_url = publicUrl;
   }
 
-  openResource(r: any){ this.preview(r); }
-  saveResource(r: any){ /* could call update when implemented; currently saved via upsert on add/upload */ }
-  openLink(url?: string){ if(!url) return; window.open(url, '_blank'); }
-  clearFile(r: any){ r.file_url = null; }
+  openResource(r: ResourceItem){ this.preview(r); }
+  saveResource(r: ResourceItem){ /* placeholder for future update call */ }
+  openLink(url?: string | null){ if(!url) return; window.open(url, '_blank'); }
+  clearFile(r: ResourceItem){ r.file_url = null; }
 
   @HostListener('document:keydown.escape') onEsc(){
     if(this.previewing){ this.previewing=false; return; }
