@@ -16,7 +16,7 @@ interface AuditDate { value: string; label: string; }
       <div class="title">GIVAUDAN Audit</div>
       <div class="controls">
         <label>Audit Date</label>
-        <select [(ngModel)]="selectedDate()" (ngModelChange)="setDate($event)">
+        <select [ngModel]="selectedDate()" (ngModelChange)="setDate($event)">
           <option *ngFor="let d of dates" [value]="d.value">{{ d.label }}</option>
         </select>
       </div>
