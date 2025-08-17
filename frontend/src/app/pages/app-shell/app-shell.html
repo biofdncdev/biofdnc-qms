@@ -49,15 +49,13 @@
     </main>
   </section>
 
-  <!-- Left-origin sheet for section menus -->
-  <mat-sidenav-container class="left-sidenav" hasBackdrop [style.visibility]="leftOpen ? 'visible' : 'hidden'">
-    <mat-sidenav mode="over" position="start" [(opened)]="leftOpen">
-      <div class="side-menu">
-        <div class="side-title">{{ selected() | titlecase }}</div>
-        <a class="side-link" *ngFor="let item of sectionMenu" [class.selected]="item.selected" (click)="item.onClick && item.onClick()">{{ item.label }}</a>
-      </div>
-    </mat-sidenav>
-  </mat-sidenav-container>
+  <!-- Left slide panel without backdrop; overlays right next to the nav rail -->
+  <aside class="section-drawer" [class.open]="leftOpen" aria-label="Section menu">
+    <div class="side-menu">
+      <div class="side-title">{{ selected() | titlecase }}</div>
+      <a class="side-link" *ngFor="let item of sectionMenu" [class.selected]="item.selected" (click)="item.onClick && item.onClick()">{{ item.label }}</a>
+    </div>
+  </aside>
 
   <!-- Account-only menu on right -->
   <mat-sidenav-container class="right-sidenav" hasBackdrop [style.visibility]="accountOpen ? 'visible' : 'hidden'">
