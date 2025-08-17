@@ -398,4 +398,6 @@ export class AuditGivaudanComponent {
       default: return '#e5e7eb';
     }
   }
+
+  pad2(n: number){ return String(n).padStart(2,'0'); }
 }
