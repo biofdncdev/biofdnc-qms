@@ -51,7 +51,7 @@ export const routes: Routes = [
       },
       {
         path: 'audit/givaudan',
-        loadComponent: () => import('./pages/home/home').then(m => m.HomeComponent),
+        loadComponent: () => import('./pages/audit/givaudan/audit-givaudan.component').then(m => m.AuditGivaudanComponent),
       },
     ]
   },
