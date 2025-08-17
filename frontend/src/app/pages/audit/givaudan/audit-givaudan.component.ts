@@ -38,13 +38,9 @@ interface AuditDate { value: string; label: string; }
                 <span class="box"><span class="tick" *ngIf="it.done">✔</span></span>
               </label>
               <div class="meta" *ngIf="it.doneBy">{{ it.doneBy }} · {{ it.doneAt }}</div>
+              <span class="status-swatch" [style.background]="statusColor(it.status)"></span>
               <select [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" (change)="saveProgress(it)" [ngClass]="statusClass(it.status)" [ngStyle]="statusStyle(it.status)">
-                <option value="pending">준비중 / Pending</option>
-                <option value="in-progress">진행중 / In progress</option>
-                <option value="on-hold">보류 / On hold</option>
-                <option value="na">해당없음 / N.A.</option>
-                <option value="impossible">불가 / Not possible</option>
-                <option value="done">완료 / Done</option>
+                <option *ngFor="let s of statusOptions" [value]="s.value">{{ s.emoji }} {{ s.label }}</option>
               </select>
               <select class="dept-select" multiple [(ngModel)]="it.departments" (ngModelChange)="saveProgress(it)" title="담당 부서 선택">
                 <option *ngFor="let d of departments" [value]="d">{{ d }}</option>
@@ -154,6 +150,7 @@ interface AuditDate { value: string; label: string; }
     .en{ color:#64748b; font-size:.92em; }
     .state{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     .state .meta{ color:#475569; font-size:.85em; }
+    .status-swatch{ width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #e5e7eb; }
     select{ padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; appearance:none; -webkit-appearance:none; -moz-appearance:none; }
     .dept-select{ min-width: 160px; max-width: 220px; }
     /* 상태별 색상 */
@@ -313,6 +310,14 @@ export class AuditGivaudanComponent {
   // UI helpers
   saving: Record<number, 'idle'|'saving'|'saved'> = {};
   private setSaving(id: number, state: 'idle'|'saving'|'saved') { this.saving[id] = state; }
+  statusOptions = [
+    { value: 'pending', label: '준비중 / Pending', emoji: '🟧' },
+    { value: 'in-progress', label: '진행중 / In progress', emoji: '🟦' },
+    { value: 'on-hold', label: '보류 / On hold', emoji: '⬜' },
+    { value: 'na', label: '해당없음 / N.A.', emoji: '⬜' },
+    { value: 'impossible', label: '불가 / Not possible', emoji: '🟥' },
+    { value: 'done', label: '완료 / Done', emoji: '🟦' },
+  ];
   statusClass(status: string){
     return {
       'status-pending': status==='pending',
@@ -335,5 +340,16 @@ export class AuditGivaudanComponent {
         default: return {} as any;
       }
     } catch { return {} as any; }
+  }
+  statusColor(status: string){
+    switch(status){
+      case 'pending': return '#f59e0b';
+      case 'in-progress': return '#60a5fa';
+      case 'on-hold': return '#9ca3af';
+      case 'na': return '#cbd5e1';
+      case 'impossible': return '#ef4444';
+      case 'done': return '#3b82f6';
+      default: return '#e5e7eb';
+    }
   }
 }
