@@ -164,7 +164,7 @@ interface AuditDate { value: string; label: string; }
     .save-badge{ margin-left:6px; font-size:.85em; color:#64748b; }
     .save-badge.saved{ color:#16a34a; }
     textarea{ width:100%; max-width: none; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
-    .note textarea{ width:500px; max-width:500px; }
+    .note textarea{ width: min(500px, 100%); max-width:100%; box-sizing:border-box; }
 
     .item .details{ grid-column: 1 / -1; overflow:hidden; }
     .item.open .details{ animation: slideDown .22s ease-out; }
@@ -213,8 +213,31 @@ interface AuditDate { value: string; label: string; }
 export class AuditGivaudanComponent {
   constructor(private supabase: SupabaseService){}
   userDisplay = '사용자';
+  currentUserId: string | null = null;
   async ngOnInit(){
-    try{ const u = await this.supabase.getCurrentUser(); if(u){ const { data } = await this.supabase.getUserProfile(u.id); this.userDisplay = data?.name || data?.email || '사용자'; } }catch{}
+    try{
+      const u = await this.supabase.getCurrentUser();
+      if(u){
+        const { data } = await this.supabase.getUserProfile(u.id);
+        this.userDisplay = data?.name || data?.email || '사용자';
+        this.currentUserId = u.id;
+      }
+      // Hydrate items with saved progress on initial load
+      const { data: all } = await this.supabase.listAllGivaudanProgress();
+      if (Array.isArray(all)) {
+        const next = this.items().map(it => {
+          const row = all.find(r => r.number === it.id);
+          if (!row) return it as any;
+          return {
+            ...it,
+            status: row.status || it.status,
+            note: row.note || it.note,
+            departments: row.departments || [],
+          } as any;
+        });
+        this.items.set(next as any);
+      }
+    }catch{}
   }
 
   dates: AuditDate[] = [ { value: '2025-09-16', label: '2025-09-16' } ];
@@ -278,13 +301,17 @@ export class AuditGivaudanComponent {
         note: it.note || null,
         status: it.status || null,
         departments: it.departments || [],
-        updated_by: this.userDisplay,
+        updated_by: this.currentUserId,
         updated_by_name: this.userDisplay,
       };
-      await this.supabase.upsertGivaudanProgress(payload);
+      const { error } = await this.supabase.upsertGivaudanProgress(payload) as any;
+      if (error) throw error;
       this.setSaving(it.id, 'saved');
       setTimeout(()=>this.setSaving(it.id,'idle'), 1200);
-    }catch{}
+    }catch(e){
+      console.error('Failed to save progress', e);
+      this.setSaving(it.id,'idle');
+    }
   }
 
   visibleItems(){

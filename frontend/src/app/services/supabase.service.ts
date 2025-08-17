@@ -115,6 +115,14 @@ export class SupabaseService {
       .maybeSingle();
   }
 
+  // List all progress rows to hydrate UI on initial load
+  async listAllGivaudanProgress() {
+    return this.ensureClient()
+      .from('givaudan_audit_progress')
+      .select('*')
+      .order('number', { ascending: true });
+  }
+
   async upsertGivaudanProgress(row: {
     number: number;
     note?: string | null;
