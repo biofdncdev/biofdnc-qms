@@ -1,4 +1,7 @@
 {
+  "installCommand": "npm ci",
+  "buildCommand": "printf \"window.__env = {\\n\\tNG_APP_SUPABASE_URL: '%s',\\n\\tNG_APP_SUPABASE_KEY: '%s',\\n\\tNG_APP_PRODUCTION: '%s',\\n};\\n\" \"$NG_APP_SUPABASE_URL\" \"$NG_APP_SUPABASE_KEY\" \"$NG_APP_PRODUCTION\" > public/env.js && CI=false npm run build",
+  "outputDirectory": "dist/qms-app/browser",
   "rewrites": [
     {
       "source": "/(.*)",
