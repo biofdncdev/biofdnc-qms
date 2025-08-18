@@ -198,4 +198,22 @@ export class SupabaseService {
       .select()
       .maybeSingle();
   }
+
+  async getLatestThRecord(formId: string){
+    return this.ensureClient()
+      .from('rmd_th_record')
+      .select('*')
+      .eq('form_id', formId)
+      .order('week_start', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+  }
+
+  async listThWeeks(formId: string){
+    return this.ensureClient()
+      .from('rmd_th_record')
+      .select('week_start')
+      .eq('form_id', formId)
+      .order('week_start', { ascending: true });
+  }
 }

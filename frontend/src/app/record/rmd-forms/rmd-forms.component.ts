@@ -1,4 +1,4 @@
-import { Component, computed, ElementRef, inject, signal, ViewChild } from '@angular/core';
+import { Component, computed, ElementRef, HostListener, inject, signal, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RMD_FORM_CATEGORIES, RmdFormCategory, RmdFormItem } from './rmd-forms-data';
@@ -36,13 +36,54 @@ import { SupabaseService } from '../../services/supabase.service';
         <div *ngIf="selected() as sel">
           <ng-container *ngIf="sel.id==='BF-RMD-PM-IR-07'; else genericInfo">
             <div class="th-toolbar">
-              <label>시작일</label>
-              <input type="date" [ngModel]="weekStart()" (ngModelChange)="setWeekStart($event)" />
-              <button (click)="clearCanvas()">지우기</button>
-              <button (click)="loadRecord()">불러오기</button>
-              <button (click)="saveRecord()">저장</button>
-              <button (click)="printRecord()">인쇄</button>
-              <button (click)="toggleFullscreen()">전체화면</button>
+              <div class="group">
+                <button class="nav pill" title="이전 월" (click)="nudgeDate(-1,'month')"><span class="chev">‹</span><span class="lab">월</span></button>
+                <button class="nav pill" title="이전 주" (click)="nudgeDate(-1,'week')"><span class="chev">‹</span><span class="lab">주</span></button>
+                <button class="nav pill" title="이전 일" (click)="nudgeDate(-1,'day')"><span class="chev">‹</span><span class="lab">일</span></button>
+                <input class="date" type="date" [ngModel]="dateValue()" (ngModelChange)="setDate($event)" />
+                <button class="nav pill" title="다음 일" (click)="nudgeDate(1,'day')"><span class="lab">일</span><span class="chev">›</span></button>
+                <button class="nav pill" title="다음 주" (click)="nudgeDate(1,'week')"><span class="lab">주</span><span class="chev">›</span></button>
+                <button class="nav pill" title="다음 월" (click)="nudgeDate(1,'month')"><span class="lab">월</span><span class="chev">›</span></button>
+              </div>
+              <div class="group admin">
+                <label class="label">기록주기</label>
+                <select class="gran" [ngModel]="granularity()" (ngModelChange)="setGranularity($event)" [disabled]="!isAdmin">
+                  <option value="month">월</option>
+                  <option value="week">주</option>
+                  <option value="day">일</option>
+                </select>
+              </div>
+              <div class="group buttons">
+                <div class="group tools">
+                  <button class="secondary" [class.active]="tool()==='pen'" (click)="togglePenMenu()">펜</button>
+                  <div class="tool-menu" *ngIf="showPenMenu()">
+                    <div class="row">
+                      <span>색상</span>
+                      <button class="swatch" *ngFor="let c of penColors" [style.background]="c" (click)="setPenColor(c)"></button>
+                    </div>
+                    <div class="row">
+                      <span>굵기</span>
+                      <select [ngModel]="penWidth()" (ngModelChange)="setPenWidth($event)">
+                        <option *ngFor="let w of penWidths" [value]="w">{{w}}px</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button class="secondary" [class.active]="tool()==='eraser'" (click)="toggleEraserMenu()">지우개</button>
+                  <div class="tool-menu" *ngIf="showEraserMenu()">
+                    <div class="row">
+                      <span>굵기</span>
+                      <select [ngModel]="eraserWidth()" (ngModelChange)="setEraserWidth($event)">
+                        <option *ngFor="let w of eraserWidths" [value]="w">{{w}}px</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <button class="secondary" (click)="closeToolMenus(); clearToday()">지우기</button>
+                <button class="secondary" (click)="closeToolMenus(); loadRecord()">불러오기</button>
+                <button class="primary" (click)="closeToolMenus(); saveRecord()">저장</button>
+                <button class="secondary" (click)="closeToolMenus(); printRecord()">인쇄</button>
+                <button class="secondary" (click)="toggleFullscreen()">전체화면</button>
+              </div>
             </div>
             <div class="pdf-annotator" #container [class.fullscreen]="fullscreen()">
               <button *ngIf="fullscreen()" class="fs-exit" (click)="toggleFullscreen()">닫기</button>
@@ -78,27 +119,94 @@ export class RmdFormsComponent {
     })).filter(cat => cat.items.length > 0);
   });
 
-  open(it: RmdFormItem){ this.selected.set(it); }
+  async open(it: RmdFormItem){
+    this.selected.set(it);
+    if (it.id === 'BF-RMD-PM-IR-07'){
+      try{
+        const { data } = await this.supabase.getLatestThRecord(it.id);
+        if (data?.week_start){ this.setDate(data.week_start); }
+        const list = await this.supabase.listThWeeks(it.id);
+        this.recordedWeeks = signal<string[]>((list.data||[]).map((r:any)=> r.week_start));
+      }catch{}
+      queueMicrotask(()=> this.renderPdf());
+    }
+  }
   // ===== Temperature/Humidity PDF Annotator =====
   @ViewChild('container', { static: false }) containerRef?: ElementRef<HTMLDivElement>;
   @ViewChild('pdfCanvas', { static: false }) pdfCanvasRef?: ElementRef<HTMLCanvasElement>;
   @ViewChild('drawCanvas', { static: false }) drawCanvasRef?: ElementRef<HTMLCanvasElement>;
 
-  weekStart = signal<string>(RmdFormsComponent.toMonday(new Date()));
+  // selected date from calendar
+  dateValue = signal<string>(new Date().toISOString().slice(0,10));
+  // computed period start based on granularity
+  periodStartSig = signal<string>(RmdFormsComponent.toMonday(new Date()));
+  granularity = signal<'day'|'week'|'month'>( (localStorage.getItem('th_granularity') as any) || 'day');
+  isAdmin = false;
+  recordedWeeks = signal<string[]>([]);
   fullscreen = signal<boolean>(false);
+  tool = signal<'pen'|'eraser'>('pen');
+  showPenMenu = signal<boolean>(false);
+  showEraserMenu = signal<boolean>(false);
+  penColors = ['#111827','#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6'];
+  penWidths = [2,3,4,6,8,10,12];
+  eraserWidths = [6,8,10,14,20,28];
+  penColor = signal<string>('#111827');
+  penWidth = signal<number>(3);
+  eraserWidth = signal<number>(14);
   private drawing = false;
   private ctxDraw?: CanvasRenderingContext2D | null;
   private pdfCtx?: CanvasRenderingContext2D | null;
-  private strokes: { points: {x:number;y:number;}[]; width:number; color:string; }[] = [];
+  private strokesByDate: Record<string, { points: {x:number;y:number;}[]; width:number; color:string; }[]> = {};
   private currentStroke: { points: {x:number;y:number;}[]; width:number; color:string; } | null = null;
 
-  static toMonday(d: Date){ const dt = new Date(d); const day = dt.getDay(); const diff = (day===0? -6 : 1 - day); dt.setDate(dt.getDate()+diff); return dt.toISOString().slice(0,10); }
+  // Week starts on Sunday as requested
+  static toMonday(d: Date){ const dt = new Date(d); const day = dt.getDay(); const diff = 0 - day; dt.setDate(dt.getDate()+diff); return dt.toISOString().slice(0,10); }
+  static toMonthStart(d: Date){ const dt = new Date(d.getFullYear(), d.getMonth(), 1); return dt.toISOString().slice(0,10); }
+  private computePeriodStart(dateStr: string){
+    const d = new Date(dateStr);
+    switch(this.granularity()){
+      case 'day': return dateStr;
+      case 'week': return RmdFormsComponent.toMonday(d);
+      case 'month': return RmdFormsComponent.toMonthStart(d);
+    }
+  }
 
-  setWeekStart(v: string){ if(!v) return; this.weekStart.set(RmdFormsComponent.toMonday(new Date(v))); this.renderPdf(); }
+  async setDate(v: string){
+    if(!v) return;
+    this.dateValue.set(v);
+    this.periodStartSig.set(this.computePeriodStart(v));
+    await this.renderPdf();
+    await this.loadRecord();
+  }
+  hasRecord(ymd: string){ return this.recordedWeeks().includes(ymd); }
+  periodStart(){ return this.periodStartSig(); }
+  setGranularity(val: 'day'|'week'|'month'){ this.granularity.set(val); localStorage.setItem('th_granularity', val); this.periodStartSig.set(this.computePeriodStart(this.dateValue())); this.renderPdf(); this.loadRecord(); }
+  async nudgeDate(delta: number, unit: 'day'|'week'|'month'){
+    const d = new Date(this.dateValue());
+    if (unit==='day') d.setDate(d.getDate()+delta);
+    if (unit==='week') d.setDate(d.getDate()+delta*7);
+    if (unit==='month') d.setMonth(d.getMonth()+delta);
+    await this.setDate(d.toISOString().slice(0,10));
+  }
+  // Removed jumpRecord in favor of explicit day/week/month nudges
+
+  closeToolMenus(){ this.showPenMenu.set(false); this.showEraserMenu.set(false); }
+
+  togglePenMenu(){ this.tool.set('pen'); this.showPenMenu.set(!this.showPenMenu()); this.showEraserMenu.set(false); }
+  toggleEraserMenu(){ this.tool.set('eraser'); this.showEraserMenu.set(!this.showEraserMenu()); this.showPenMenu.set(false); }
+  setPenColor(c: string){ this.penColor.set(c); this.ctxDraw && (this.ctxDraw.strokeStyle = c); }
+  setPenWidth(w: number){ this.penWidth.set(+w); this.ctxDraw && (this.ctxDraw.lineWidth = +w); }
+  setEraserWidth(w: number){ this.eraserWidth.set(+w); }
 
   ngAfterViewInit(){
-    queueMicrotask(()=> this.renderPdf());
+    queueMicrotask(async ()=>{
+      try{ const u = await this.supabase.getCurrentUser(); if(u){ const { data } = await this.supabase.getUserProfile(u.id); this.isAdmin = (data?.role==='admin'||data?.role==='manager'); } }catch{}
+      this.periodStartSig.set(this.computePeriodStart(this.dateValue()));
+      this.renderPdf();
+    });
   }
+
+  @HostListener('window:resize') onResize(){ if(this.fullscreen()) this.renderPdf(); }
 
   private async renderPdf(){
     if (!this.selected() || this.selected()!.id !== 'BF-RMD-PM-IR-07') return;
@@ -106,12 +214,25 @@ export class RmdFormsComponent {
     const pdfCanvas = this.pdfCanvasRef?.nativeElement; const drawCanvas = this.drawCanvasRef?.nativeElement;
     if(!pdfCanvas || !drawCanvas) return;
 
-    const width = Math.min(900, container.clientWidth || 900);
-    const height = Math.floor(width * 1.414); // A4 비율 근사
+    // Target size: fit within container (or viewport if fullscreen) while preserving A4 ratio (sqrt(2) ≈ 1.414)
+    let width: number; let height: number;
+    if (this.fullscreen()) {
+      const vw = Math.max(320, (globalThis.innerWidth || 1024) - 32);
+      const vh = Math.max(320, (globalThis.innerHeight || 768) - 32);
+      width = Math.min(vw, Math.floor(vh / 1.414));
+      height = Math.floor(width * 1.414);
+    } else {
+      width = Math.min(900, container.clientWidth || 900);
+      height = Math.floor(width * 1.414);
+    }
     [pdfCanvas, drawCanvas].forEach(c=>{ c.width = width; c.height = height; c.style.width = width+'px'; c.style.height = height+'px'; });
     this.pdfCtx = pdfCanvas.getContext('2d');
     this.ctxDraw = drawCanvas.getContext('2d');
-    if (this.ctxDraw){ this.ctxDraw.lineCap='round'; this.ctxDraw.lineJoin='round'; this.ctxDraw.strokeStyle = '#111827'; this.ctxDraw.lineWidth = 2.5; }
+    if (this.ctxDraw){
+      this.ctxDraw.lineCap='round'; this.ctxDraw.lineJoin='round';
+      this.ctxDraw.strokeStyle = this.penColor();
+      this.ctxDraw.lineWidth = this.penWidth();
+    }
 
     // Try to draw from image first for best performance on iPad; fallback to PDF
     const imageCandidates = [
@@ -165,39 +286,85 @@ export class RmdFormsComponent {
   onPointerDown(ev: PointerEvent){
     if (!this.drawCanvasRef) return;
     const canvas = this.drawCanvasRef.nativeElement; this.drawing = true; canvas.setPointerCapture(ev.pointerId);
-    const {x,y} = this.localPoint(canvas, ev); this.currentStroke = { points:[{x,y}], width: this.ctxDraw?.lineWidth||2.5, color: this.ctxDraw?.strokeStyle as string || '#111827' };
+    const {x,y} = this.localPoint(canvas, ev);
+    this.closeToolMenus();
+    if (this.tool()==='eraser' && this.ctxDraw){
+      const w = this.eraserWidth();
+      this.ctxDraw.save();
+      this.ctxDraw.globalCompositeOperation = 'destination-out';
+      this.ctxDraw.lineWidth = w; this.ctxDraw.strokeStyle = 'rgba(0,0,0,1)';
+      this.currentStroke = { points:[{x,y}], width: w, color: 'eraser' } as any;
+    } else {
+      if (this.ctxDraw){ this.ctxDraw.globalCompositeOperation = 'source-over'; this.ctxDraw.lineWidth = this.penWidth(); this.ctxDraw.strokeStyle = this.penColor(); }
+      this.currentStroke = { points:[{x,y}], width: this.ctxDraw?.lineWidth||3, color: this.ctxDraw?.strokeStyle as string || '#111827' };
+    }
   }
   onPointerMove(ev: PointerEvent){ if(!this.drawing || !this.drawCanvasRef || !this.ctxDraw || !this.currentStroke) return; const canvas=this.drawCanvasRef.nativeElement; const {x,y}=this.localPoint(canvas,ev); const pts=this.currentStroke.points; const last=pts[pts.length-1]; if(Math.hypot(x-last.x,y-last.y)<0.8) return; pts.push({x,y}); this.ctxDraw.beginPath(); this.ctxDraw.moveTo(last.x,last.y); this.ctxDraw.lineTo(x,y); this.ctxDraw.stroke(); }
-  onPointerUp(){ if(!this.drawing) return; this.drawing=false; if(this.currentStroke){ this.strokes.push(this.currentStroke); this.currentStroke=null; } }
+  onPointerUp(){ if(!this.drawing) return; this.drawing=false; if(this.currentStroke){ if(this.ctxDraw){ this.ctxDraw.restore?.(); } const key=this.dateValue(); if(!this.strokesByDate[key]) this.strokesByDate[key]=[]; this.strokesByDate[key].push(this.currentStroke); this.currentStroke=null; } }
   private localPoint(canvas: HTMLCanvasElement, ev: PointerEvent){ const rect = canvas.getBoundingClientRect(); return { x: (ev.clientX - rect.left) * (canvas.width/rect.width), y: (ev.clientY - rect.top) * (canvas.height/rect.height) }; }
 
-  clearCanvas(resetStrokes: boolean = true){ if(this.ctxDraw && this.drawCanvasRef){ this.ctxDraw.clearRect(0,0,this.drawCanvasRef.nativeElement.width,this.drawCanvasRef.nativeElement.height); } if(resetStrokes) this.strokes = []; }
+  clearCanvas(resetStrokes: boolean = true){ if(this.ctxDraw && this.drawCanvasRef){ this.ctxDraw.clearRect(0,0,this.drawCanvasRef.nativeElement.width,this.drawCanvasRef.nativeElement.height); } if(resetStrokes){ this.strokesByDate[this.dateValue()] = []; } }
+
+  // 지우기: 오늘 날짜의 스트로크만 제거하고 이전 누적은 유지(주/월 단위 대비)
+  clearToday(){ this.clearCanvas(true); }
 
   async saveRecord(){
+    const ymd = this.periodStart();
     try{
+      // Double-confirm if a record already exists for this date
+      const chk = await this.supabase.getThRecord(this.selected()!.id, ymd);
+      if (chk.data) {
+        const first = globalThis.confirm('해당 날짜에 기존 기록이 있습니다. 덮어쓰시겠습니까?');
+        if (!first) return;
+        const second = globalThis.confirm('정말로 덮어쓰기 하시겠습니까? 이 작업은 되돌릴 수 없습니다.');
+        if (!second) return;
+      }
+
       const merged = document.createElement('canvas');
       const pdfC = this.pdfCanvasRef!.nativeElement; const drawC = this.drawCanvasRef!.nativeElement;
       merged.width = pdfC.width; merged.height = pdfC.height; const mctx = merged.getContext('2d')!;
       mctx.drawImage(pdfC, 0, 0); mctx.drawImage(drawC, 0, 0);
       const blob: Blob = await new Promise(res=> merged.toBlob(b=>res(b!), 'image/png'));
-      const ymd = this.weekStart();
       const path = `th/${ymd}.png`;
-      const { publicUrl } = await this.supabase.uploadRecordImage(blob, path);
-      await this.supabase.upsertThRecord({ form_id: this.selected()!.id, week_start: ymd, image_url: publicUrl, strokes: this.strokes });
-      alert('저장되었습니다');
+      let publicUrl: string | null = null;
+      try{
+        const up = await this.supabase.uploadRecordImage(blob, path);
+        publicUrl = up.publicUrl;
+      }catch(err:any){
+        // Storage 업로드가 실패해도 DB에는 필기(strokes)만 저장되도록 진행합니다.
+      }
+      await this.supabase.upsertThRecord({ form_id: this.selected()!.id, week_start: ymd, image_url: publicUrl, strokes: this.strokesByDate });
+      // 성공 토스트: 기본 alert 제거
     }catch(e){ console.error(e); alert('저장 실패'); }
   }
 
   async loadRecord(){
     try{
-      const ymd = this.weekStart();
+      const ymd = this.periodStart();
       const { data } = await this.supabase.getThRecord(this.selected()!.id, ymd);
-      if(data?.strokes){ this.strokes = data.strokes; this.redrawStrokes(); }
-      if(!data){ alert('기록이 없습니다'); }
-    }catch{ alert('불러오기 실패'); }
+      if(data?.strokes){ this.strokesByDate = data.strokes as any; this.redrawFromMap(); } else { this.strokesByDate = {}; this.clearCanvas(true); }
+      // 기록이 없으면 아무 메시지도 표시하지 않고 빈 양식을 유지합니다.
+    }catch{ /* Silent fail; keep current canvas */ }
   }
 
-  private redrawStrokes(){ if(!this.ctxDraw || !this.drawCanvasRef) return; this.clearCanvas(false); for(const s of this.strokes){ this.ctxDraw!.strokeStyle = s.color; this.ctxDraw!.lineWidth = s.width; const pts=s.points; for(let i=1;i<pts.length;i++){ this.ctxDraw!.beginPath(); this.ctxDraw!.moveTo(pts[i-1].x, pts[i-1].y); this.ctxDraw!.lineTo(pts[i].x, pts[i].y); this.ctxDraw!.stroke(); } } }
+  private redrawFromMap(){
+    if(!this.ctxDraw || !this.drawCanvasRef) return; this.clearCanvas(false);
+    const start = new Date(this.periodStart());
+    const end = new Date(this.dateValue());
+    const gather: { points:{x:number;y:number;}[]; width:number; color:string; }[] = [];
+    const pushDay = (d: Date)=>{
+      const key = d.toISOString().slice(0,10);
+      const arr = this.strokesByDate[key] || [];
+      for(const s of arr){ gather.push(s); }
+    };
+    if(this.granularity()==='day'){
+      pushDay(end);
+    } else if(this.granularity()==='week' || this.granularity()==='month'){
+      const cur = new Date(start);
+      while(cur <= end){ pushDay(cur); cur.setDate(cur.getDate()+1); }
+    }
+    for(const s of gather){ this.ctxDraw!.strokeStyle = s.color; this.ctxDraw!.lineWidth = s.width; const pts=s.points; for(let i=1;i<pts.length;i++){ this.ctxDraw!.beginPath(); this.ctxDraw!.moveTo(pts[i-1].x, pts[i-1].y); this.ctxDraw!.lineTo(pts[i].x, pts[i].y); this.ctxDraw!.stroke(); } }
+  }
 
   printRecord(){
     const merged = document.createElement('canvas'); const pdfC = this.pdfCanvasRef!.nativeElement; const drawC = this.drawCanvasRef!.nativeElement; merged.width=pdfC.width; merged.height=pdfC.height; const mctx=merged.getContext('2d')!; mctx.drawImage(pdfC,0,0); mctx.drawImage(drawC,0,0);
