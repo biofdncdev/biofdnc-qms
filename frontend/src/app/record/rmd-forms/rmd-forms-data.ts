@@ -32,6 +32,7 @@ export const RMD_FORM_CATEGORIES: RmdFormCategory[] = [
       { id: 'BF-RMD-PM-IR-04', title: '완제품 출하 지시·기록서' },
       { id: 'BF-RMD-PM-IR-05', title: '변경관리 지시·기록서' },
       { id: 'BF-RMD-PM-IR-06', title: '부자재 입고/검사 지시·기록서' },
+      { id: 'BF-RMD-PM-IR-07', title: '온습도관리 지시·기록서' },
     ],
   },
   {
