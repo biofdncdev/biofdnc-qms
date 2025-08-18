@@ -172,4 +172,30 @@ export class SupabaseService {
     const { data: urlData } = this.ensureClient().storage.from('audit_resources').getPublicUrl(data.path);
     return { path: data.path, publicUrl: urlData.publicUrl };
   }
+
+  // Record images (Temperature/Humidity)
+  async uploadRecordImage(blob: Blob, path: string) {
+    const client = this.ensureClient();
+    const { data, error } = await client.storage.from('rmd_records').upload(path, blob, { upsert: true, contentType: 'image/png' });
+    if (error) throw error;
+    const { data: urlData } = client.storage.from('rmd_records').getPublicUrl(data.path);
+    return { path: data.path, publicUrl: urlData.publicUrl };
+  }
+
+  async getThRecord(formId: string, weekStart: string) {
+    return this.ensureClient()
+      .from('rmd_th_record')
+      .select('*')
+      .eq('form_id', formId)
+      .eq('week_start', weekStart)
+      .maybeSingle();
+  }
+
+  async upsertThRecord(row: { form_id: string; week_start: string; image_url?: string | null; strokes?: any; }) {
+    return this.ensureClient()
+      .from('rmd_th_record')
+      .upsert(row, { onConflict: 'form_id,week_start' })
+      .select()
+      .maybeSingle();
+  }
 }

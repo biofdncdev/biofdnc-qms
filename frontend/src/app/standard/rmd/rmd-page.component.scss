@@ -33,7 +33,7 @@
   .toolbar { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; }
   .spacer { flex: 1; }
   .primary { padding: 8px 12px; background: #1b5fff; color: #fff; border: 0; border-radius: 6px; }
-  .content { height: calc(100vh - 140px); overflow: hidden; }
+  .content { height: calc(100vh - 140px); overflow: auto; }
   iframe { width: 100%; height: 100%; border: 0; background: #fff; }
 }
 
@@ -44,3 +44,12 @@
 .right th { background: #f3f4f6; }
 .hint{ color:#6b7280; font-size:.9em; margin:4px 0 10px; }
 .hint.right{ margin:4px 0 6px; }
+
+/* PDF/이미지 주석용 캔버스 컨테이너 */
+.right .pdf-annotator{ position: relative; }
+.right .pdf-annotator canvas{ display:block; }
+.right .pdf-annotator canvas + canvas{ position:absolute; inset:0; }
+.right .pdf-annotator.fullscreen{ position:fixed; inset:0; background:#fff; z-index:9999; padding:12px; display:flex; align-items:center; justify-content:center; }
+.right .pdf-annotator.fullscreen canvas{ width: min(100%, 1024px); height: auto; }
+.right .pdf-annotator.fullscreen canvas + canvas{ position:absolute; inset:12px; margin:auto; max-width: min(100% - 24px, 1024px); }
+.right .pdf-annotator .fs-exit{ position:absolute; top:12px; right:12px; z-index:10000; padding:8px 10px; border:0; border-radius:8px; background:#111827; color:#fff; }

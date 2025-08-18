@@ -33,7 +33,8 @@
     "@supabase/supabase-js": "^2.55.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
-    "zone.js": "~0.15.0"
+    "zone.js": "~0.15.0",
+    "pdfjs-dist": "^4.6.82"
   },
   "devDependencies": {
     "@angular/build": "^20.1.6",
