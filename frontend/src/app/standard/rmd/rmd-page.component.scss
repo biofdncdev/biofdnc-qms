@@ -63,6 +63,7 @@
 .th-toolbar .group.tools .tool-menu.hide{ opacity:0; transform: translateY(-6px); animation: dropdown-out .12s ease-in forwards; }
 .th-toolbar .group.tools .tool-menu .row{ display:flex; align-items:center; gap:8px; margin:6px 0; }
 .th-toolbar .group.tools .tool-menu .swatch{ width:20px; height:20px; border-radius:50%; border:1px solid #e5e7eb; }
+/* 선택 효과는 인라인 스타일(box-shadow)로 표현하므로 클래스 스타일 제거 */
 @keyframes dropdown-in{ to{ opacity:1; transform:none; } }
 @keyframes dropdown-out{ to{ opacity:0; transform: translateY(-8px); } }
 .th-toolbar .label{ color:#475569; font-weight:600; font-size:13px; }

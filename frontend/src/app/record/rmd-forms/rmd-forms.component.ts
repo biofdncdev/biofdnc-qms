@@ -59,7 +59,12 @@ import { SupabaseService } from '../../services/supabase.service';
                   <div class="tool-menu" *ngIf="showPenMenu()">
                     <div class="row">
                       <span>색상</span>
-                      <button class="swatch" *ngFor="let c of penColors" [style.background]="c" (click)="setPenColor(c)"></button>
+                      <button class="swatch" *ngFor="let c of penColors"
+                        [style.background]="c"
+                        (click)="setPenColor(c)"
+                        [style.boxShadow]="penColor()===c ? ('0 0 0 4px ' + c + '55') : 'none'"
+                        [style.transform]="penColor()===c ? 'scale(1.08)' : 'scale(1)'"
+                        [attr.aria-label]="c"></button>
                     </div>
                     <div class="row">
                       <span>굵기</span>
@@ -123,12 +128,14 @@ export class RmdFormsComponent {
     this.selected.set(it);
     if (it.id === 'BF-RMD-PM-IR-07'){
       try{
-        const { data } = await this.supabase.getLatestThRecord(it.id);
-        if (data?.week_start){ this.setDate(data.week_start); }
-        const list = await this.supabase.listThWeeks(it.id);
-        this.recordedWeeks = signal<string[]>((list.data||[]).map((r:any)=> r.week_start));
+        const today = new Date().toISOString().slice(0,10);
+        // View가 렌더된 다음에 날짜/렌더/불러오기를 실행 (container가 아직 없을 수 있음)
+        setTimeout(async () => {
+          await this.setDate(today);
+          const list = await this.supabase.listThWeeks(it.id);
+          this.recordedWeeks = signal<string[]>((list.data||[]).map((r:any)=> r.week_start));
+        }, 0);
       }catch{}
-      queueMicrotask(()=> this.renderPdf());
     }
   }
   // ===== Temperature/Humidity PDF Annotator =====
@@ -157,6 +164,7 @@ export class RmdFormsComponent {
   private ctxDraw?: CanvasRenderingContext2D | null;
   private pdfCtx?: CanvasRenderingContext2D | null;
   private strokesByDate: Record<string, { points: {x:number;y:number;}[]; width:number; color:string; }[]> = {};
+  private legacyStrokes: { points: {x:number;y:number;}[]; width:number; color:string; }[] | null = null;
   private currentStroke: { points: {x:number;y:number;}[]; width:number; color:string; } | null = null;
 
   // Week starts on Sunday as requested
@@ -202,7 +210,8 @@ export class RmdFormsComponent {
     queueMicrotask(async ()=>{
       try{ const u = await this.supabase.getCurrentUser(); if(u){ const { data } = await this.supabase.getUserProfile(u.id); this.isAdmin = (data?.role==='admin'||data?.role==='manager'); } }catch{}
       this.periodStartSig.set(this.computePeriodStart(this.dateValue()));
-      this.renderPdf();
+      await this.renderPdf();
+      await this.loadRecord();
     });
   }
 
@@ -333,6 +342,10 @@ export class RmdFormsComponent {
       }catch(err:any){
         // Storage 업로드가 실패해도 DB에는 필기(strokes)만 저장되도록 진행합니다.
       }
+      // If we loaded legacy array-only strokes and 사용자가 새로 그린 게 없으면 보존을 위해 현재 날짜 키에 넣어 저장
+      if (this.legacyStrokes && Object.keys(this.strokesByDate).length === 0){
+        this.strokesByDate[this.dateValue()] = this.legacyStrokes;
+      }
       await this.supabase.upsertThRecord({ form_id: this.selected()!.id, week_start: ymd, image_url: publicUrl, strokes: this.strokesByDate });
       // 성공 토스트: 기본 alert 제거
     }catch(e){ console.error(e); alert('저장 실패'); }
@@ -342,7 +355,22 @@ export class RmdFormsComponent {
     try{
       const ymd = this.periodStart();
       const { data } = await this.supabase.getThRecord(this.selected()!.id, ymd);
-      if(data?.strokes){ this.strokesByDate = data.strokes as any; this.redrawFromMap(); } else { this.strokesByDate = {}; this.clearCanvas(true); }
+      if(data?.strokes){
+        const raw = data.strokes as any;
+        // Backward-compat: older 데이터는 배열(strokes[])로 저장됨
+        if (Array.isArray(raw)){
+          this.legacyStrokes = raw as any;
+          this.strokesByDate = {};
+        } else {
+          this.legacyStrokes = null;
+          this.strokesByDate = raw || {};
+        }
+        this.redrawFromMap();
+      } else {
+        this.strokesByDate = {};
+        this.legacyStrokes = null;
+        this.clearCanvas(true);
+      }
       // 기록이 없으면 아무 메시지도 표시하지 않고 빈 양식을 유지합니다.
     }catch{ /* Silent fail; keep current canvas */ }
   }
@@ -363,6 +391,8 @@ export class RmdFormsComponent {
       const cur = new Date(start);
       while(cur <= end){ pushDay(cur); cur.setDate(cur.getDate()+1); }
     }
+    // If legacy array-only strokes exist, 주간/월간 어디서든 표시되도록 누적에 포함
+    if (this.legacyStrokes){ for(const s of this.legacyStrokes){ gather.push(s); } }
     for(const s of gather){ this.ctxDraw!.strokeStyle = s.color; this.ctxDraw!.lineWidth = s.width; const pts=s.points; for(let i=1;i<pts.length;i++){ this.ctxDraw!.beginPath(); this.ctxDraw!.moveTo(pts[i-1].x, pts[i-1].y); this.ctxDraw!.lineTo(pts[i].x, pts[i].y); this.ctxDraw!.stroke(); } }
   }
 
