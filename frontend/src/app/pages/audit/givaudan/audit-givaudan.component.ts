@@ -39,29 +39,29 @@ interface AuditDate { value: string; label: string; }
               </span>
             </div>
           </div>
-          <div class="item" *ngFor="let it of visibleItems()" [class.open]="openItemId===it.id">
+          <div class="item" *ngFor="let it of visibleItems()" [class.open]="openItemId===it.id" (click)="toggleDetails(it)">
             <div class="id">{{ it.id | number:'2.0-0' }}</div>
-            <div class="text" (click)="toggleDetails(it)">
+            <div class="text" (click)="$event.stopPropagation()">
               <div class="ko">{{ it.titleKo }}</div>
               <div class="en">{{ it.titleEn }}</div>
             </div>
             <div class="state">
-              <select class="status-select" [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" (change)="saveProgress(it)" [ngClass]="statusClass(it.status)" [ngStyle]="statusStyle(it.status)">
+              <select class="status-select" [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" (change)="saveProgress(it)" [ngClass]="statusClass(it.status)" [ngStyle]="statusStyle(it.status)" (click)="$event.stopPropagation()">
                 <option *ngFor="let s of statusOptions" [value]="s.value">{{ s.emoji }} {{ s.label }}</option>
               </select>
-              <select class="dept-select" [ngModel]="''" (ngModelChange)="addDept(it, $event)" title="담당 부서 추가">
+              <select class="dept-select" [ngModel]="''" (ngModelChange)="addDept(it, $event)" title="담당 부서 추가" (click)="$event.stopPropagation()">
                 <option value="" disabled>담당 부서 추가…</option>
                 <option *ngFor="let d of departments" [value]="d" [disabled]="it.departments.includes(d)">{{ d }}</option>
               </select>
               <div class="chips" *ngIf="it.departments?.length">
-                <span class="chip" *ngFor="let d of it.departments" [ngClass]="teamClass(d)">{{ displayDeptName(d) }}
+                <span class="chip" *ngFor="let d of it.departments" [ngClass]="teamClass(d)" (click)="$event.stopPropagation()">{{ displayDeptName(d) }}
                   <button class="remove" (click)="removeDept(it, d); $event.stopPropagation()">×</button>
                 </span>
               </div>
               <span class="save-badge" *ngIf="saving[it.id]==='saving'">저장중…</span>
               <span class="save-badge saved after-status" *ngIf="saving[it.id]==='saved'">저장됨</span>
               <div class="note">
-                <textarea spellcheck="false" [(ngModel)]="it.note" (blur)="saveProgress(it)" rows="2" placeholder="비고 / Notes"></textarea>
+                <textarea spellcheck="false" [(ngModel)]="it.note" (blur)="saveProgress(it)" rows="2" placeholder="비고 / Notes" (click)="$event.stopPropagation()"></textarea>
               </div>
             </div>
             <div class="details" *ngIf="openItemId===it.id" (click)="$event.stopPropagation()">
@@ -88,20 +88,28 @@ interface AuditDate { value: string; label: string; }
         <ng-container *ngIf="openItemId; else emptySel">
           <div class="re-head sticky">
             <h3>{{ pad2(openItemId!) }} 자료 / Resources</h3>
-            <button (click)="addResourceByAside()">항목 추가</button>
+            <button class="add-btn" (click)="addResourceByAside()">+ 항목 추가</button>
           </div>
-          <div class="resource-card" *ngFor="let r of resources">
+          <div class="resource-card" *ngFor="let r of resources; let i = index">
+            <div class="card-controls">
+              <button class="icon-btn check" [class.on]="r.done" title="완료" (click)="toggleResourceDone(r)">✓</button>
+              <button class="icon-btn close" title="항목 삭제" (click)="removeResourceConfirm(r)">×</button>
+            </div>
             <div class="col">
-              <input class="re-input" [(ngModel)]="r.name" (blur)="saveResource(r)" placeholder="자료명" />
-              <div class="re-row">
-                <input class="re-input" [(ngModel)]="r.url" (blur)="saveResource(r)" placeholder="링크(규정/지시기록서/외부)" />
-                <button (click)="openLink(r.url)" [disabled]="!r.url">열기</button>
+              <div class="card-row">
+                <textarea class="re-text" rows="1" [(ngModel)]="r.name" (input)="autoResize($event)" (blur)="saveResource(r)" placeholder="" spellcheck="false"></textarea>
               </div>
-              <div class="re-row">
-                <input type="file" (change)="uploadFor(r, $event)" />
-                <button (click)="openLink(r.file_url)" [disabled]="!r.file_url">파일 열기</button>
-                <button class="danger" (click)="clearFile(r)" [disabled]="!r.file_url">파일 삭제</button>
-                <button class="danger" (click)="removeResource(r)">항목 삭제</button>
+              <div class="dropzone"
+                   (dragover)="$event.preventDefault(); resourceHover[i]=true"
+                   (dragleave)="resourceHover[i]=false"
+                   (drop)="resourceHover[i]=false; handleDrop(r, $event)"
+                   (click)="fileInput.click()"
+                   [class.hover]="resourceHover[i]">
+                <ng-container *ngIf="r['file_url']; else hint">
+                  <a class="file-link" (click)="openLink(r['file_url']); $event.stopPropagation()">{{ getFileName(r) }}</a>
+                </ng-container>
+                <ng-template #hint>파일/이미지 첨부 (드롭 또는 클릭)</ng-template>
+                <input #fileInput type="file" style="display:none" (change)="uploadFor(r, $event)" />
               </div>
             </div>
           </div>
@@ -198,10 +206,21 @@ interface AuditDate { value: string; label: string; }
     .resources{ background:#fff; border:1px solid #eee; border-radius:16px; padding:16px; box-shadow:0 10px 24px rgba(2,6,23,.06); height: calc(100vh - 160px); overflow:auto; width:100%; box-sizing:border-box; }
     .resources .sticky{ position:sticky; top:0; background:#fff; padding-bottom:8px; }
     .re-head{ display:flex; align-items:center; justify-content:space-between; }
-    .resource-card{ border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin:12px 6px; background:linear-gradient(180deg,#f8fafc,#ffffff); box-shadow:0 4px 14px rgba(2,6,23,.05); }
+    .re-head .add-btn{ padding:6px 10px; border-radius:999px; border:1px solid #e5e7eb; background:#ffffff; color:#0f172a; font-weight:600; font-size:12px; }
+    .resource-card{ position:relative; border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin:12px 6px; background:linear-gradient(180deg,#f8fafc,#ffffff); box-shadow:0 4px 14px rgba(2,6,23,.05); }
     .resource-card .col{ display:flex; flex-direction:column; gap:8px; }
+    .resource-card .card-row{ display:flex; align-items:center; gap:8px; }
     .re-row{ display:flex; align-items:center; gap:8px; }
-    .re-input{ width:100%; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; }
+    .re-input{ width:100%; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; box-sizing:border-box; }
+    .re-text{ width:100%; padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; box-sizing:border-box; resize:none; overflow:hidden; }
+    .card-controls{ position:absolute; top:-10px; right:-10px; display:flex; gap:6px; }
+    .icon-btn{ width:22px; height:22px; border-radius:4px; border:1px solid #0f172a; background:#ffe9d5; color:#0f172a; font-size:13px; line-height:20px; transition: all .15s ease; }
+    .icon-btn.check:hover{ border-color:#16a34a; color:#16a34a; }
+    .icon-btn.check.on{ background:#16a34a; color:#fff; border-color:#16a34a; }
+    .icon-btn.close:hover{ border-color:#ef4444; color:#ef4444; }
+    .dropzone{ border:2px dashed #cbd5e1; border-radius:10px; padding:8px; text-align:center; color:#64748b; cursor:pointer; font-size:12px; transition: all .15s ease; }
+    .dropzone.hover{ border-color:#22c55e; background:#f0fdf4; color:#16a34a; }
+    .file-link{ color:#2563eb; text-decoration:underline; cursor:pointer; }
     .hint{ color:#64748b; margin:8px 0 0 4px; }
     .resource-card button{ padding:6px 10px; border-radius:8px; background:#2563eb; color:#fff; border:0; }
 
@@ -215,6 +234,8 @@ export class AuditGivaudanComponent {
   constructor(private supabase: SupabaseService){}
   userDisplay = '사용자';
   currentUserId: string | null = null;
+  hover: boolean = false;
+  resourceHover: boolean[] = [];
   async ngOnInit(){
     try{
       const u = await this.supabase.getCurrentUser();
@@ -277,7 +298,13 @@ export class AuditGivaudanComponent {
   filterTeams: string[] = [];
 
   async toggleDetails(it: any){
-    if(this.openItemId === it.id){ return; }
+    // Toggle behavior: if already open → close; otherwise open and load
+    if (this.openItemId === it.id) {
+      this.openItemId = null;
+      this.assessment = null;
+      this.resources = [];
+      return;
+    }
     this.openItemId = it.id;
     // Load assessment master
     const { data } = await this.supabase.getGivaudanAssessment(it.id);
@@ -292,6 +319,12 @@ export class AuditGivaudanComponent {
     // Load resources
     const { data: res } = await this.supabase.listGivaudanResources(it.id);
     this.resources = res || [];
+    // Adjust textareas height after resources load
+    setTimeout(()=>{
+      document.querySelectorAll('.re-text').forEach(el=>{
+        const ta = el as HTMLTextAreaElement; if(!ta) return; ta.style.height='auto'; ta.style.height=Math.min(120, Math.max(ta.scrollHeight, 38))+'px';
+      });
+    }, 0);
   }
 
   async saveProgress(it: any){
@@ -338,14 +371,14 @@ export class AuditGivaudanComponent {
   }
 
   async addResource(it: any){
-    const row = { number: it.id, name: '새 자료', type: 'Manual', url: null, file_url: null };
+    const row = { number: it.id, name: '', type: 'Manual', url: null, file_url: null };
     const { data } = await this.supabase.addGivaudanResource(row);
     this.resources = [...(this.resources || []), data as ResourceItem];
   }
 
   async addResourceByAside(){
     if(!this.openItemId) return;
-    const row = { number: this.openItemId, name: '새 자료', type: 'Manual', url: null, file_url: null };
+    const row = { number: this.openItemId, name: '', type: 'Manual', url: null, file_url: null };
     const { data } = await this.supabase.addGivaudanResource(row);
     this.resources = [...(this.resources || []), data as ResourceItem];
   }
@@ -353,6 +386,11 @@ export class AuditGivaudanComponent {
   async removeResource(r: any){
     await this.supabase.deleteGivaudanResource(r.id);
     this.resources = (this.resources || []).filter((x:any)=>x.id!==r.id);
+  }
+  removeResourceConfirm(r: any){
+    const ok = confirm('정말로 이 자료 항목을 삭제할까요?');
+    if(!ok) return;
+    this.removeResource(r);
   }
 
   async uploadFor(r: any, ev: any){
@@ -362,10 +400,26 @@ export class AuditGivaudanComponent {
     const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const { publicUrl } = await this.supabase.uploadAuditFile(file, path);
     r.file_url = publicUrl;
+    this.saveResource(r);
   }
+  handleDrop(r: any, ev: DragEvent){
+    ev.preventDefault();
+    const file = ev.dataTransfer?.files?.[0];
+    if(!file) return;
+    const fake = { target: { files: [file] } } as any;
+    this.uploadFor(r, fake);
+  }
+  toggleResourceDone(r: any){ r.done = !r.done; this.saveResource(r); }
+  autoResize(ev: any){ const ta = ev?.target as HTMLTextAreaElement; if(!ta) return; ta.style.height = 'auto'; ta.style.height = Math.min(120, Math.max(ta.scrollHeight, 28)) + 'px'; }
+  getFileName(r: any){ try{ const url = (r?.file_url||'').split('?')[0]; return url.substring(url.lastIndexOf('/')+1); }catch{return '파일 열기';} }
 
   openResource(r: ResourceItem){ this.preview(r); }
-  saveResource(r: ResourceItem){ /* placeholder for future update call */ }
+  async saveResource(r: ResourceItem){
+    if (!r || !('id' in (r as any))) return;
+    try{
+      await this.supabase.updateGivaudanResource((r as any).id, { name: r.name, url: (r as any).url, file_url: (r as any).file_url, done: (r as any).done });
+    }catch{}
+  }
   openLink(url?: string | null){ if(!url) return; window.open(url, '_blank'); }
   clearFile(r: ResourceItem){ r.file_url = null; }
 

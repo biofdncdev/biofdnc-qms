@@ -155,6 +155,15 @@ export class SupabaseService {
       .single();
   }
 
+  async updateGivaudanResource(id: string, row: any) {
+    return this.ensureClient()
+      .from('givaudan_audit_resources')
+      .update(row)
+      .eq('id', id)
+      .select()
+      .single();
+  }
+
   async deleteGivaudanResource(id: string) {
     return this.ensureClient()
       .from('givaudan_audit_resources')
