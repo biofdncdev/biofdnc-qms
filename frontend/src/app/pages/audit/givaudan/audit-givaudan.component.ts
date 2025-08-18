@@ -174,15 +174,16 @@ interface AuditDate { value: string; label: string; }
     .assessment .t{ color:#475569; margin:6px 0; }
     .assessment .acc{ background:#f8fafc; border:1px dashed #e2e8f0; border-radius:8px; padding:8px; }
     .assign select{ min-height: 100px; }
-    .chips{ margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
-    .chip{ background:#eef2ff; color:#3730a3; padding:4px 8px; border-radius:999px; font-weight:600; font-size:.85em; display:inline-flex; align-items:center; gap:6px; }
-    .chip .remove{ background:transparent; border:0; color:#333; cursor:pointer; line-height:1; padding:0 4px; border-radius:8px; }
-    .chip .remove:hover{ background:#e5e7eb; }
-    .chip.team-rmd{ background:#dbeafe; color:#1e40af; } /* 원료제조팀 파랑 */
-    .chip.team-cell{ background:#dcfce7; color:#166534; } /* 식물세포배양팀 연두 */
-    .chip.team-qc{ background:#cfeffd; color:#0b3f57; } /* 품질 옥색 이미지 색 */
-    .chip.team-rnd{ background:#f3e8ff; color:#6b21a8; } /* 연구팀 보라 */
-    .chip.team-admin{ background:#fef9c3; color:#92400e; } /* 경영지원팀 노랑 */
+    .chips{ margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; }
+    .chip{ background:#f8fafc; color:#334155; padding:4px 8px; border-radius:999px; font-weight:600; font-size:.85em; display:inline-flex; align-items:center; gap:4px; border:1px solid #e2e8f0; transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
+    .chip:hover{ border-color:#cbd5e1; }
+    .chip .remove{ background:transparent; border:0; color:inherit; cursor:pointer; line-height:1; padding:0 2px; border-radius:8px; }
+    .chip .remove:hover{ background:#e2e8f0; }
+    .chip.team-rmd{ background:#e0f2fe; color:#075985; border-color:#bae6fd; } /* 원료제조팀: Sky */
+    .chip.team-cell{ background:#dcfce7; color:#047857; border-color:#bbf7d0; } /* 식물세포배양팀: Emerald */
+    .chip.team-qc{ background:#cffafe; color:#155e75; border-color:#a5f3fc; } /* 품질팀: Cyan */
+    .chip.team-rnd{ background:#ede9fe; color:#6d28d9; border-color:#ddd6fe; } /* 연구팀: Violet */
+    .chip.team-admin{ background:#fef3c7; color:#b45309; border-color:#fde68a; } /* 경영지원팀: Amber */
     /* 내부 resources 편집 섹션 제거로 관련 스타일 삭제 */
 
     @keyframes slideDown { from{ opacity:0; transform: translateY(-6px); } to{ opacity:1; transform:none; } }
