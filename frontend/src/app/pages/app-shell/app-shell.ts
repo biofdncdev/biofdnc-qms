@@ -58,6 +58,7 @@ export class AppShellComponent {
   private buildMenus() {
     this.menus = [
       { key: 'home', icon: 'home', label: 'Home', path: '/app/home' },
+      { key: 'sale', icon: 'payments', label: 'Sale', submenu: [ { label: 'Rice Bran Water H', path: '/app/sale/rice-bran-water-h' } ] },
       { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [ { label: '목록' }, { label: '등록' }, { label: '승인' } ] },
       { key: 'product', icon: 'category', label: 'Product', submenu: [ { label: '목록' }, { label: '등록' } ] },
       {

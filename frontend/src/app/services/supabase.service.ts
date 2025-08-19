@@ -225,4 +225,30 @@ export class SupabaseService {
       .eq('form_id', formId)
       .order('week_start', { ascending: true });
   }
+
+  // Sales (Rice Bran Water H and others)
+  async createSalesOrder(row: { product_key: string; order_no?: string | null; order_date?: string | null; order_qty?: number | null; created_by?: string | null; created_by_name?: string | null; }){
+    return this.ensureClient().from('sales_orders').insert(row).select('*').single();
+  }
+  async updateSalesOrder(id: string, row: Partial<{ order_no: string; order_date: string; order_qty: number; }>) {
+    return this.ensureClient().from('sales_orders').update(row).eq('id', id).select('*').single();
+  }
+  async listSalesOrders(product_key: string){
+    return this.ensureClient().from('sales_orders').select('*, deliveries:sales_deliveries(*)').eq('product_key', product_key).order('created_at', { ascending: true });
+  }
+  async addSalesDelivery(row: { order_id: string; due_date?: string | null; qty?: number | null; outsource_date?: string | null; outsource_qty?: number | null; }){
+    return this.ensureClient().from('sales_deliveries').insert(row).select('*').single();
+  }
+  async updateSalesDelivery(id: string, row: Partial<{ due_date: string; qty: number; outsource_date: string; outsource_qty: number; }>) {
+    return this.ensureClient().from('sales_deliveries').update(row).eq('id', id).select('*').single();
+  }
+  async deleteSalesDelivery(id: string){
+    return this.ensureClient().from('sales_deliveries').delete().eq('id', id);
+  }
+  async logDeliveryChange(row: { delivery_id: string; field: string; old_value?: string | null; new_value?: string | null; changed_by?: string | null; changed_by_name?: string | null; }){
+    return this.ensureClient().from('sales_delivery_changes').insert(row);
+  }
+  async listDeliveryChanges(delivery_id: string){
+    return this.ensureClient().from('sales_delivery_changes').select('*').eq('delivery_id', delivery_id).order('changed_at', { ascending: true });
+  }
 }
