@@ -141,18 +141,19 @@ interface AuditDate { value: string; label: string; }
     .controls{ display:flex; align-items:center; gap:8px; }
     .controls select{ padding:8px 10px; border-radius:8px; border:1px solid #e5e7eb; }
 
-    .layout{ display:grid; grid-template-columns: minmax(0,1fr) 320px; gap:16px; }
+    .layout{ display:grid; grid-template-columns: minmax(0,1fr) 320px; gap:16px; align-items:start; }
+    .checklist, .resources { min-width: 0; }
     @media (max-width: 1100px){ .layout{ grid-template-columns: 1fr; } }
 
     .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 160px); overflow:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
     .group h3{ margin:8px 6px 12px; }
     .filterbar{ display:flex; align-items:center; gap:10px; margin:6px; flex-wrap:wrap; }
-    .item{ display:grid; grid-template-columns: 54px 1fr 1.6fr; gap:12px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; align-items:start; }
+    .item{ display:grid; grid-template-columns: 54px 1fr 1.6fr; gap:12px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; align-items:start; min-width:0; }
     .id{ font-weight:700; color:#475569; display:flex; align-items:center; justify-content:center; }
     .ko{ font-weight:600; margin-bottom:2px; }
     .en{ color:#64748b; font-size:.92em; }
     /* Left controls: 2x2 grid (row1: status + saved, row2: dept-select + chips + notes below) */
-    .state{ display:grid; grid-template-columns: auto 1fr; grid-template-rows:auto auto auto; align-items:start; column-gap:12px; row-gap:8px; }
+    .state{ display:grid; grid-template-columns: auto 1fr; grid-template-rows:auto auto auto; align-items:start; column-gap:12px; row-gap:8px; min-width:0; }
     .state .status-select{ grid-row:1; grid-column:1; }
     .state .after-status{ grid-row:1; grid-column:2; }
     .state .dept-select{ grid-row:2; grid-column:1; }
@@ -161,7 +162,7 @@ interface AuditDate { value: string; label: string; }
     .state .meta{ color:#475569; font-size:.85em; }
     .status-swatch{ width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #e5e7eb; }
     select{ padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; appearance:none; -webkit-appearance:none; -moz-appearance:none; }
-    .status-select, .dept-select{ width: 150px; }
+    .status-select, .dept-select{ width: 150px; max-width: 100%; }
     /* 상태별 색상 (진행중=초록, 보류=주황, 해당없음=회색) */
     .state select.status-pending{ background:#fff7ed; border-color:#f59e0b; color:#92400e; }
     .state select.status-in-progress{ background:#ecfdf5; border-color:#10b981; color:#065f46; }
@@ -177,6 +178,7 @@ interface AuditDate { value: string; label: string; }
     .item .details{ grid-column: 1 / -1; overflow:hidden; }
     .item.open .details{ animation: slideDown .22s ease-out; }
     .details-inner{ display:grid; grid-template-columns: 1.4fr .8fr 1fr; gap:16px; padding:10px 6px 12px; }
+    @media (max-width: 1200px){ .details-inner{ grid-template-columns: 1fr; } }
     .assessment .row{ display:flex; gap:10px; margin:4px 0; }
     .assessment .q{ margin-top:8px; font-weight:600; }
     .assessment .t{ color:#475569; margin:6px 0; }
@@ -223,6 +225,14 @@ interface AuditDate { value: string; label: string; }
     .file-link{ color:#2563eb; text-decoration:underline; cursor:pointer; }
     .hint{ color:#64748b; margin:8px 0 0 4px; }
     .resource-card button{ padding:6px 10px; border-radius:8px; background:#2563eb; color:#fff; border:0; }
+
+    /* Tablet: compress item row and make controls stack to avoid horizontal scroll */
+    @media (max-width: 1100px){
+      .item{ grid-template-columns: 48px 1fr; }
+      .state{ grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; }
+      .state .status-select, .state .dept-select{ width: 100%; }
+      .state .after-status{ grid-row:auto; grid-column:auto; justify-self:start; }
+    }
 
     .preview-backdrop{ position:fixed; inset:0; background:rgba(2,6,23,.45); display:flex; align-items:center; justify-content:center; }
     .preview{ width:min(880px,92vw); max-height:80vh; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.2); overflow:hidden; display:flex; flex-direction:column; }

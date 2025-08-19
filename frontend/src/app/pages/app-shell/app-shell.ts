@@ -34,6 +34,7 @@ import { SupabaseService } from '../../services/supabase.service';
 export class AppShellComponent {
   selected = signal<string>('home');
   leftOpen = false;
+  drawerCompact = false;
   // Motion tokens derived from M3 motion guidance
   readonly drawerDurationMs = 320;
   readonly drawerEasing = 'cubic-bezier(0.2, 0, 0, 1)';
@@ -127,6 +128,14 @@ export class AppShellComponent {
     if (item && item.path) {
       this.router.navigate([item.path]);
     }
+  }
+
+  toggleDrawerSize(){
+    this.drawerCompact = !this.drawerCompact;
+  }
+
+  toggleLeftDrawer(){
+    this.leftOpen = !this.leftOpen;
   }
 
   openAccountList() {

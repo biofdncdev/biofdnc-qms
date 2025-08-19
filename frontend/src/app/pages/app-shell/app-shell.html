@@ -1,5 +1,9 @@
 <div class="app-shell">
   <aside class="nav-rail">
+    <button class="rail-item" mat-icon-button matTooltip="Menu" (click)="toggleLeftDrawer()">
+      <mat-icon>{{ leftOpen ? 'menu_open' : 'menu' }}</mat-icon>
+      <span>Menu</span>
+    </button>
     <button class="rail-item" *ngFor="let m of menus" [class.active]="selected() === m.key"
             mat-icon-button [matTooltip]="m.label"
             (mouseenter)="onRailMouseEnter(m.key)"
@@ -17,7 +21,7 @@
     </div>
   </aside>
 
-  <section class="content" [class.drawer-open]="leftOpen">
+  <section class="content" [class.drawer-open]="leftOpen" [class.compact]="drawerCompact">
     <header class="topbar">
       <div class="brand">BIO-FD&C QMS</div>
     </header>
@@ -28,7 +32,7 @@
   </section>
 
   <!-- Left slide panel without backdrop; overlays right next to the nav rail -->
-  <aside class="section-drawer" [class.open]="leftOpen" aria-label="Section menu">
+  <aside class="section-drawer" [class.open]="leftOpen" [class.compact]="drawerCompact" aria-label="Section menu">
     <div class="side-menu">
       <div class="side-title">{{ selected() | titlecase }}</div>
       <a class="side-link" *ngFor="let item of sectionMenu"
