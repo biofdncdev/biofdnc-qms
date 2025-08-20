@@ -38,6 +38,9 @@ export class AppShellComponent {
   readonly drawerDurationMs = 320;
   readonly drawerEasing = 'cubic-bezier(0.2, 0, 0, 1)';
   sectionMenu: Array<{ label: string; path?: string; onClick?: () => void; selected?: boolean }> = [];
+  // Simple in-app tab bar for quick nav
+  tabs: Array<{ title: string; path: string }>=[];
+  activeTabIndex = 0;
   menus: Array<{ key: string; icon: string; label: string; path?: string; badge?: number; submenu?: Array<{ label: string; path?: string }> }> = [];
   isAdmin = false;
   isViewer = false;
@@ -158,13 +161,13 @@ export class AppShellComponent {
     this.leftOpen = false;
   }
 
-  onSubClick(item: { path?: string; onClick?: () => void; selected?: boolean }) {
+  onSubClick(item: { label?: string; path?: string; onClick?: () => void; selected?: boolean }) {
     // clear previous selections
     this.sectionMenu.forEach(i => i.selected = false);
     item.selected = true;
     if (item?.onClick) { item.onClick(); return; }
     if (item && item.path) {
-      this.router.navigate([item.path]);
+      this.openTab(item.label || 'Page', item.path);
     }
   }
 
@@ -188,9 +191,7 @@ export class AppShellComponent {
 
   navigate(key: string, path: string) {
     this.selected.set(key);
-    if (path) {
-      this.router.navigate([path]);
-    }
+    if (path) this.openTab(this.menus.find(m=>m.key===key)?.label || 'Page', path);
   }
 
   async logout() {
@@ -200,5 +201,31 @@ export class AppShellComponent {
     }
     await this.supabase.signOut();
     this.router.navigate(['/login']);
+  }
+
+  // tabs helpers
+  openTab(title: string, path: string){
+    const idx = this.tabs.findIndex(t => t.path === path);
+    if (idx === -1) {
+      this.tabs.push({ title, path });
+      this.activeTabIndex = this.tabs.length - 1;
+    } else {
+      this.activeTabIndex = idx;
+    }
+    this.router.navigate([path]);
+  }
+  closeTab(i: number){
+    const closingActive = i === this.activeTabIndex;
+    this.tabs.splice(i,1);
+    if (this.tabs.length === 0) return;
+    if (closingActive) {
+      const ni = Math.max(0, i-1);
+      this.activeTabIndex = ni;
+      this.router.navigate([this.tabs[ni].path]);
+    }
+  }
+  activateTab(i: number){
+    this.activeTabIndex = i;
+    this.router.navigate([this.tabs[i].path]);
   }
 }

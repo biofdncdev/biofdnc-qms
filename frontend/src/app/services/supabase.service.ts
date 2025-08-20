@@ -151,6 +151,22 @@ export class SupabaseService {
     return q;
   }
 
+  async getIngredient(id: string){
+    return this.ensureClient()
+      .from('ingredients')
+      .select('*')
+      .eq('id', id)
+      .single();
+  }
+
+  async upsertIngredient(row: any){
+    return this.ensureClient()
+      .from('ingredients')
+      .upsert(row, { onConflict: 'id' })
+      .select('*')
+      .single();
+  }
+
   async selfDelete(confirmEmail: string) {
     const client = this.ensureClient();
     const { data: ures } = await client.auth.getUser();

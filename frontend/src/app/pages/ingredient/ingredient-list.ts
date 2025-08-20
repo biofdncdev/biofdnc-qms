@@ -1,9 +1,11 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { SupabaseService } from '../../services/supabase.service';
 
 type IngredientRow = { [key: string]: any } & {
+  id?: string;
   inci_name?: string; korean_name?: string; chinese_name?: string;
   cas_no?: string; scientific_name?: string; function_en?: string; function_kr?: string;
 };
@@ -17,7 +19,9 @@ type IngredientRow = { [key: string]: any } & {
     <header class="top top-sticky">
       <h2>Ingredient</h2>
       <div class="actions">
-        <button class="btn primary" (click)="load()">조회</button>
+        <button class="btn ghost" (click)="onAdd()">추가</button>
+        <button class="btn ghost" [disabled]="!selectedId" (click)="onEdit()">수정</button>
+        <button class="btn ghost" (click)="load()">조회</button>
         <button class="btn ghost" (click)="reset()">초기화</button>
         <div class="page-size">
           <label>표시 개수</label>
@@ -57,7 +61,9 @@ type IngredientRow = { [key: string]: any } & {
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let r of rows()">
+            <tr *ngFor="let r of rows()" [class.hovered]="hoverId===r['id']" [class.selected]="selectedId===r['id']"
+                (mouseenter)="hoverId=r['id']" (mouseleave)="hoverId=null"
+                (click)="toggleSelect(r['id'])" (dblclick)="openEdit(r['id'])">
               <td class="wrap">{{ r.inci_name }}</td>
               <td class="wrap">{{ r.korean_name }}</td>
               <td class="wrap">{{ r.chinese_name }}</td>
@@ -120,6 +126,8 @@ type IngredientRow = { [key: string]: any } & {
   td.wrap{ white-space:normal; word-break:break-word; }
   td.nowrap{ white-space:nowrap; }
   .empty{ text-align:center; color:#94a3b8; }
+  tr.hovered{ box-shadow: inset 0 0 0 9999px rgba(99,102,241,0.06); }
+  tr.selected{ box-shadow: inset 0 0 0 9999px rgba(59,130,246,0.10); outline: 2px solid rgba(37,99,235,0.35); }
   .pager{ display:flex; align-items:center; justify-content:space-between; margin-top:8px; }
   .controls{ display:flex; align-items:center; gap:8px; }
   .page-indicator{ min-width:64px; text-align:center; font-weight:800; }
@@ -135,8 +143,10 @@ export class IngredientListComponent implements OnInit {
   keyword = '';
   keywordOp: 'AND' | 'OR' = 'AND';
   extraCols: string[] = [];
+  hoverId: string | null = null;
+  selectedId: string | null = null;
 
-  constructor(private supabase: SupabaseService) {}
+  constructor(private supabase: SupabaseService, private router: Router) {}
 
   ngOnInit(){ this.load(); }
 
@@ -157,6 +167,14 @@ export class IngredientListComponent implements OnInit {
   go(p: number){ this.page = Math.min(Math.max(1, p), this.pages); this.load(); }
   onPageSize(ps: number){ this.pageSize = Number(ps) || 15; this.page = 1; this.load(); }
   reset(){ this.keyword=''; this.keywordOp='AND'; this.page=1; this.pageSize=15; this.load(); }
+  toggleSelect(id: string){ this.selectedId = this.selectedId === id ? null : id; }
+  openEdit(id?: string){ const target = id || this.selectedId; if(!target) return; this.onEdit(target); }
+  onAdd(){ this.navigateToForm(); }
+  onEdit(id?: string){ const target = id || this.selectedId; if(!target) return; this.navigateToForm(target); }
+  private navigateToForm(id?: string){
+    const extras = id ? { queryParams: { id } } : {} as any;
+    this.router.navigate(['/app/ingredient/form'], extras);
+  }
 
   onWheel(ev: WheelEvent){ if (ev.shiftKey) { const wrap = ev.currentTarget as HTMLElement; wrap.scrollLeft += (ev.deltaY || ev.deltaX); ev.preventDefault(); } }
 }

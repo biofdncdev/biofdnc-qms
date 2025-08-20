@@ -27,6 +27,12 @@
   <section class="content" [class.drawer-open]="leftOpen" [class.compact]="drawerCompact">
     <header class="topbar">
       <div class="brand">BIO-FD&C QMS</div>
+      <div class="tabbar" *ngIf="tabs.length">
+        <div class="tab" *ngFor="let t of tabs; index as i" [class.active]="i===activeTabIndex">
+          <button class="tab-btn" (click)="activateTab(i)">{{ t.title }}</button>
+          <button class="tab-close" (click)="closeTab(i)">×</button>
+        </div>
+      </div>
     </header>
 
     <main class="viewport">
