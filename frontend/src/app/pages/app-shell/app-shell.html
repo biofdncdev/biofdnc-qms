@@ -8,7 +8,10 @@
             mat-icon-button [matTooltip]="m.label"
             (mouseenter)="onRailMouseEnter(m.key)"
             (click)="onMainClick(m)">
-      <mat-icon [fontIcon]="m.icon"></mat-icon>
+      <span class="icon-badge">
+        <mat-icon [fontIcon]="m.icon"></mat-icon>
+        <span class="badge" *ngIf="m.badge && m.badge > 0">{{ m.badge }}</span>
+      </span>
       <span>{{m.label}}</span>
     </button>
 

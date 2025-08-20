@@ -18,6 +18,10 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/login/login').then(m => m.LoginComponent),
   },
   {
+    path: 'forgot-credentials',
+    loadComponent: () => import('./pages/forgot-credentials/forgot-credentials').then(m => m.ForgotCredentialsComponent),
+  },
+  {
     path: 'signup',
     loadComponent: () => import('./pages/signup/signup').then(m => m.SignupComponent),
   },
@@ -30,6 +34,10 @@ export const routes: Routes = [
       {
         path: 'home',
         loadComponent: () => import('./pages/home/home').then(m => m.HomeComponent),
+      },
+      {
+        path: 'alerts',
+        loadComponent: () => import('./pages/alerts/alerts').then(m => m.AlertsComponent),
       },
       {
         path: 'admin/roles',

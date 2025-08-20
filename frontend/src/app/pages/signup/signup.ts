@@ -119,16 +119,8 @@ export class SignupComponent {
     const password: string = this.signupForm.value.password;
 
     try {
-      const { data: available, error: rpcError } = await this.supabaseService
-        .getClient()
-        .rpc('is_email_available', { p_email: email });
-
-      if (!rpcError && available === false) {
-        const emailCtrl = this.signupForm.get('email');
-        const nextErrors = { ...(emailCtrl?.errors || {}), duplicate: true };
-        emailCtrl?.setErrors(nextErrors);
-        return;
-      }
+      // 가용성 사전 체크는 신뢰하지 않고, 실제 auth.signUp 결과로 처리 분기
+      // (auth에 기존 레코드가 남아있을 수 있으므로)
 
       const { data, error } = await this.supabaseService
         .getClient()
@@ -148,10 +140,20 @@ export class SignupComponent {
           desc.includes('user already exists');
 
         if (looksDuplicate) {
-          const emailCtrl = this.signupForm.get('email');
-          const nextErrors = { ...(emailCtrl?.errors || {}), duplicate: true };
-          emailCtrl?.setErrors(nextErrors);
-          return;
+          // 이미 auth에 존재하지만 users 테이블에 없을 수 있는 케이스를 위해
+          // 비밀번호 재설정 메일을 발송하여 계정 복구를 유도
+          try {
+            await this.supabaseService.getClient().auth.resetPasswordForEmail(email, {
+              redirectTo: `${location.origin}/login`
+            });
+            alert('이미 가입된 이메일입니다. 비밀번호 재설정 링크를 이메일로 발송했습니다. 메일함을 확인해주세요.');
+            return;
+          } catch (e) {
+            const emailCtrl = this.signupForm.get('email');
+            const nextErrors = { ...(emailCtrl?.errors || {}), duplicate: true };
+            emailCtrl?.setErrors(nextErrors);
+            return;
+          }
         }
 
         throw error;
@@ -159,9 +161,17 @@ export class SignupComponent {
 
       if (!data?.user) {
         alert('가입 요청이 접수되었습니다. 이메일로 전송된 인증 링크를 확인해주세요.');
+        // 관리자 알림 등록
+        try {
+          await this.supabaseService.addSignupNotification({ email, name });
+        } catch {}
         return;
       }
 
+      // 이메일 인증이 필요한 워크플로라면 여기서도 알림을 남겨 관리자 검토를 유도
+      try {
+        await this.supabaseService.addSignupNotification({ email, name });
+      } catch {}
       alert('회원가입에 성공했습니다! 로그인 페이지로 이동합니다.');
       this.router.navigate(['/login']);
     } catch (error: any) {

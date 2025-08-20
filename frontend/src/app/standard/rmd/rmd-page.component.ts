@@ -50,14 +50,13 @@ export class RmdPageComponent {
 
   constructor(){
     this.buildIndex();
-    window.addEventListener('message', (e) => this.onFrameMessage(e));
+    window.addEventListener('message', (e: MessageEvent) => this.onFrameMessage(e));
   }
 
   async buildIndex(){
     // Load all docs content once; disable search until ready
     try {
-      const items: RegulationItem[] = [];
-      this.categories.forEach(c => items.push(...c.items));
+      const items: RegulationItem[] = this.categories.flatMap((c: RegulationCategory) => c.items);
       for (const it of items){
         try{
           const html = await this.http.get(`/rmd/${it.id}.html`, { responseType:'text' }).toPromise();
@@ -67,10 +66,10 @@ export class RmdPageComponent {
         }catch{}
       }
       this.indexReady.set(true);
-      queueMicrotask(() => {
-        const el = document.querySelector<HTMLInputElement>('input[type=search]');
+      setTimeout(() => {
+        const el = document.querySelector('input[type=search]') as HTMLInputElement | null;
         if (el) el.focus();
-      });
+      }, 0);
     } catch { this.indexReady.set(true); }
   }
 
@@ -84,7 +83,7 @@ export class RmdPageComponent {
       const q = this.term();
       const viewer = `/rmd/view.html?id=${encodeURIComponent(item.id)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
       this.docUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(viewer));
-      queueMicrotask(() => this.scrollTop());
+      setTimeout(() => this.scrollTop(), 0);
     } finally {
       this.loading.set(false);
     }
@@ -97,7 +96,7 @@ export class RmdPageComponent {
     this.results.set([]);
     this.matchTotal.set(0);
     this.matchIndex.set(0);
-    const frame = document.querySelector<HTMLIFrameElement>('iframe');
+    const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
     if (frame?.contentWindow) frame.contentWindow.postMessage({ type:'highlight', term: '' }, '*');
   }
 
@@ -119,8 +118,8 @@ export class RmdPageComponent {
     this.searching.set(true);
     // rank simple contains
     const filtered = this.docs
-      .filter(d => d.title.toLowerCase().includes(q) || d.content.includes(q))
-      .map(d => ({ id: d.id, title: this.findTitle(d.id) } as RegulationItem));
+      .filter((d: SearchDoc) => d.title.toLowerCase().includes(q) || d.content.includes(q))
+      .map((d: SearchDoc) => ({ id: d.id, title: this.findTitle(d.id) } as RegulationItem));
     this.results.set(filtered);
   }
 
@@ -131,7 +130,7 @@ export class RmdPageComponent {
 
   private findTitle(id: string){
     for (const c of this.categories){
-      const f = c.items.find(i => i.id === id);
+      const f = c.items.find((i: RegulationItem) => i.id === id);
       if (f) return f.title;
     }
     return id;
@@ -142,13 +141,13 @@ export class RmdPageComponent {
   }
 
   private postHighlight(){
-    const frame = document.querySelector<HTMLIFrameElement>('iframe');
+    const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
     if (!frame?.contentWindow) return;
     frame.contentWindow.postMessage({ type:'highlight', term: this.term() }, '*');
   }
 
   navigate(dir: 'prev'|'next'){
-    const frame = document.querySelector<HTMLIFrameElement>('iframe');
+    const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
     if (!frame?.contentWindow) return;
     frame.contentWindow.postMessage({ type:'nav', dir }, '*');
   }

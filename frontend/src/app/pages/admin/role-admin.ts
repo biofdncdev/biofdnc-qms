@@ -15,7 +15,7 @@ import { MatDialogModule } from '@angular/material/dialog';
   styleUrls: ['./role-admin.scss']
 })
 export class RoleAdminComponent implements OnInit {
-  displayedColumns = ['name','email','created_at','updated_at','last_sign_in_at','is_online','status','role'];
+  displayedColumns = ['name','email','created_at','updated_at','last_sign_in_at','is_online','status','role','actions'];
   rows: any[] = [];
   roles = ['admin','manager','staff','viewer'];
   statuses: Array<'active' | 'inactive'> = ['active','inactive'];
@@ -71,6 +71,26 @@ export class RoleAdminComponent implements OnInit {
     if (!confirm('해당 사용자를 삭제하시겠습니까?')) return;
     await this.supabase.deleteUser(row.id);
     await this.load();
+  }
+
+  async forceConfirm(row: any) {
+    if (!confirm('이 사용자의 이메일 인증을 관리자 권한으로 완료 처리할까요?')) return;
+    await this.supabase.forceConfirmUser(row.id);
+    // 프로필 갱신 시간 업데이트
+    await this.supabase.getClient().from('users').update({ updated_at: new Date().toISOString() }).eq('id', row.id);
+    // 로컬 행 즉시 반영 (버튼 → 텍스트)
+    row.email_confirmed_at = new Date().toISOString();
+    // 권한 변경 질의
+    const makeStaff = confirm('권한을 staff로 변경하시겠습니까? 취소를 누르면 viewer로 유지됩니다.');
+    const nextRole = makeStaff ? 'staff' : 'viewer';
+    await this.supabase.updateUserRole(row.id, nextRole);
+    await this.supabase.getClient().from('users').update({ updated_at: new Date().toISOString() }).eq('id', row.id);
+    row.role = nextRole;
+    alert('이메일 인증이 완료 처리되었습니다. 사용자에게 로그인 안내를 해주세요.');
+  }
+
+  isConfirmed(row: any){
+    return !!(row?.email_confirmed_at || row?.last_sign_in_at);
   }
 
   async toggleStatus(row: any) {

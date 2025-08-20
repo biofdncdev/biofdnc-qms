@@ -43,4 +43,7 @@ Thumbs.db
 
 # Environment variables
 .env
-public/env.js
+public/env.jsNUL
+
+# ignore Windows pseudo file
+NUL

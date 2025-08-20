@@ -38,8 +38,11 @@ export class AppShellComponent {
   readonly drawerDurationMs = 320;
   readonly drawerEasing = 'cubic-bezier(0.2, 0, 0, 1)';
   sectionMenu: Array<{ label: string; path?: string; onClick?: () => void; selected?: boolean }> = [];
-  menus: Array<{ key: string; icon: string; label: string; path?: string; submenu?: Array<{ label: string; path?: string }> }> = [];
+  menus: Array<{ key: string; icon: string; label: string; path?: string; badge?: number; submenu?: Array<{ label: string; path?: string }> }> = [];
   isAdmin = false;
+  isViewer = false;
+  unread = signal<number>(0);
+  private notifSubscription: any;
 
   constructor(private router: Router, private supabase: SupabaseService) {
     // Determine admin on boot
@@ -47,40 +50,76 @@ export class AppShellComponent {
       if (u) {
         const { data } = await this.supabase.getUserProfile(u.id);
         this.isAdmin = data?.role === 'admin';
+        this.isViewer = data?.role === 'viewer';
       }
       this.buildMenus();
+      // Load notifications only for admins
+      if (this.isAdmin) {
+        this.refreshNotifications();
+        this.subscribeNotifications();
+      }
     });
     // initial menus before profile resolves
     this.buildMenus();
   }
 
   private buildMenus() {
+    // 기본 메뉴: Home만
     this.menus = [
-      { key: 'home', icon: 'home', label: 'Home', path: '/app/home' },
-      { key: 'sale', icon: 'payments', label: 'Sale', submenu: [ { label: 'Rice Bran Water H', path: '/app/sale/rice-bran-water-h' } ] },
-      { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [ { label: '목록' }, { label: '등록' }, { label: '승인' } ] },
-      { key: 'product', icon: 'category', label: 'Product', submenu: [ { label: '목록' }, { label: '등록' } ] },
-      {
-        key: 'standard', icon: 'gavel', label: 'Standard',
-        submenu: [
-          { label: '원료제조팀 규정', path: '/app/standard/rmd' }
-        ]
-      },
-      {
-        key: 'record', icon: 'history_edu', label: 'Record', submenu: [
-          { label: '원료제조팀 지시·기록서', path: '/app/record/rmd-forms' }
-        ]
-      },
-      {
-        key: 'audit', icon: 'rule', label: 'Audit', submenu: [
-          { label: 'AMOREPACIFIC', path: '/app/audit/amorepacific' },
-          { label: 'GIVAUDAN', path: '/app/audit/givaudan' }
-        ]
-      },
+      { key: 'home', icon: 'home', label: 'Home', path: '/app/home' }
     ];
+
+    if (!this.isViewer) {
+      this.menus.push(
+        { key: 'sale', icon: 'payments', label: 'Sale', submenu: [ { label: 'Rice Bran Water H', path: '/app/sale/rice-bran-water-h' } ] },
+        { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [ { label: '목록' }, { label: '등록' }, { label: '승인' } ] },
+        { key: 'product', icon: 'category', label: 'Product', submenu: [ { label: '목록' }, { label: '등록' } ] },
+        {
+          key: 'standard', icon: 'gavel', label: 'Standard',
+          submenu: [
+            { label: '원료제조팀 규정', path: '/app/standard/rmd' }
+          ]
+        },
+        {
+          key: 'record', icon: 'history_edu', label: 'Record', submenu: [
+            { label: '원료제조팀 지시·기록서', path: '/app/record/rmd-forms' }
+          ]
+        },
+        {
+          key: 'audit', icon: 'rule', label: 'Audit', submenu: [
+            { label: 'AMOREPACIFIC', path: '/app/audit/amorepacific' },
+            { label: 'GIVAUDAN', path: '/app/audit/givaudan' }
+          ]
+        },
+      );
+    }
     if (this.isAdmin) {
+      this.menus.unshift({ key: 'alerts', icon: 'notifications', label: '알림', path: '/app/alerts', badge: this.unread() });
+    }
+    if (this.isAdmin && !this.isViewer) {
       this.menus.push({ key: 'user', icon: 'group', label: 'User', submenu: [ { label: '사용자 관리', path: '/app/admin/roles' } ] });
     }
+  }
+
+  private async refreshNotifications(){
+    const count = await this.supabase.countUnreadNotifications();
+    this.unread.set(count);
+    const alerts = this.menus.find(m => m.key === 'alerts');
+    if (alerts) alerts.badge = count;
+  }
+
+  private subscribeNotifications(){
+    // Realtime subscription to notifications inserts
+    const client = this.supabase.getClient();
+    this.notifSubscription = client
+      .channel('public:notifications')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, async () => {
+        await this.refreshNotifications();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications' }, async () => {
+        await this.refreshNotifications();
+      })
+      .subscribe();
   }
 
   private openLeftForKey(key: string) {

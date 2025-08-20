@@ -67,7 +67,17 @@ export class SupabaseService {
       .single();
   }
 
+  async ensureUserProfile(user: User) {
+    // 더 이상 자동 생성하지 않음: 탈퇴 직후 즉시 재생성되는 문제 방지
+    return;
+  }
+
   async listUsers() {
+    // Prefer admin view including email confirmation
+    try {
+      const { data, error } = await this.ensureClient().rpc('admin_list_users_with_confirm');
+      if (!error && data) return { data, error: null } as any;
+    } catch {}
     return this.ensureClient()
       .from('users')
       .select('id,name,email,role,status,created_at,updated_at,last_sign_in_at,is_online')
@@ -95,6 +105,92 @@ export class SupabaseService {
   async deleteUser(id: string) {
     // Requires RPC to delete user both from auth and public.users
     return this.ensureClient().rpc('admin_delete_user', { user_id: id });
+  }
+
+  async forceConfirmUser(userId: string) {
+    return this.ensureClient().rpc('admin_force_confirm', { user_id: userId });
+  }
+
+  async selfDelete(confirmEmail: string) {
+    const client = this.ensureClient();
+    const { data: ures } = await client.auth.getUser();
+    const uid = ures.user?.id;
+    if (!uid) throw new Error('No session');
+    // 1) RLS로 직접 삭제 (항상 보장)
+    await client.from('user_roles').delete().eq('user_id', uid);
+    await client.from('users').delete().eq('id', uid);
+    // 2) RPC가 설정되어 있으면 Auth 계정 삭제 시도(선택적)
+    try { await client.rpc('self_delete_user', { confirm_email: confirmEmail }); } catch {}
+    return { ok: true } as any;
+  }
+
+  // Notifications
+  async listNotifications() {
+    return this.ensureClient()
+      .from('notifications')
+      .select('*')
+      .order('created_at', { ascending: false });
+  }
+
+  async countUnreadNotifications() {
+    const { count } = await this.ensureClient()
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .is('read_at', null);
+    return count || 0;
+  }
+
+  async markAllNotificationsRead() {
+    // prefer RPC if available
+    try {
+      await this.ensureClient().rpc('mark_all_notifications_read');
+      return;
+    } catch {
+      // fallback to direct update (policy allows admin only)
+      await this.ensureClient().from('notifications').update({ read_at: new Date().toISOString() }).is('read_at', null);
+    }
+  }
+
+  async addSignupNotification(payload: { email: string; name?: string | null }) {
+    const title = '신규 가입 요청';
+    const message = `${payload.name || payload.email} 님이 가입을 요청했습니다. 권한을 확인해 주세요.`;
+    return this.ensureClient()
+      .from('notifications')
+      .insert({
+        type: 'signup',
+        title,
+        message,
+        link: '/app/admin/roles',
+        actor_email: payload.email,
+        actor_name: payload.name || null,
+      });
+  }
+
+  // Resend confirmation email for signups
+  async resendConfirmationEmail(email: string) {
+    const client = this.ensureClient();
+    const redirectTo = `${location.origin}/login`;
+    // 1) 가입 인증 메일 재발송만 시도
+    const { error } = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: redirectTo } as any });
+    if (!error) return { ok: true } as any;
+    // 2) 부득이한 경우에만 매직링크(소유권 확인)로 대체. 비밀번호 재설정은 절대 보내지 않음.
+    const { error: otpErr } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
+    if (!otpErr) return { ok: true, via: 'otp' } as any;
+    throw error;
+  }
+
+  async addDeleteRequestNotification(payload: { email: string }) {
+    const title = '회원탈퇴 요청';
+    const message = `${payload.email} 사용자가 회원탈퇴를 요청했습니다.`;
+    return this.ensureClient()
+      .from('notifications')
+      .insert({
+        type: 'delete_request',
+        title,
+        message,
+        link: '/app/admin/roles',
+        actor_email: payload.email,
+      });
   }
 
   // Givaudan Audit - assessment master

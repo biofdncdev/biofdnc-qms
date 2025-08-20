@@ -15,18 +15,18 @@ import { MatInputModule } from '@angular/material/input';
 	standalone: true,
 	imports: [CommonModule, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule],
 	template: `
-	<div class="dialog">
-		<h3>계정 탈퇴</h3>
-		<p style="margin:6px 0 16px;">보안을 위해 본인 확인이 필요합니다. 아래 내용을 입력해 주세요.</p>
-		<mat-form-field appearance="outline" style="width:100%; margin-bottom:10px;">
+	<div class="dialog" style="max-width:480px; width:100%">
+		<h3 style="margin:0 0 8px;">계정 탈퇴</h3>
+		<p style="margin:4px 0 12px; font-size:13px;">보안을 위해 본인 확인이 필요합니다. 아래 내용을 입력해 주세요.</p>
+		<mat-form-field appearance="outline" style="width:100%; margin-bottom:8px;">
 			<mat-label>이메일</mat-label>
 			<input matInput [(ngModel)]="email" placeholder="email@example.com">
 		</mat-form-field>
-		<mat-form-field appearance="outline" style="width:100%;">
+		<mat-form-field appearance="outline" style="width:100%; margin-bottom:4px;">
 			<mat-label>확인 문구</mat-label>
 			<input matInput [(ngModel)]="confirmText" placeholder="탈퇴합니다">
 		</mat-form-field>
-		<div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+		<div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
 			<button mat-button mat-dialog-close>취소</button>
 			<button mat-flat-button color="warn" [disabled]="!canConfirm()" [mat-dialog-close]="{ email, confirm: true }">탈퇴</button>
 		</div>
@@ -94,12 +94,15 @@ export class ProfileComponent implements OnInit {
 		if (!this.profile) return;
 		const ref = this.dialog.open(DeleteConfirmDialogComponent);
 		(ref.componentInstance as DeleteConfirmDialogComponent).expectedEmail = (this.profile.email || '').toLowerCase();
+		(ref.componentInstance as DeleteConfirmDialogComponent).email = (this.profile.email || '').toLowerCase();
 		const result = await ref.afterClosed().toPromise();
 		if (!result || !result.confirm) return;
 		try {
-			await this.supabase.deleteUser(this.profile.id);
-			alert('탈퇴가 완료되었습니다. 이용해 주셔서 감사합니다.');
+			await this.supabase.selfDelete(String(result.email || '').toLowerCase());
+			// 로컬 세션 정리 및 메뉴/상태 초기화 전에 약간의 지연
+			await new Promise(r => setTimeout(r, 300));
 			await this.supabase.signOut();
+			alert('탈퇴가 완료되었습니다. 이용해 주셔서 감사합니다.');
 			this.router.navigate(['/login']);
 		} catch (e: any) {
 			alert('탈퇴 처리 중 오류가 발생했습니다: ' + (e?.message || e));
