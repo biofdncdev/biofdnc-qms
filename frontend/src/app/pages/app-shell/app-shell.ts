@@ -41,6 +41,8 @@ export class AppShellComponent {
   // Simple in-app tab bar for quick nav
   tabs: Array<{ title: string; path: string }>=[];
   activeTabIndex = 0;
+  dragIndex: number | null = null;
+  dragOverIndex: number | null = null;
   menus: Array<{ key: string; icon: string; label: string; path?: string; badge?: number; submenu?: Array<{ label: string; path?: string }> }> = [];
   isAdmin = false;
   isViewer = false;
@@ -227,5 +229,31 @@ export class AppShellComponent {
   activateTab(i: number){
     this.activeTabIndex = i;
     this.router.navigate([this.tabs[i].path]);
+  }
+
+  // drag & drop tabs
+  onTabDragStart(ev: DragEvent, index: number){
+    this.dragIndex = index;
+    this.dragOverIndex = null;
+    try { ev.dataTransfer?.setData('text/plain', String(index)); } catch {}
+    if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
+  }
+  onTabDragOver(ev: DragEvent, index: number){
+    ev.preventDefault();
+    this.dragOverIndex = index;
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+  }
+  onTabDragLeave(){
+    this.dragOverIndex = null;
+  }
+  onTabDrop(ev: DragEvent, index: number){
+    ev.preventDefault();
+    const from = this.dragIndex ?? Number(ev.dataTransfer?.getData('text/plain'));
+    this.dragIndex = null;
+    this.dragOverIndex = null;
+    if (Number.isNaN(from) || from === null || from === index || from < 0 || from >= this.tabs.length) return;
+    const [moved] = this.tabs.splice(from, 1);
+    this.tabs.splice(index, 0, moved);
+    this.activeTabIndex = index;
   }
 }

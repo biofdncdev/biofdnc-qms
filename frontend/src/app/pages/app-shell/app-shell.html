@@ -28,7 +28,8 @@
     <header class="topbar">
       <div class="brand">BIO-FD&C QMS</div>
       <div class="tabbar" *ngIf="tabs.length">
-        <div class="tab" *ngFor="let t of tabs; index as i" [class.active]="i===activeTabIndex">
+        <div class="tab" *ngFor="let t of tabs; index as i" [class.active]="i===activeTabIndex" [class.dragover]="i===dragOverIndex"
+             draggable="true" (dragstart)="onTabDragStart($event,i)" (dragover)="onTabDragOver($event,i)" (dragleave)="onTabDragLeave()" (drop)="onTabDrop($event,i)">
           <button class="tab-btn" (click)="activateTab(i)">{{ t.title }}</button>
           <button class="tab-close" (click)="closeTab(i)">×</button>
         </div>

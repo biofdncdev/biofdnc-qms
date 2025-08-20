@@ -78,8 +78,9 @@
 .brand { font-weight: 800; }
 
 .tabbar { display:flex; gap:6px; margin-left: 16px; overflow:auto; }
-.tab { display:flex; align-items:center; background:#f3f4f6; border:1px solid #e5e7eb; border-radius:10px; }
+.tab { display:flex; align-items:center; background:#f3f4f6; border:1px solid #e5e7eb; border-radius:10px; transition: box-shadow .18s ease, border-color .18s ease; }
 .tab.active{ background:#eef2ff; border-color:#c7d2fe; }
+.tab.dragover{ border-color:#e5e7eb; box-shadow: 0 8px 20px rgba(59,130,246,.20), 0 3px 8px rgba(59,130,246,.18); }
 .tab-btn{ padding:6px 10px; background:transparent; border:0; cursor:pointer; font-weight:600; }
 .tab-close{ padding:6px 8px; background:transparent; border:0; cursor:pointer; color:#6b7280; }
 .viewport { padding: 16px; min-width: 0; }
