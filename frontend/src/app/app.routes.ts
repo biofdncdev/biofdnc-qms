@@ -64,6 +64,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/audit/givaudan/audit-givaudan.component').then(m => m.AuditGivaudanComponent),
       },
       {
+        path: 'ingredient',
+        loadComponent: () => import('./pages/ingredient/ingredient-list').then(m => m.IngredientListComponent),
+      },
+      {
         path: 'sale/rice-bran-water-h',
         loadComponent: () => import('./pages/sale/rice-bran-water-h').then(m => m.RiceBranWaterHComponent),
       },

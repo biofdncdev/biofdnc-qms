@@ -1,4 +1,4 @@
-.app-shell { height: 100vh; background: #fff; }
+.app-shell { height: 100dvh; background: #fff; }
 
 .nav-rail {
   position: fixed;
@@ -88,7 +88,7 @@
   position: fixed;
   top: 0;
   left: 80px; /* align right next to rail */
-  height: 100vh;
+  height: 100dvh;
   width: 260px;
   background: #fff;
   border-right: 1px solid #eee;

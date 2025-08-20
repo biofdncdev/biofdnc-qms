@@ -111,6 +111,46 @@ export class SupabaseService {
     return this.ensureClient().rpc('admin_force_confirm', { user_id: userId });
   }
 
+  // Ingredients - paginated list with keyword search
+  async listIngredients(params: {
+    page?: number; // 1-based
+    pageSize?: number; // 20/50/100
+    keyword?: string;
+    keywordOp?: 'AND' | 'OR';
+  }) {
+    const page = Math.max(1, params?.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, params?.pageSize ?? 15));
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const cols = ['inci_name','korean_name','chinese_name','cas_no','scientific_name','function_en','function_kr','einecs_no','old_korean_name','origin_abs'];
+
+    let q = this.ensureClient()
+      .from('ingredients')
+      .select('*', { count: 'exact' })
+      .order('inci_name', { ascending: true })
+      .range(from, to);
+
+    const kw = (params?.keyword || '').trim();
+    const op = (params?.keywordOp || 'AND').toUpperCase() as 'AND'|'OR';
+    if (kw) {
+      const words = kw.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+      if (words.length) {
+        if (op === 'AND') {
+          for (const w of words) {
+            const pieces = cols.map(c => `${c}.ilike.%${w}%`).join(',');
+            q = q.or(pieces);
+          }
+        } else {
+          const pieces = words.flatMap(w => cols.map(c => `${c}.ilike.%${w}%`)).join(',');
+          q = q.or(pieces);
+        }
+      }
+    }
+
+    return q;
+  }
+
   async selfDelete(confirmEmail: string) {
     const client = this.ensureClient();
     const { data: ures } = await client.auth.getUser();
