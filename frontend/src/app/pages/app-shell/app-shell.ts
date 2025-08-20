@@ -71,7 +71,6 @@ export class AppShellComponent {
 
     if (!this.isViewer) {
       this.menus.push(
-        { key: 'sale', icon: 'payments', label: 'Sale', submenu: [ { label: 'Rice Bran Water H', path: '/app/sale/rice-bran-water-h' } ] },
         { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [ { label: '목록' }, { label: '등록' }, { label: '승인' } ] },
         { key: 'product', icon: 'category', label: 'Product', submenu: [ { label: '목록' }, { label: '등록' } ] },
         {
@@ -91,12 +90,12 @@ export class AppShellComponent {
             { label: 'GIVAUDAN', path: '/app/audit/givaudan' }
           ]
         },
+        { key: 'sale', icon: 'payments', label: 'Sale', submenu: [ { label: 'Rice Bran Water H', path: '/app/sale/rice-bran-water-h' } ] },
       );
     }
-    if (this.isAdmin) {
-      this.menus.unshift({ key: 'alerts', icon: 'notifications', label: '알림', path: '/app/alerts', badge: this.unread() });
-    }
     if (this.isAdmin && !this.isViewer) {
+      // Notification above User
+      this.menus.push({ key: 'alerts', icon: 'notifications', label: 'Notification', path: '/app/alerts', badge: this.unread() });
       this.menus.push({ key: 'user', icon: 'group', label: 'User', submenu: [ { label: '사용자 관리', path: '/app/admin/roles' } ] });
     }
   }
