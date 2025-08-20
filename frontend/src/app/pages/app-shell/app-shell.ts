@@ -1,7 +1,7 @@
 import { Component, signal } from '@angular/core';
 // Avoid animations dependency for Netlify build; simple JS/CSS transitions are used
 import { CommonModule } from '@angular/common';
-import { Router, RouterLink, RouterOutlet } from '@angular/router';
+import { Router, RouterOutlet } from '@angular/router';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
@@ -17,7 +17,6 @@ import { SupabaseService } from '../../services/supabase.service';
   standalone: true,
   imports: [
     CommonModule,
-    RouterLink,
     RouterOutlet,
     MatSidenavModule,
     MatToolbarModule,

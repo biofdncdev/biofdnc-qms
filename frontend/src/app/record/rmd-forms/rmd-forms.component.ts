@@ -262,8 +262,8 @@ export class RmdFormsComponent {
     }
     if(!drawn){
       try{
-        const pdfjs = await import('pdfjs-dist');
-        (pdfjs as any).GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs';
+        const pdfjs = await this.ensurePdfjs();
+        (pdfjs as any).GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.js';
         const pdfPaths = [
           '/asset/th-record-sheet.pdf',
           '/asset/Temperature%20and%20Humidity%20Record%20Sheet.pdf'
@@ -424,5 +424,23 @@ export class RmdFormsComponent {
 
   private static async imageExists(url: string){
     try{ const res = await fetch(url, { method: 'HEAD' }); return res.ok; } catch { return false; }
+  }
+
+  private loadScript(url: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = url;
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('script load failed'));
+      document.head.appendChild(s);
+    });
+  }
+
+  private async ensurePdfjs(): Promise<any> {
+    const g: any = globalThis as any;
+    if (g.pdfjsLib) return g.pdfjsLib;
+    await this.loadScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.js');
+    return g.pdfjsLib;
   }
 }
