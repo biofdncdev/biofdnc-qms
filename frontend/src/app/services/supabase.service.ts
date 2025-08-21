@@ -123,7 +123,7 @@ export class SupabaseService {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
-    const cols = ['inci_name','korean_name','chinese_name','cas_no','scientific_name','function_en','function_kr','einecs_no','old_korean_name','origin_abs','created_at','updated_at','created_by','updated_by','created_by_name','updated_by_name'];
+    const cols = ['inci_name','korean_name','chinese_name','cas_no','scientific_name','function_en','function_kr','einecs_no','old_korean_name','origin_abs','remarks','created_at','updated_at','created_by','updated_by','created_by_name','updated_by_name'];
 
     let q = this.ensureClient()
       .from('ingredients')

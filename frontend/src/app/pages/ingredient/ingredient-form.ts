@@ -40,6 +40,8 @@ import { SupabaseService } from '../../services/supabase.service';
         <input [(ngModel)]="model.old_korean_name" />
         <label>원산/ABS</label>
         <textarea rows="2" [(ngModel)]="model.origin_abs"></textarea>
+        <label>비고</label>
+        <textarea rows="3" [(ngModel)]="model.remarks"></textarea>
       </div>
       <div class="meta" *ngIf="meta">
         <div>처음 생성: {{ meta.created_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.created_by_name || meta.created_by }}</div>

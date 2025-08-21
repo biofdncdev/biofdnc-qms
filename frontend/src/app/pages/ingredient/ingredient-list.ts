@@ -5,9 +5,10 @@ import { Router } from '@angular/router';
 import { SupabaseService } from '../../services/supabase.service';
 
 type IngredientRow = { [key: string]: any } & {
-  id?: string;
+  id: string;
   inci_name?: string; korean_name?: string; chinese_name?: string;
   cas_no?: string; scientific_name?: string; function_en?: string; function_kr?: string;
+  remarks?: string;
 };
 
 @Component({
@@ -57,22 +58,24 @@ type IngredientRow = { [key: string]: any } & {
               <th class="col-cas">CAS No</th>
               <th class="col-fen">기능(EN)</th>
               <th class="col-fkr">기능(KR)</th>
+              <th class="col-remarks">비고</th>
               <th class="extra" *ngFor="let c of extraCols">{{ c }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let r of rows()" [class.hovered]="hoverId===r['id']" [class.selected]="selectedId===r['id']"
-                (mouseenter)="hoverId=r['id']" (mouseleave)="hoverId=null"
-                (click)="toggleSelect(r['id'])" (dblclick)="openEdit(r['id'])">
+            <tr *ngFor="let r of rows()" [class.hovered]="hoverId===r.id" [class.selected]="selectedId===r.id"
+                (mouseenter)="hoverId=r.id" (mouseleave)="hoverId=null"
+                (click)="toggleSelect(r.id)" (dblclick)="openEdit(r.id)">
               <td class="wrap">{{ r.inci_name }}</td>
               <td class="wrap">{{ r.korean_name }}</td>
               <td class="wrap">{{ r.chinese_name }}</td>
               <td class="nowrap">{{ r.cas_no }}</td>
               <td class="wrap">{{ r.function_en }}</td>
               <td class="wrap">{{ r.function_kr }}</td>
+              <td class="wrap col-remarks">{{ r.remarks }}</td>
               <td class="wrap extra" *ngFor="let c of extraCols">{{ r[c] }}</td>
             </tr>
-            <tr *ngIf="!loading && rows().length === 0"><td class="empty" [attr.colspan]="6+extraCols.length">데이터가 없습니다.</td></tr>
+            <tr *ngIf="!loading && rows().length === 0"><td class="empty" [attr.colspan]="7+extraCols.length">데이터가 없습니다.</td></tr>
           </tbody>
         </table>
       </div>
@@ -122,6 +125,7 @@ type IngredientRow = { [key: string]: any } & {
   .col-fkr{ width:clamp(160px, 20vw, 260px); max-width:260px; }
   .col-cn{ width:clamp(140px, 14vw, 200px); max-width:200px; }
   .col-cas{ width:clamp(100px, 10vw, 140px); max-width:140px; }
+  .col-remarks{ width:clamp(160px, 20vw, 260px); max-width:260px; }
   th.extra, td.extra{ width:clamp(140px, 16vw, 220px); max-width:220px; }
   td.wrap{ white-space:normal; word-break:break-word; }
   td.nowrap{ white-space:nowrap; }
@@ -155,7 +159,7 @@ export class IngredientListComponent implements OnInit {
     const { data, count } = await this.supabase.listIngredients({ page: this.page, pageSize: this.pageSize, keyword: this.keyword, keywordOp: this.keywordOp });
     const rows = (data as IngredientRow[]) || [];
     // 추출된 컬럼 중 기본 컬럼 제외 나머지를 extraCols로 구성
-    const base = new Set(['id','inci_name','korean_name','chinese_name','cas_no','function_en','function_kr']);
+    const base = new Set(['id','inci_name','korean_name','chinese_name','cas_no','function_en','function_kr','remarks']);
     const allCols = rows.reduce<string[]>((acc, r) => { Object.keys(r).forEach(k => { if(!acc.includes(k)) acc.push(k); }); return acc; }, []);
     this.extraCols = allCols.filter(c => !base.has(c));
     this.rows.set(rows);
