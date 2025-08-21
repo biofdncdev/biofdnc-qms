@@ -11,12 +11,14 @@ import { SupabaseService } from '../../services/supabase.service';
   template: `
   <div class="form-page">
     <header class="form-header">
-      <h2>{{ id() ? 'Ingredient 수정' : 'Ingredient 등록' }}</h2>
+      <h2>Ingredient 성분등록</h2>
       <div class="actions">
         <button class="btn primary" (click)="save()">저장</button>
         <button class="btn ghost" (click)="cancel()">취소</button>
       </div>
     </header>
+
+    <div class="notice" *ngIf="notice()">{{ notice() }}</div>
 
     <section class="form-body">
       <div class="grid">
@@ -44,8 +46,8 @@ import { SupabaseService } from '../../services/supabase.service';
         <textarea rows="3" [(ngModel)]="model.remarks"></textarea>
       </div>
       <div class="meta" *ngIf="meta">
-        <div>처음 생성: {{ meta.created_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.created_by_name || meta.created_by }}</div>
-        <div>마지막 수정: {{ meta.updated_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.updated_by_name || meta.updated_by }}</div>
+        <div>처음 생성: {{ meta.created_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.created_by_name || meta.created_by_email || meta.created_by || '-' }}</div>
+        <div>마지막 수정: {{ meta.updated_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.updated_by_name || meta.updated_by_email || meta.updated_by || '-' }}</div>
       </div>
     </section>
   </div>
@@ -57,6 +59,7 @@ import { SupabaseService } from '../../services/supabase.service';
   .btn{ height:30px; padding:0 12px; border-radius:8px; border:1px solid #d1d5db; background:#fff; cursor:pointer; }
   .btn.primary{ background:#111827; color:#fff; border-color:#111827; }
   .btn.ghost{ background:#fff; color:#111827; }
+  .notice{ margin:8px 0 0; padding:8px 10px; border:1px solid #bbf7d0; background:#ecfdf5; color:#065f46; border-radius:10px; font-size:12px; }
   .form-body{ border:1px solid #eef2f7; border-radius:12px; padding:12px; }
   .grid{ display:grid; grid-template-columns:120px 1fr; gap:10px 14px; align-items:center; }
   input, textarea{ width:100%; border:1px solid #e5e7eb; border-radius:8px; padding:6px 8px; font-size:13px; }
@@ -67,6 +70,7 @@ export class IngredientFormComponent implements OnInit {
   id = signal<string | null>(null);
   model: any = {};
   meta: any = null;
+  notice = signal<string | null>(null);
   constructor(private route: ActivatedRoute, private router: Router, private supabase: SupabaseService) {}
   async ngOnInit(){
     const id = this.route.snapshot.queryParamMap.get('id');
@@ -82,6 +86,8 @@ export class IngredientFormComponent implements OnInit {
         updated_by: data?.updated_by,
         updated_by_name: data?.updated_by_name,
       };
+      // Fallback: if names are missing, resolve emails from users table
+      await this.resolveActorEmails();
     }
   }
   async save(){
@@ -97,10 +103,42 @@ export class IngredientFormComponent implements OnInit {
     row.updated_at = now;
     row.updated_by = user.user?.id || null;
     row.updated_by_name = user.user?.email || null;
-    await this.supabase.upsertIngredient(row);
-    this.router.navigate(['/app/ingredient']);
+    const { data: saved } = await this.supabase.upsertIngredient(row);
+    // Stay on the form; update local state and URL (id) if needed
+    const applied = saved || row;
+    this.model = applied;
+    this.id.set(applied.id || row.id);
+    this.meta = {
+      created_at: applied.created_at,
+      created_by: applied.created_by,
+      created_by_name: applied.created_by_name,
+      updated_at: applied.updated_at,
+      updated_by: applied.updated_by,
+      updated_by_name: applied.updated_by_name,
+    };
+    await this.resolveActorEmails();
+    // Optionally reflect id in URL without leaving the form
+    try { this.router.navigate([], { relativeTo: this.route, queryParams: { id: this.id() }, replaceUrl: true }); } catch {}
+    // Show success notice
+    this.notice.set('저장되었습니다.');
+    setTimeout(() => this.notice.set(null), 2500);
   }
   cancel(){ this.router.navigate(['/app/ingredient']); }
+
+  private async resolveActorEmails(){
+    try{
+      if (this.meta?.created_by && !this.meta?.created_by_name) {
+        const { data: profile } = await this.supabase.getUserProfile(this.meta.created_by);
+        if (profile?.email) { this.meta.created_by_email = profile.email; if (!this.meta.created_by_name) this.meta.created_by_name = profile.email; }
+        else if (profile?.name) { this.meta.created_by_name = profile.name; }
+      }
+      if (this.meta?.updated_by && !this.meta?.updated_by_name) {
+        const { data: profile } = await this.supabase.getUserProfile(this.meta.updated_by);
+        if (profile?.email) { this.meta.updated_by_email = profile.email; if (!this.meta.updated_by_name) this.meta.updated_by_name = profile.email; }
+        else if (profile?.name) { this.meta.updated_by_name = profile.name; }
+      }
+    } catch {}
+  }
 }
 
 

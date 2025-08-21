@@ -11,6 +11,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SupabaseService } from '../../services/supabase.service';
+import { TabService } from '../../services/tab.service';
 
 @Component({
   selector: 'app-shell',
@@ -49,7 +50,7 @@ export class AppShellComponent {
   unread = signal<number>(0);
   private notifSubscription: any;
 
-  constructor(private router: Router, private supabase: SupabaseService) {
+  constructor(private router: Router, private supabase: SupabaseService, private tabBus: TabService) {
     // Determine admin on boot
     this.supabase.getCurrentUser().then(async (u) => {
       if (u) {
@@ -66,6 +67,10 @@ export class AppShellComponent {
     });
     // initial menus before profile resolves
     this.buildMenus();
+    // subscribe to open-tab requests from anywhere
+    this.tabBus.open$.subscribe(({ title, tabPath, navUrl }) => {
+      this.openOrNavigateTab(title, tabPath, navUrl);
+    });
   }
 
   private buildMenus() {
@@ -76,7 +81,7 @@ export class AppShellComponent {
 
     if (!this.isViewer) {
       this.menus.push(
-        { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [ { label: '목록', path: '/app/ingredient' }, { label: '등록', path: '/app/ingredient/form' } ] },
+        { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [ { label: '성분목록', path: '/app/ingredient' }, { label: '성분등록', path: '/app/ingredient/form' } ] },
         { key: 'product', icon: 'category', label: 'Product', submenu: [ { label: '목록' }, { label: '등록' } ] },
         {
           key: 'standard', icon: 'gavel', label: 'Standard',
@@ -214,7 +219,19 @@ export class AppShellComponent {
     } else {
       this.activeTabIndex = idx;
     }
-    this.router.navigate([path]);
+    // Support absolute path with query by using navigateByUrl
+    this.router.navigateByUrl(path);
+  }
+
+  private openOrNavigateTab(title: string, tabPath: string, navUrl: string){
+    const idx = this.tabs.findIndex(t => t.path === tabPath);
+    if (idx === -1) {
+      this.tabs.push({ title, path: tabPath });
+      this.activeTabIndex = this.tabs.length - 1;
+    } else {
+      this.activeTabIndex = idx;
+    }
+    this.router.navigateByUrl(navUrl);
   }
   closeTab(i: number){
     const closingActive = i === this.activeTabIndex;
