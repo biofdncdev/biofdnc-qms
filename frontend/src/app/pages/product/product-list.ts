@@ -64,7 +64,7 @@ type ProductRow = { [key:string]: any } & {
     <section class="filters filters-sticky" (keyup.enter)="load()">
       <div class="grid">
         <span class="chip">키워드</span>
-        <input [(ngModel)]="keyword" (keydown.escape)="keyword=''" placeholder="통합 검색 (띄어쓰기로 여러 키워드)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
+        <input [(ngModel)]="keyword" (ngModelChange)="onKeywordChange($event)" (keydown.escape)="onEscClear()" placeholder="통합 검색 (띄어쓰기로 여러 키워드)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
         <span class="chip">연산</span>
         <select [(ngModel)]="keywordOp" (ngModelChange)="load()">
           <option value="AND">AND</option>
@@ -181,6 +181,13 @@ export class ProductListComponent implements OnInit {
     this.loading = false;
   }
   go(p:number){ this.page = Math.min(Math.max(1,p), this.pages); this.load(); } onPageSize(ps:number){ this.pageSize = Number(ps)||15; this.page=1; this.load(); } reset(){ this.keyword=''; this.keywordOp='AND'; this.page=1; this.pageSize=15; this.load(); }
+  onKeywordChange(value:string){
+    this.keyword = value || '';
+    this.page = 1;
+    if (/\s$/.test(this.keyword)) { return; }
+    this.debouncedLoad();
+  }
+  onEscClear(){ this.keyword=''; this.page=1; this.load(); }
   toggleSelect(id:string){ this.selectedId = this.selectedId===id? null: id; } openEdit(id?:string){ const t = id||this.selectedId; if(!t) return; this.router.navigate(['/app/product/form'], { queryParams: { id: t } }); }
   onAdd(){ this.router.navigate(['/app/product/form']); }
   onWheel(ev: WheelEvent){ if (ev.shiftKey) { const wrap = ev.currentTarget as HTMLElement; wrap.scrollLeft += (ev.deltaY || ev.deltaX); ev.preventDefault(); } }
@@ -212,6 +219,8 @@ export class ProductListComponent implements OnInit {
   private saveLayout(){ const payload={ order:this.columns, widths:this.colWidths, hidden:Array.from(this.hiddenCols)}; try{ localStorage.setItem(this.storageKey, JSON.stringify(payload)); }catch{} }
   private loadSavedLayout(){ try{ const raw=localStorage.getItem(this.storageKey); if(!raw) return { order:[],widths:{},hidden:[] }; const d=JSON.parse(raw); return { order:Array.isArray(d.order)? d.order:[], widths:d.widths||{}, hidden:Array.isArray(d.hidden)? d.hidden:[] }; }catch{ return { order:[],widths:{},hidden:[] }; }
   }
+  // Debounce for live typing
+  private debounceTimer:any=null; private debouncedLoad(delayMs:number=300){ if(this.debounceTimer) clearTimeout(this.debounceTimer); this.debounceTimer=setTimeout(()=>this.load(), delayMs); }
 }
 
 

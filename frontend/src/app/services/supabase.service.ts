@@ -463,11 +463,41 @@ export class SupabaseService {
     const page = Math.max(1, params?.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params?.pageSize ?? 15));
     const from = (page - 1) * pageSize; const to = from + pageSize - 1;
-    let q = this.ensureClient().from('products').select('*', { count: 'exact' }).order('name_kr', { ascending: true }).range(from, to);
     const cols = ['product_code','name_kr','name_en','category','status','remarks'];
-    const kw = (params?.keyword || '').trim(); const op = (params?.keywordOp || 'AND').toUpperCase() as 'AND'|'OR';
-    if (kw){ const words = kw.split(/\s+/).map(s=>s.trim()).filter(Boolean); if (words.length){ if (op==='AND'){ for(const w of words){ q = q.or(cols.map(c=>`${c}.ilike.*${w}*`).join(',')); } } else { q = q.or(words.flatMap(w=>cols.map(c=>`${c}.ilike.*${w}*`)).join(',')); } } }
-    return q;
+    const kw = (params?.keyword || '').trim();
+    const words = kw ? kw.split(/\s+/).map(s=>s.trim()).filter(Boolean) : [];
+    const op = (params?.keywordOp || 'AND').toUpperCase() as 'AND'|'OR';
+
+    // Build base query
+    let q = this.ensureClient().from('products').select('*', { count: 'exact' }).order('name_kr', { ascending: true }).range(from, to);
+    if (kw && words.length){
+      const makeGroup = (w: string) => cols.map(c => `${c}.ilike.*${w}*`).join(',');
+      if (op === 'AND'){
+        const logic = `and(${words.map(w => `or(${makeGroup(w)})`).join(',')})`;
+        q = q.or(logic);
+      } else {
+        const logic = `or(${words.map(w => makeGroup(w)).join(',')})`;
+        q = q.or(logic);
+      }
+    }
+    // When AND with multiple tokens, run client-side filter to guarantee correctness similar to ingredients
+    if (op === 'AND' && words.length > 1){
+      // Get a larger superset then filter
+      const supersetLimit = 2000;
+      let supQ = this.ensureClient().from('products').select('*').order('name_kr', { ascending: true });
+      if (kw && words.length){
+        const makeGroup = (w: string) => cols.map(c => `${c}.ilike.*${w}*`).join(',');
+        const logic = `or(${words.map(w => makeGroup(w)).join(',')})`;
+        supQ = supQ.or(logic);
+      }
+      const { data: superset } = await supQ.limit(supersetLimit) as any;
+      const rows: any[] = Array.isArray(superset) ? superset : [];
+      const toHay = (r:any) => [r.product_code,r.name_kr,r.name_en,r.category,r.status,r.remarks].filter(Boolean).join(' ').toLowerCase();
+      const filtered = rows.filter(r => words.every(w => toHay(r).includes(w.toLowerCase())));
+      const start = (page - 1) * pageSize; const end = start + pageSize;
+      return { data: filtered.slice(start,end), count: filtered.length } as any;
+    }
+    return q as any;
   }
   async getProduct(id: string){ return this.ensureClient().from('products').select('*').eq('id', id).single(); }
   async upsertProduct(row: any){ return this.ensureClient().from('products').upsert(row, { onConflict: 'id' }).select('*').single(); }
