@@ -6,7 +6,6 @@ update public.product_column_map set sheet_label_kr='품번' where db_column='pr
 update public.product_column_map set sheet_label_kr='품명' where db_column='name_kr';
 update public.product_column_map set sheet_label_kr='품목자산분류' where db_column='asset_category';
 
--- Registration / meta
 update public.product_column_map set sheet_label_kr='등록상태' where db_column='item_status';
 update public.product_column_map set sheet_label_kr='등록일자' where db_column='reg_date';
 update public.product_column_map set sheet_label_kr='등록자' where db_column='reg_user';
@@ -40,7 +39,7 @@ update public.product_column_map set sheet_label_kr='대표품번' where db_colu
 update public.product_column_map set sheet_label_kr='대표규격' where db_column='main_spec';
 update public.product_column_map set sheet_label_kr='규격' where db_column='spec';
 update public.product_column_map set sheet_label_kr='영문명' where db_column='name_en';
-update public.product_column_map set sheet_label_kr='비고' where db_column='remarks';
+update public.product_column_map set sheet_label_kr='품목설명' where db_column='remarks';
 update public.product_column_map set sheet_label_kr='기준단위' where db_column='unit';
 update public.product_column_map set sheet_label_kr='세부품목' where db_column='item_subdivision';
 update public.product_column_map set sheet_label_kr='검색어(이명)' where db_column='keywords_alias';

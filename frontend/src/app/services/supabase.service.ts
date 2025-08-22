@@ -542,6 +542,20 @@ export class SupabaseService {
   }
   async deleteProductComposition(id: string){ return this.ensureClient().from('product_compositions').delete().eq('id', id); }
 
+  // Ingredient quick search for composition picking
+  async searchIngredientsBasic(keyword: string){
+    const kw = (keyword||'').trim();
+    if (!kw) return { data: [] as any[] } as any;
+    const or = `inci_name.ilike.*${kw}*,korean_name.ilike.*${kw}*`;
+    const { data } = await this.ensureClient()
+      .from('ingredients')
+      .select('id, inci_name, korean_name')
+      .or(or)
+      .order('inci_name', { ascending: true })
+      .limit(50) as any;
+    return { data: Array.isArray(data)? data: [] } as any;
+  }
+
   // Product column map (for Korean labels)
   async getProductColumnMap(){
     const { data } = await this.ensureClient().from('product_column_map').select('*').order('display_order', { ascending: true }) as any;
