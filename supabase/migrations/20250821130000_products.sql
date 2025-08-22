@@ -87,3 +87,4 @@ drop trigger if exists trg_product_compositions_audit on public.product_composit
 create trigger trg_product_compositions_audit before insert or update on public.product_compositions for each row execute procedure public.set_audit_fields();
 
 
+

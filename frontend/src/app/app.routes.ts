@@ -72,6 +72,14 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/ingredient/ingredient-form').then(m => m.IngredientFormComponent),
       },
       {
+        path: 'product',
+        loadComponent: () => import('./pages/product/product-list').then(m => m.ProductListComponent),
+      },
+      {
+        path: 'product/form',
+        loadComponent: () => import('./pages/product/product-form').then(m => m.ProductFormComponent),
+      },
+      {
         path: 'sale/rice-bran-water-h',
         loadComponent: () => import('./pages/sale/rice-bran-water-h').then(m => m.RiceBranWaterHComponent),
       },

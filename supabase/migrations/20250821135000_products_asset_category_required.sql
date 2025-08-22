@@ -12,3 +12,4 @@ alter table public.products
   alter column asset_category set not null;
 
 
+

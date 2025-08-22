@@ -10,3 +10,4 @@ alter table public.products
   alter column name_kr set not null;
 
 
+

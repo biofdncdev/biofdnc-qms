@@ -84,3 +84,4 @@ alter table public.products
   add column if not exists caution_origin_2 text;
 
 
+

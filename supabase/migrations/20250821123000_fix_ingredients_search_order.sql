@@ -96,3 +96,4 @@ $$;
 grant execute on function public.ingredients_search(integer, integer, text, text) to authenticated, anon;
 
 
+

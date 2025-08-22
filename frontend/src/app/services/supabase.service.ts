@@ -120,31 +120,35 @@ export class SupabaseService {
   }) {
     const page = Math.max(1, params?.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params?.pageSize ?? 15));
+
+    // Prefer RPC for robust keyword search (supports commas, dots, unicode)
+    try {
+      const { data, error } = await this.ensureClient().rpc('ingredients_search', {
+        _page: page,
+        _page_size: pageSize,
+        _keyword: params?.keyword || '',
+        _op: (params?.keywordOp || 'AND').toUpperCase(),
+      });
+      if (!error) {
+        const count = Array.isArray(data) && data.length ? (data[0] as any).total_count as number : 0;
+        return { data, count } as any;
+      }
+    } catch (e) {
+      // fall through to direct query
+      // console warn is fine; UI should still work
+      console.warn('ingredients_search RPC failed; falling back to direct query', e);
+    }
+
+    // Fallback: direct table query (may not handle commas perfectly but ensures basic search works)
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
-
-    const cols = [
-      'inci_name',
-      'korean_name',
-      'chinese_name',
-      'cas_no',
-      'scientific_name',
-      'function_en',
-      'function_kr',
-      'einecs_no',
-      'old_korean_name',
-      'origin_abs',
-      'remarks',
-      'created_by_name',
-      'updated_by_name'
-    ];
-
     let q = this.ensureClient()
       .from('ingredients')
       .select('*', { count: 'exact' })
       .order('inci_name', { ascending: true })
       .range(from, to);
 
+    const cols = ['inci_name','korean_name','chinese_name','cas_no','scientific_name','function_en','function_kr','einecs_no','old_korean_name','origin_abs','remarks','created_by_name','updated_by_name'];
     const kw = (params?.keyword || '').trim();
     const op = (params?.keywordOp || 'AND').toUpperCase() as 'AND'|'OR';
     if (kw) {
@@ -161,7 +165,6 @@ export class SupabaseService {
         }
       }
     }
-
     return q;
   }
 
@@ -416,5 +419,132 @@ export class SupabaseService {
   }
   async listDeliveryChanges(delivery_id: string){
     return this.ensureClient().from('sales_delivery_changes').select('*').eq('delivery_id', delivery_id).order('changed_at', { ascending: true });
+  }
+
+  // Products
+  async listProducts(params: { page?: number; pageSize?: number; keyword?: string; keywordOp?: 'AND'|'OR' }){
+    const page = Math.max(1, params?.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, params?.pageSize ?? 15));
+    const from = (page - 1) * pageSize; const to = from + pageSize - 1;
+    let q = this.ensureClient().from('products').select('*', { count: 'exact' }).order('name_kr', { ascending: true }).range(from, to);
+    const cols = ['product_code','name_kr','name_en','category','status','remarks'];
+    const kw = (params?.keyword || '').trim(); const op = (params?.keywordOp || 'AND').toUpperCase() as 'AND'|'OR';
+    if (kw){ const words = kw.split(/\s+/).map(s=>s.trim()).filter(Boolean); if (words.length){ if (op==='AND'){ for(const w of words){ q = q.or(cols.map(c=>`${c}.ilike.*${w}*`).join(',')); } } else { q = q.or(words.flatMap(w=>cols.map(c=>`${c}.ilike.*${w}*`)).join(',')); } } }
+    return q;
+  }
+  async getProduct(id: string){ return this.ensureClient().from('products').select('*').eq('id', id).single(); }
+  async upsertProduct(row: any){ return this.ensureClient().from('products').upsert(row, { onConflict: 'id' }).select('*').single(); }
+  async deleteProduct(id: string){ return this.ensureClient().from('products').delete().eq('id', id); }
+
+  // Product compositions
+  async listProductCompositions(product_id: string){
+    return this.ensureClient().from('product_compositions').select('*, ingredient:ingredients(*)').eq('product_id', product_id).order('created_at', { ascending: true });
+  }
+  async addProductComposition(row: { product_id: string; ingredient_id: string; percent?: number | null; note?: string | null; }){
+    return this.ensureClient().from('product_compositions').insert(row).select('*').single();
+  }
+  async updateProductComposition(id: string, row: Partial<{ percent: number; note: string; }>) {
+    return this.ensureClient().from('product_compositions').update(row).eq('id', id).select('*').single();
+  }
+  async deleteProductComposition(id: string){ return this.ensureClient().from('product_compositions').delete().eq('id', id); }
+
+  // Excel sync RPC stub (implement later if needed)
+  async syncProductsByExcel(payload: { sheet: any[]; headerMap?: Record<string,string> }){
+    const rows = payload?.sheet || [];
+    if (!rows.length) return { ok: true, updated: 0 } as any;
+    const map = Object.assign({
+      '품번': 'product_code',
+      '품목코드': 'product_code',
+      '대표품번': 'main_code',
+      '품명': 'name_kr',
+      '대표품명': 'name_kr',
+      '영문명': 'name_en',
+      '품목설명': 'remarks',
+      '품목상태': 'item_status',
+      '품목대분류': 'item_category',
+      '품목중분류': 'item_midcategory',
+      '품목소분류': 'item_subcategory',
+      '기준단위': 'unit',
+      '규격': 'spec',
+      '대표규격': 'main_spec',
+      '검색어(이명(異名))': 'keywords_alias',
+      '사양': 'specification',
+      '품목특이사항': 'special_notes',
+      'CAS NO': 'cas_no',
+      'MOQ': 'moq',
+      '포장단위': 'package_unit',
+      'Manufacturer': 'manufacturer',
+      'Country of Manufacture': 'country_of_manufacture',
+      'Source of Origin(Method)': 'source_of_origin_method',
+      'Plant Part': 'plant_part',
+      'Country of Origin': 'country_of_origin',
+      '중국원료신고번호(NMPA)': 'nmpa_no',
+      '알러젠성분': 'allergen',
+      'Furocoumarines': 'furocoumarins',
+      '효능': 'efficacy',
+      '특허': 'patent',
+      '논문': 'paper',
+      '임상': 'clinical',
+      '사용기한': 'expiration_date',
+      '보관위치': 'storage_location',
+      '보관방법1': 'storage_method1',
+      '안정성 및 유의사항1': 'stability_note1',
+      'Note on storage1': 'storage_note1',
+      'Safety & Handling1': 'safety_handling1',
+      'NOTICE (COA3 영문)1': 'notice_coa3_en_1',
+      'NOTICE (COA3 국문)1': 'notice_coa3_kr_1',
+      'NOTICE (Composition 국문)1': 'notice_comp_kr_1',
+      'NOTICE (Composition 영문)1': 'notice_comp_en_1',
+      'CAUTION (Origin)1': 'caution_origin_1',
+      '유기농 인증': 'cert_organic',
+      'KOSHER 인증': 'cert_kosher',
+      'HALAL 인증': 'cert_halal',
+      'VEGAN 인증': 'cert_vegan',
+      'ISAAA 인증': 'cert_isaaa',
+      'RSPO 인증': 'cert_rspo',
+      'REACH 인증': 'cert_reach',
+      'Expiration Date': 'expiration_date2',
+      '보관방법2': 'storage_method2',
+      '안정성 및 유의사항2': 'stability_note2',
+      'Note on storage2': 'storage_note2',
+      'Safety & Handling2': 'safety_handling2',
+      'NOTICE (COA3 영문)2': 'notice_coa3_en_2',
+      'NOTICE (COA3 국문)2': 'notice_coa3_kr_2',
+      'NOTICE (Composition 국문)2': 'notice_comp_kr_2',
+      'NOTICE (Composition 영문)2': 'notice_comp_en_2',
+      'CAUTION (Origin)2': 'caution_origin_2'
+    }, payload?.headerMap || {});
+
+    let updated = 0;
+    for (const r of rows){
+      const code = r['품번'] || r['품목코드'];
+      if (!code) continue;
+      const dbRow: any = { product_code: String(code).trim() };
+      for (const [k, v] of Object.entries(map)){
+        if (!(k in r)) continue;
+        const col = v as string;
+        if (['product_code','name_kr','name_en','remarks','status','category'].includes(col)){
+          // legacy mapping kept for backward compatibility
+          dbRow[col] = r[k];
+        }
+        if ([
+          'item_status','item_category','item_midcategory','item_subcategory','unit','spec','main_spec','keywords_alias','specification','special_notes','cas_no','moq','package_unit','manufacturer','country_of_manufacture','source_of_origin_method','plant_part','country_of_origin','nmpa_no','allergen','furocoumarins','efficacy','patent','paper','clinical','expiration_date','storage_location','storage_method1','stability_note1','storage_note1','safety_handling1','notice_coa3_en_1','notice_coa3_kr_1','notice_comp_kr_1','notice_comp_en_1','caution_origin_1','cert_organic','cert_kosher','cert_halal','cert_vegan','cert_isaaa','cert_rspo','cert_reach','expiration_date2','storage_method2','stability_note2','storage_note2','safety_handling2','notice_coa3_en_2','notice_coa3_kr_2','notice_comp_kr_2','notice_comp_en_2','caution_origin_2'
+        ].includes(col)){
+          dbRow[col] = r[k];
+        }
+      }
+      // Merge attrs: store all headers from sheet except the core mapped ones
+      const coreHeaders = new Set(Object.keys(map));
+      const { data: existing } = await this.ensureClient().from('products').select('*').eq('product_code', dbRow.product_code).maybeSingle();
+      const mergedAttrs = Object.assign({}, (existing as any)?.attrs || {});
+      for (const [key, val] of Object.entries(r)){
+        if (map[key]) continue; // handled as core field
+        mergedAttrs[key] = val;
+      }
+      dbRow.attrs = mergedAttrs;
+      await this.upsertProduct(dbRow);
+      updated++;
+    }
+    return { ok: true, updated } as any;
   }
 }
