@@ -71,8 +71,22 @@ export class IngredientFormComponent implements OnInit {
   model: any = {};
   meta: any = null;
   notice = signal<string | null>(null);
+  private backParams: { q?: string; op?: 'AND'|'OR'; page?: number; size?: number } | null = null;
   constructor(private route: ActivatedRoute, private router: Router, private supabase: SupabaseService) {}
   async ngOnInit(){
+    // Remember list query params to preserve search state on back/cancel
+    const qp = this.route.snapshot.queryParamMap;
+    const q = qp.get('q') || undefined;
+    const op = (qp.get('op') as ('AND'|'OR'|null)) || undefined;
+    const page = Number(qp.get('page'));
+    const size = Number(qp.get('size'));
+    this.backParams = {
+      q,
+      op: op === 'AND' || op === 'OR' ? op : undefined,
+      page: !Number.isNaN(page) && page > 0 ? page : undefined,
+      size: !Number.isNaN(size) && size > 0 ? size : undefined,
+    };
+
     const id = this.route.snapshot.queryParamMap.get('id');
     if (id) {
       this.id.set(id);
@@ -123,7 +137,18 @@ export class IngredientFormComponent implements OnInit {
     this.notice.set('저장되었습니다.');
     setTimeout(() => this.notice.set(null), 2500);
   }
-  cancel(){ this.router.navigate(['/app/ingredient']); }
+  cancel(){
+    const queryParams: any = {};
+    if (this.backParams?.q) queryParams.q = this.backParams.q;
+    if (this.backParams?.op) queryParams.op = this.backParams.op;
+    if (this.backParams?.page) queryParams.page = this.backParams.page;
+    if (this.backParams?.size) queryParams.size = this.backParams.size;
+    if (Object.keys(queryParams).length){
+      this.router.navigate(['/app/ingredient'], { queryParams });
+    } else {
+      this.router.navigate(['/app/ingredient']);
+    }
+  }
 
   private async resolveActorEmails(){
     try{

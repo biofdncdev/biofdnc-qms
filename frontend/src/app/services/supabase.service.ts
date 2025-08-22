@@ -122,50 +122,87 @@ export class SupabaseService {
     const pageSize = Math.min(100, Math.max(1, params?.pageSize ?? 15));
 
     // Prefer RPC for robust keyword search (supports commas, dots, unicode)
+    const kwRaw = params?.keyword || '';
+    const kwTrim = kwRaw.trim();
+    const words = kwTrim ? kwTrim.split(/\s+/).map(s => s.trim()).filter(Boolean) : [];
+    const op = (params?.keywordOp || 'AND').toUpperCase() as 'AND' | 'OR';
+
     try {
       const { data, error } = await this.ensureClient().rpc('ingredients_search', {
         _page: page,
         _page_size: pageSize,
-        _keyword: params?.keyword || '',
-        _op: (params?.keywordOp || 'AND').toUpperCase(),
+        _keyword: kwTrim,
+        _op: op,
       });
       if (!error) {
         const count = Array.isArray(data) && data.length ? (data[0] as any).total_count as number : 0;
+        // If RPC returned empty for multi-token AND, run manual fallback to be safe
+        if ((op === 'AND') && words.length > 1 && (!data || (Array.isArray(data) && data.length === 0))) {
+          const manual = await this.manualIngredientSearch({ page, pageSize, words, op });
+          return manual as any;
+        }
         return { data, count } as any;
       }
+      // If RPC responded with an error, fall through to fallback query
+      console.warn('ingredients_search RPC returned error; using fallback', error);
     } catch (e) {
-      // fall through to direct query
-      // console warn is fine; UI should still work
+      // Fallback to direct query when RPC is unavailable on the target project
       console.warn('ingredients_search RPC failed; falling back to direct query', e);
     }
-
-    // Fallback: direct table query (may not handle commas perfectly but ensures basic search works)
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-    let q = this.ensureClient()
-      .from('ingredients')
-      .select('*', { count: 'exact' })
-      .order('inci_name', { ascending: true })
-      .range(from, to);
-
+    // Perform fallback query (also used when RPC returned error)
+    const from = (page - 1) * pageSize; const to = from + pageSize - 1;
     const cols = ['inci_name','korean_name','chinese_name','cas_no','scientific_name','function_en','function_kr','einecs_no','old_korean_name','origin_abs','remarks','created_by_name','updated_by_name'];
-    const kw = (params?.keyword || '').trim();
-    const op = (params?.keywordOp || 'AND').toUpperCase() as 'AND'|'OR';
-    if (kw) {
-      const words = kw.split(/\s+/).map(s => s.trim()).filter(Boolean);
-      if (words.length) {
-        if (op === 'AND') {
-          for (const w of words) {
-            const pieces = cols.map(c => `${c}.ilike.*${w}*`).join(',');
-            q = q.or(pieces);
-          }
+    const kw = kwTrim;
+    let q = this.ensureClient().from('ingredients').select('*', { count: 'exact' }).order('inci_name', { ascending: true }).range(from, to);
+    if (kw){
+      const words = kw.split(/\s+/).map(s=>s.trim()).filter(Boolean);
+      if (words.length){
+        const makeGroup = (w: string) => cols.map(c => `${c}.ilike.*${w}*`).join(',');
+        if (op === 'AND'){
+          const logic = `and(${words.map(w => `or(${makeGroup(w)})`).join(',')})`;
+          q = q.or(logic);
         } else {
-          const pieces = words.flatMap(w => cols.map(c => `${c}.ilike.*${w}*`)).join(',');
-          q = q.or(pieces);
+          const logic = `or(${words.map(w => makeGroup(w)).join(',')})`;
+          q = q.or(logic);
         }
       }
     }
-    return q;
+    // For multi-token AND, fetch superset by OR and filter in memory for correctness
+    if (op === 'AND' && words.length > 1) {
+      const manual = await this.manualIngredientSearch({ page, pageSize, words, op });
+      return manual as any;
+    }
+
+    const { data, count } = await q as any;
+    return { data: data || [], count: count || 0 } as any;
+  }
+
+  private async manualIngredientSearch(params: { page: number; pageSize: number; words: string[]; op: 'AND' | 'OR'; }){
+    const { page, pageSize, words, op } = params;
+    // Build OR superset query
+    const cols = ['inci_name','korean_name','chinese_name','cas_no','scientific_name','function_en','function_kr','einecs_no','old_korean_name','origin_abs','remarks','created_by_name','updated_by_name'];
+    const makeGroup = (w: string) => cols.map(c => `${c}.ilike.*${w}*`).join(',');
+    const logic = op === 'OR'
+      ? `or(${words.map(w => makeGroup(w)).join(',')})`
+      : `or(${words.map(w => makeGroup(w)).join(',')})`;
+    let q = this.ensureClient().from('ingredients').select('*').order('inci_name', { ascending: true });
+    q = q.or(logic);
+    // Cap to avoid huge payloads
+    const MAX_FETCH = 2000;
+    const { data: superset } = await q.limit(MAX_FETCH) as any;
+    const rows: any[] = Array.isArray(superset) ? superset : [];
+    const toHay = (r: any) => [r.inci_name,r.korean_name,r.chinese_name,r.cas_no,r.scientific_name,r.function_en,r.function_kr,r.einecs_no,r.old_korean_name,r.origin_abs,r.remarks,r.created_by_name,r.updated_by_name]
+      .filter(Boolean).join(' ').toLowerCase();
+    const filtered = rows.filter(r => {
+      const hay = toHay(r);
+      if (op === 'AND') return words.every(w => hay.includes(w.toLowerCase()));
+      return words.some(w => hay.includes(w.toLowerCase()));
+    });
+    // Manual pagination
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const pageRows = filtered.slice(start, end);
+    return { data: pageRows, count: filtered.length };
   }
 
   async getIngredient(id: string){

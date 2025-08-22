@@ -1,7 +1,7 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { TabService } from '../../services/tab.service';
 import { SupabaseService } from '../../services/supabase.service';
 import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
@@ -58,9 +58,9 @@ type IngredientRow = { [key: string]: any } & {
     <section class="filters filters-sticky" (keyup.enter)="load()">
       <div class="grid">
         <span class="chip">키워드</span>
-        <input [(ngModel)]="keyword" (keydown.escape)="keyword=''" placeholder="통합 검색 (띄어쓰기로 여러 키워드)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
+        <input [(ngModel)]="keyword" (ngModelChange)="onKeywordChange($event)" (keydown.escape)="onEscClear()" placeholder="통합 검색 (띄어쓰기로 여러 키워드)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
         <span class="chip">연산</span>
-        <select [(ngModel)]="keywordOp" (ngModelChange)="load()">
+        <select [(ngModel)]="keywordOp" (ngModelChange)="onOpChange($event)">
           <option value="AND">AND</option>
           <option value="OR">OR</option>
         </select>
@@ -179,9 +179,20 @@ export class IngredientListComponent implements OnInit {
   private hiddenCols = new Set<string>();
   showColMenu = false;
 
-  constructor(private supabase: SupabaseService, private router: Router, private tabBus: TabService) {}
+  constructor(private supabase: SupabaseService, private router: Router, private route: ActivatedRoute, private tabBus: TabService) {}
 
   ngOnInit(){
+    // Initialize filters from URL query params to preserve state on back navigation
+    const qp = this.route.snapshot.queryParamMap;
+    const qKeyword = qp.get('q');
+    const qOp = qp.get('op') as ('AND' | 'OR') | null;
+    const qPage = Number(qp.get('page'));
+    const qSize = Number(qp.get('size'));
+    if (qKeyword !== null) this.keyword = qKeyword;
+    if (qOp === 'AND' || qOp === 'OR') this.keywordOp = qOp;
+    if (!Number.isNaN(qPage) && qPage > 0) this.page = qPage;
+    if (!Number.isNaN(qSize) && qSize > 0) this.pageSize = qSize;
+
     const saved = this.loadSavedLayout();
     this.columns = saved.order.length ? saved.order.slice() : this.baseColumns.slice();
     this.colWidths = saved.widths || {};
@@ -191,7 +202,8 @@ export class IngredientListComponent implements OnInit {
 
   async load(){
     this.loading = true;
-    const { data, count } = await this.supabase.listIngredients({ page: this.page, pageSize: this.pageSize, keyword: this.keyword, keywordOp: this.keywordOp });
+    const normalizedKeyword = (this.keyword || '').trim().replace(/\s+/g, ' ');
+    const { data, count } = await this.supabase.listIngredients({ page: this.page, pageSize: this.pageSize, keyword: normalizedKeyword, keywordOp: this.keywordOp });
     const rows = (data as IngredientRow[]) || [];
     // 추출된 컬럼 중 기본 컬럼 제외 나머지를 extraCols로 구성
     const base = new Set(['id','created_by','updated_by','created_at','updated_at','created_by_name','updated_by_name', ...this.baseColumns]);
@@ -205,18 +217,42 @@ export class IngredientListComponent implements OnInit {
     this.total = count || 0;
     this.pages = Math.max(1, Math.ceil(this.total / this.pageSize));
     this.loading = false;
+    this.syncQueryParams(normalizedKeyword);
   }
 
   go(p: number){ this.page = Math.min(Math.max(1, p), this.pages); this.load(); }
   onPageSize(ps: number){ this.pageSize = Number(ps) || 15; this.page = 1; this.load(); }
   reset(){ this.keyword=''; this.keywordOp='AND'; this.page=1; this.pageSize=15; this.load(); }
+  onOpChange(op: 'AND' | 'OR'){ this.keywordOp = op; this.page = 1; this.load(); }
+  onKeywordChange(value: string){
+    this.keyword = value || '';
+    this.page = 1;
+    // If user just typed a space, keep current results; wait until next token starts
+    if (/\s$/.test(this.keyword)) {
+      this.syncQueryParams((this.keyword || '').trim().replace(/\s+/g, ' '));
+      return;
+    }
+    this.debouncedLoad();
+  }
+  onEscClear(){
+    this.keyword = '';
+    this.page = 1;
+    this.load();
+  }
   toggleSelect(id: string){ this.selectedId = this.selectedId === id ? null : id; }
   openEdit(id?: string){ const target = id || this.selectedId; if(!target) return; this.onEdit(target); }
   onAdd(){ this.navigateToForm(); }
   onEdit(id?: string){ const target = id || this.selectedId; if(!target) return; this.navigateToForm(target); }
   private navigateToForm(id?: string){
-    const queryParams = id ? { id } : undefined;
-    const navUrl = '/app/ingredient/form' + (queryParams ? ('?'+ new URLSearchParams(queryParams as any).toString()) : '');
+    const queryParams: any = {};
+    if (id) queryParams.id = id;
+    const normalizedKeyword = (this.keyword || '').trim().replace(/\s+/g, ' ');
+    if (normalizedKeyword) queryParams.q = normalizedKeyword;
+    if (this.keywordOp) queryParams.op = this.keywordOp;
+    if (this.page) queryParams.page = String(this.page);
+    if (this.pageSize) queryParams.size = String(this.pageSize);
+    const qs = new URLSearchParams(queryParams as any).toString();
+    const navUrl = '/app/ingredient/form' + (qs ? ('?' + qs) : '');
     // Keep a single tab for 성분등록 regardless of selected id
     this.tabBus.requestOpen('성분등록', '/app/ingredient/form', navUrl);
   }
@@ -307,6 +343,23 @@ export class IngredientListComponent implements OnInit {
       const data = JSON.parse(raw);
       return { order: Array.isArray(data.order) ? data.order : [], widths: data.widths || {}, hidden: Array.isArray(data.hidden) ? data.hidden : [] };
     } catch { return { order: [], widths: {}, hidden: [] }; }
+  }
+
+  // Debounced load for live search as user types
+  private debounceTimer: any = null;
+  private debouncedLoad(delayMs: number = 300){
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => this.load(), delayMs);
+  }
+
+  // Reflect current filters into the URL so that history/back preserves state
+  private syncQueryParams(currentKeyword?: string){
+    try{
+      const kw = currentKeyword !== undefined ? currentKeyword : (this.keyword || '');
+      const q: any = { q: kw || null, op: this.keywordOp, page: this.page, size: this.pageSize };
+      Object.keys(q).forEach(k => (q[k] === null || q[k] === undefined || q[k] === '') && delete q[k]);
+      this.router.navigate([], { relativeTo: this.route, queryParams: q, replaceUrl: true });
+    } catch {}
   }
 }
 
