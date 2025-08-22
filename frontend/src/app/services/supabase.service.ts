@@ -136,8 +136,8 @@ export class SupabaseService {
       });
       if (!error) {
         const count = Array.isArray(data) && data.length ? (data[0] as any).total_count as number : 0;
-        // If RPC returned empty for multi-token AND, run manual fallback to be safe
-        if ((op === 'AND') && words.length > 1 && (!data || (Array.isArray(data) && data.length === 0))) {
+        // If RPC returned empty for multi-token queries, run manual fallback to be safe
+        if (words.length > 1 && (!data || (Array.isArray(data) && data.length === 0))) {
           const manual = await this.manualIngredientSearch({ page, pageSize, words, op });
           return manual as any;
         }
