@@ -584,6 +584,33 @@ export class SupabaseService {
     // Normalize upload rows and collect columns present
     const normalized: Array<{ product_code: string; row: any }> = [];
     const colsInUpload = new Set<string>(['product_code']);
+    const DATE_COLS = new Set(['reg_date','last_update_date']);
+    const isEmpty = (val:any) => val===undefined || val===null || (typeof val==='string' && val.trim()==='');
+    const toDateText = (val:any) => {
+      if (val===undefined || val===null) return null;
+      // numbers: Excel serial -> ISO date
+      if (typeof val === 'number' && isFinite(val)){
+        // treat reasonable serial range only
+        if (val > 20000 && val < 80000){
+          const epoch = new Date(Date.UTC(1899, 11, 30)); // Excel epoch (with 1900 leap bug adjustment)
+          const ms = epoch.getTime() + Math.round(val * 86400000);
+          const d = new Date(ms);
+          return d.toISOString().slice(0,10);
+        }
+      }
+      // strings: unify separators . or / to - and trim
+      const s = String(val).trim();
+      if (!s) return null;
+      const norm = s.replace(/[.\/]/g, '-');
+      // simple YYYY-MM-DD extraction
+      const m = norm.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (m){
+        const y = m[1]; const mm = ('0'+m[2]).slice(-2); const dd = ('0'+m[3]).slice(-2);
+        return `${y}-${mm}-${dd}`;
+      }
+      // fallback: return as-is
+      return s;
+    };
     for (const r of rows){
       const codeRaw = codeHeaders.map(h => r[h]).find(v => v!==undefined && v!==null && String(v).trim()!=='');
       const code = codeRaw ? String(codeRaw).trim() : '';
@@ -591,8 +618,18 @@ export class SupabaseService {
       const obj: any = { product_code: code };
       for (const [erp, dbcol] of Object.entries(map)){
         if (r[erp] === undefined) continue;
-        const v = r[erp];
-        obj[dbcol] = (v===undefined || v===null || String(v).trim()==='') ? null : v;
+        const raw = r[erp];
+        // Normalize values; handle date columns specially
+        let v: any = DATE_COLS.has(dbcol) ? toDateText(raw) : raw;
+        // treat blank/whitespace as null
+        v = (v===undefined || v===null || (typeof v==='string' && v.trim()==='')) ? null : v;
+        // Do not let a blank value overwrite a non-blank value when multiple ERP headers map to same DB column
+        const existed = obj.hasOwnProperty(dbcol) ? obj[dbcol] : undefined;
+        if (isEmpty(v) && !isEmpty(existed)) {
+          // keep existing non-empty value
+        } else {
+          obj[dbcol] = v;
+        }
         colsInUpload.add(dbcol);
       }
       normalized.push({ product_code: code, row: obj });
@@ -638,6 +675,7 @@ export class SupabaseService {
 
       // Compute diff only on columns present in upload when signature changed
       const diff: any = { product_code: n.product_code };
+      const REQUIRED = new Set<string>(['name_kr','asset_category']);
       let changed = false;
       for (const col of colsInUpload){
         if (col==='product_code') continue;
@@ -645,9 +683,17 @@ export class SupabaseService {
         if (newVal === undefined) continue;
         const oldVal = (existing as any)[col];
         const oldNorm = (oldVal===undefined || oldVal===null || String(oldVal).trim()==='') ? null : oldVal;
-        const newNorm = (newVal===undefined || newVal===null || String(newVal).trim()==='') ? null : newVal;
+        const newNorm = (newVal===undefined || newVal===null || (typeof newVal==='string' && newVal.trim()==='')) ? null : newVal;
+        // Do not overwrite required columns with null (treat blanks as "no change")
+        if (newNorm === null && REQUIRED.has(col as string)) { continue; }
+        // Update when value differs OR when DB is null and upload provides a value (including date fill-ins)
         if (JSON.stringify(oldNorm) !== JSON.stringify(newNorm)) { (diff as any)[col] = newNorm; changed = true; }
       }
+      // Safety: always include required fields so accidental INSERT by upsert won't violate NOT NULL
+      const fallbackName = (existing && (existing as any).name_kr) || (n.row as any).name_kr || n.product_code;
+      const fallbackCat = (existing && (existing as any).asset_category) || (n.row as any).asset_category || 'unspecified';
+      (diff as any).name_kr = fallbackName;
+      (diff as any).asset_category = fallbackCat;
       if (changed){
         const prevAttrs = (existing as any)?.attrs || {};
         diff.attrs = { ...prevAttrs, row_hash: newSig };
@@ -658,7 +704,7 @@ export class SupabaseService {
     if (toUpsert.length){
       const client = this.ensureClient();
       // Batch upsert
-      const { error } = await client.from('products').upsert(toUpsert, { onConflict: 'product_code', ignoreDuplicates: false, defaultToNull: true });
+      const { error } = await client.from('products').upsert(toUpsert, { onConflict: 'product_code', ignoreDuplicates: false, defaultToNull: false });
       if (error){
         // Fallback to smaller chunks to isolate failing rows
         const B = 200;
