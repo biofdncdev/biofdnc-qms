@@ -120,7 +120,8 @@ type ProductRow = { [key:string]: any } & {
   .page-size select{ height:30px; border-radius:8px; border:1px solid #e5e7eb; padding:0 8px; }
   .filters{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; margin:14px 0 18px; }
   .col-picker{ position:relative; }
-  .col-picker .menu{ position:fixed; right:26px; top:88px; width:280px; max-height:340px; overflow:auto; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 12px 24px rgba(0,0,0,0.12); padding:8px; z-index:1000; }
+  /* Place menu right under the button (like Ingredient list) */
+  .col-picker .menu{ position:absolute; right:0; top:calc(100% + 6px); width:280px; max-height:340px; overflow:auto; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 12px 24px rgba(0,0,0,0.12); padding:8px; z-index:1000; }
   .col-picker .menu-head{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
   .col-picker .menu-head .spacer{ flex:1; }
   .col-picker .mini{ height:24px; padding:0 8px; border-radius:6px; border:1px solid #e5e7eb; background:#fff; font-size:11px; cursor:pointer; }
@@ -140,6 +141,9 @@ type ProductRow = { [key:string]: any } & {
   .empty{ text-align:center; color:#94a3b8; }
   th{ position:relative; }
   .resize-handle{ position:absolute; right:0; top:0; height:100%; width:6px; cursor:col-resize; }
+  .pager{ display:flex; align-items:center; justify-content:space-between; margin-top:8px; }
+  .controls{ display:flex; align-items:center; gap:8px; }
+  .page-indicator{ min-width:64px; text-align:center; font-weight:800; }
   `]
 })
 export class ProductListComponent implements OnInit {
@@ -147,22 +151,119 @@ export class ProductListComponent implements OnInit {
   loading = false; page = 1; pageSize = 15; total = 0; pages = 1;
   keyword = ''; keywordOp: 'AND' | 'OR' = 'AND';
   columns: string[] = []; allColumns: string[] = []; extraCols: string[] = [];
+  // 기본 표시 열: 품목자산분류, 품번, 품명
   private readonly baseColumns = [
-    'product_code',      // 품번
-    'main_code',         // 대표품번
-    'name_kr',           // 품명
-    'name_en',           // 영문명
-    'item_category',     // 품목대분류
-    'item_status',       // 품목상태
     'asset_category',    // 품목자산분류
-    'remarks'            // 비고
+    'product_code',      // 품번
+    'name_kr'            // 품명
   ];
-  private readonly storageKey = 'product.columns.v1';
+  // 저장 키 버전을 올려 이전 사용자 설정과 분리 (새 기본 표시 열을 강제 적용)
+  private readonly storageKey = 'product.columns.v2';
+  private firstInit = false;
+  private colLabelMap = new Map<string,string>();
+  private readonly fallbackLabels: Record<string,string> = {
+    // Required / basics
+    product_code: '품번',
+    name_kr: '품명',
+    asset_category: '품목자산분류',
+    // Registration / meta
+    item_status: '등록상태',
+    reg_date: '등록일자',
+    reg_user: '등록자',
+    last_update_date: '최종수정일자',
+    last_update_user: '최종수정자',
+    domestic_overseas: '내외국구분',
+    item_subcategory: '품목소분류',
+    importance: '중요도',
+    managing_department: '관리부서',
+    manager: '관리자',
+    item_category: '품목대분류',
+    item_midcategory: '품목중분류',
+    shipping_type: '출하형태',
+    is_main_item: '대표품목',
+    is_set_item: '세트품목',
+    is_bom_registered: 'BOM등록여부',
+    has_process_materials: '재공품재료사용',
+    lot_control: 'Lot관리',
+    serial_control: 'Serial관리',
+    inspection_target: '검사대상',
+    shelf_life_type: '유통기간형태',
+    shelf_life_period: '유통기간',
+    sm_asset_grp: 'SM자산그룹',
+    default_supplier: '기본구매처',
+    vat_type: '부가세유형',
+    sale_price_includes_vat: '판매가격에부가세포함여부',
+    attachment: '첨부파일',
+    image_url: '이미지',
+    main_name: '대표품명',
+    main_code: '대표품번',
+    main_spec: '대표규격',
+    spec: '규격',
+    name_en: '영문명',
+    remarks: '비고',
+    unit: '기준단위',
+    item_subdivision: '세부품목',
+    keywords_alias: '검색어(이명)',
+    specification: '사양',
+    special_notes: '품목특이사항',
+    // Scientific / compliance
+    cas_no: 'CAS',
+    moq: 'MOQ',
+    package_unit: '포장단위',
+    manufacturer: 'Manufacturer',
+    country_of_manufacture: 'Country of Manufacture',
+    source_of_origin_method: 'Source of Origin(Method)',
+    plant_part: 'Plant Part',
+    country_of_origin: 'Country of Origin',
+    nmpa_no: '중국원료신고번호(NMPA)',
+    allergen: '알러젠성분',
+    furocoumarins: 'Furocoumarines',
+    efficacy: '효능',
+    patent: '특허',
+    paper: '논문',
+    clinical: '임상',
+    expiration_date: '사용기한',
+    storage_location: '보관위치',
+    storage_method1: '보관방법1',
+    stability_note1: '안정성 및 유의사항1',
+    storage_note1: 'Note on storage1',
+    safety_handling1: '안전 및 취급 주의사항1',
+    notice_coa3_en_1: 'NOTICE(COA3 영문)1',
+    notice_coa3_kr_1: 'NOTICE(COA3 국문)1',
+    notice_comp_kr_1: 'NOTICE(Composition 국문)1',
+    notice_comp_en_1: 'NOTICE(Composition 영문)1',
+    caution_origin_1: 'CAUTION(Origin)1',
+    cert_kosher: 'KOSHER 인증',
+    cert_halal: 'HALAL 인증',
+    cert_vegan: 'VEGAN 인증',
+    cert_isaaa: 'ISAAA 인증',
+    cert_rspo: 'RSPO 인증',
+    cert_reach: 'REACH 인증',
+    expiration_date2: 'Expiration Date2',
+    storage_method2: '보관방법2',
+    stability_note2: '안정성 및 유의사항2',
+    storage_note2: 'Note on storage2',
+    safety_handling2: '안전 및 취급 주의사항2',
+    notice_coa3_en_2: 'NOTICE(COA3 영문)2',
+    notice_coa3_kr_2: 'NOTICE(COA3 국문)2',
+    notice_comp_kr_2: 'NOTICE(Composition 국문)2',
+    notice_comp_en_2: 'NOTICE(Composition 영문)2',
+    caution_origin_2: 'CAUTION(Origin)2'
+  };
   private colWidths: Record<string, number | undefined> = {}; private resizing: { col: string; startX: number; startW: number } | null = null;
   hoverId: string | null = null; selectedId: string | null = null; showColMenu = false; private hiddenCols = new Set<string>();
 
   constructor(private supabase: SupabaseService, private router: Router) {}
-  ngOnInit(){ const saved = this.loadSavedLayout(); this.columns = saved.order.length? saved.order.slice(): this.baseColumns.slice(); this.colWidths = saved.widths || {}; this.hiddenCols = new Set(saved.hidden||[]); this.load(); }
+  ngOnInit(){
+    const saved = this.loadSavedLayout();
+    this.columns = saved.order.length ? saved.order.slice() : this.baseColumns.slice();
+    this.colWidths = saved.widths || {};
+    this.hiddenCols = new Set(saved.hidden || []);
+    // 첫 초기화 여부: 사용자가 저장한 레이아웃이 없는 경우
+    this.firstInit = (saved.order.length === 0 && (!saved.hidden || saved.hidden.length === 0));
+    this.load();
+    this.loadColumnLabels();
+  }
 
   async load(){
     this.loading = true;
@@ -175,6 +276,14 @@ export class ProductListComponent implements OnInit {
     const desired = [...this.baseColumns, ...this.extraCols];
     this.columns = this.mergeOrder(this.columns, desired);
     this.allColumns = desired.slice();
+    // 최초 진입 시에는 기본 열 외의 추가 열은 숨김 처리하여 요청한 3개만 보이도록 함
+    if (this.firstInit && this.hiddenCols.size === 0) {
+      for (const c of this.extraCols) { this.hiddenCols.add(c); }
+      // baseColumns 외에 과거에 저장된 열이 columns에 있더라도 숨김 처리
+      for (const c of this.columns) { if (!this.baseColumns.includes(c) && !this.extraCols.includes(c)) { this.hiddenCols.add(c); } }
+      this.saveLayout();
+      this.firstInit = false;
+    }
     this.rows.set(rows);
     this.total = count || 0;
     this.pages = Math.max(1, Math.ceil(this.total / this.pageSize));
@@ -193,20 +302,12 @@ export class ProductListComponent implements OnInit {
   onWheel(ev: WheelEvent){ if (ev.shiftKey) { const wrap = ev.currentTarget as HTMLElement; wrap.scrollLeft += (ev.deltaY || ev.deltaX); ev.preventDefault(); } }
 
   headerLabel(col:string){
-    switch(col){
-      case 'product_code': return '품번';
-      case 'main_code': return '대표품번';
-      case 'name_kr': return '품명';
-      case 'name_en': return '영문명';
-      case 'item_category': return '품목대분류';
-      case 'item_midcategory': return '품목중분류';
-      case 'item_status': return '품목상태';
-      case 'asset_category': return '품목자산분류';
-      case 'spec': return '규격';
-      case 'unit': return '기준단위';
-      case 'remarks': return '비고';
-      default: return col;
-    }
+    // Use dynamic mapping if available
+    // Prefer ERP fallback first for stability; DB mapping can override only if meaningful
+    const fallback = this.fallbackLabels[col];
+    const mapped = this.colLabelMap.get(col);
+    if (fallback) return fallback;
+    return (mapped && mapped.trim()) || col;
   }
   visibleColumns(){ return this.columns.filter(c => !this.hiddenCols.has(c)); }
   isVisible(c:string){ return !this.hiddenCols.has(c); }
@@ -221,6 +322,21 @@ export class ProductListComponent implements OnInit {
   }
   // Debounce for live typing
   private debounceTimer:any=null; private debouncedLoad(delayMs:number=300){ if(this.debounceTimer) clearTimeout(this.debounceTimer); this.debounceTimer=setTimeout(()=>this.load(), delayMs); }
+
+  private async loadColumnLabels(){
+    try{
+      const rows = await this.supabase.getProductColumnMap();
+      this.colLabelMap.clear();
+      for(const r of rows){
+        const key = r?.db_column as string;
+        const label = (r?.sheet_label_kr ?? '') as string;
+        // Ignore empty labels and labels that are just the DB column name to avoid overriding fallback
+        if (key && label && label.trim() && label.trim() !== key) {
+          this.colLabelMap.set(key, label.trim());
+        }
+      }
+    }catch{}
+  }
 }
 
 

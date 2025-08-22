@@ -1,19 +1,20 @@
--- Reorder products columns to match Korean sheet order and safely migrate data
--- Strategy: create new table -> copy data -> swap -> restore trigger
+-- Recreate products with required columns, order, and constraints
+-- Ensures: product_code UNIQUE NOT NULL, name_kr NOT NULL, asset_category NOT NULL
 
 begin;
 
--- 1) Drop audit trigger if exists (will be recreated later)
-do $$
-begin
-  if exists (select 1 from pg_trigger where tgname = 'trg_products_audit') then
-    execute 'drop trigger trg_products_audit on public.products';
-  end if;
-end$$;
+-- 0) Ensure audit trigger won't block renames
+drop trigger if exists trg_products_audit on public.products;
 
--- 2) Create new table with desired column order
-create table public.products_new (
-  -- Korean table order
+-- 1) Drop dependent FK on product_compositions before table swap
+alter table public.product_compositions drop constraint if exists product_compositions_product_id_fkey;
+
+-- 2) Keep current data by renaming old table
+alter table if exists public.products rename to products_old;
+
+-- 3) Create new products table in the exact desired order
+create table public.products (
+  -- Korean sheet order
   item_status               text null,
   reg_date                  text null,
   reg_user                  text null,
@@ -112,12 +113,12 @@ create table public.products_new (
   created_by_name           text null,
   updated_by_name           text null,
 
-  constraint products_new_pkey primary key (id),
-  constraint products_new_product_code_key unique (product_code)
+  constraint products_pkey primary key (id),
+  constraint products_product_code_key unique (product_code)
 );
 
--- 3) Data migration 1:1 mapping
-insert into public.products_new (
+-- 4) Backfill from old table preserving IDs and ensuring required columns are not null
+insert into public.products (
   item_status, reg_date, reg_user, last_update_date, last_update_user,
   domestic_overseas, item_subcategory, importance, managing_department, manager,
   item_category, item_midcategory, shipping_type, is_main_item, is_set_item,
@@ -140,10 +141,11 @@ select
   item_status, reg_date, reg_user, last_update_date, last_update_user,
   domestic_overseas, item_subcategory, importance, managing_department, manager,
   item_category, item_midcategory, shipping_type, is_main_item, is_set_item,
-  is_bom_registered, has_process_materials, lot_control, serial_control, asset_category,
+  is_bom_registered, has_process_materials, lot_control, serial_control,
+  coalesce(asset_category, 'unspecified') as asset_category,
   inspection_target, shelf_life_type, shelf_life_period, sm_asset_grp, default_supplier,
   vat_type, sale_price_includes_vat, attachment, image_url, main_name, main_code, main_spec,
-  product_code, name_kr, spec, name_en, remarks, unit, item_subdivision, keywords_alias,
+  product_code, coalesce(name_kr, product_code) as name_kr, spec, name_en, remarks, unit, item_subdivision, keywords_alias,
   specification, special_notes, cas_no, moq, package_unit, manufacturer, country_of_manufacture,
   source_of_origin_method, plant_part, country_of_origin, nmpa_no, allergen, furocoumarins,
   efficacy, patent, paper, clinical, expiration_date, storage_location, storage_method1,
@@ -154,21 +156,14 @@ select
   notice_comp_kr_2, notice_comp_en_2, caution_origin_2,
   id, category, status, attrs, created_at, updated_at, created_by, updated_by,
   created_by_name, updated_by_name
-from public.products;
+from public.products_old;
 
--- 4) Detach dependent foreign keys before swap (will recreate after)
-alter table public.product_compositions drop constraint if exists product_compositions_product_id_fkey;
-
--- 5) Swap tables via rename to preserve data and allow FK recreation
-alter table public.products rename to products_old;
-alter table public.products_new rename to products;
-
--- 6) Recreate dependent foreign keys to point to new products
+-- 5) Recreate FK dependency
 alter table public.product_compositions
   add constraint product_compositions_product_id_fkey
   foreign key (product_id) references public.products(id) on delete cascade;
 
--- 7) Ensure RLS and policies exist on the new products table
+-- 6) RLS + policies (idempotent)
 alter table public.products enable row level security;
 
 do $$
@@ -187,13 +182,13 @@ begin
   end if;
 end $$;
 
--- 8) Recreate trigger on the new products table
+-- 7) Recreate audit trigger
 create trigger trg_products_audit
 before insert or update on public.products
 for each row execute function set_audit_fields();
 
--- 9) Drop the old table now that dependencies are reattached
-drop table public.products_old;
+-- 8) Drop old table
+drop table if exists public.products_old;
 
 commit;
 

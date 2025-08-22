@@ -76,6 +76,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/product/product-list').then(m => m.ProductListComponent),
       },
       {
+        path: 'product/update',
+        loadComponent: () => import('./pages/product/product-update').then(m => m.ProductUpdateComponent),
+      },
+      {
         path: 'product/form',
         loadComponent: () => import('./pages/product/product-form').then(m => m.ProductFormComponent),
       },

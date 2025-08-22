@@ -82,7 +82,7 @@ export class AppShellComponent {
     if (!this.isViewer) {
       this.menus.push(
         { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [ { label: '성분목록', path: '/app/ingredient' }, { label: '성분등록', path: '/app/ingredient/form' } ] },
-        { key: 'product', icon: 'category', label: 'Product', submenu: [ { label: '제품목록', path: '/app/product' }, { label: '제품등록', path: '/app/product/form' } ] },
+        { key: 'product', icon: 'category', label: 'Product', submenu: [ { label: '제품목록', path: '/app/product' }, { label: '제품등록', path: '/app/product/form' }, { label: '제품목록 업데이트', path: '/app/product/update' } ] },
         {
           key: 'standard', icon: 'gavel', label: 'Standard',
           submenu: [

@@ -29,7 +29,9 @@ export class SupabaseService {
             // F5 새로고침에서는 로그인 유지, 브라우저/탭 종료 시에는 로그아웃 되도록 sessionStorage 사용
             storage: (globalThis as any).sessionStorage,
             persistSession: true,
-            autoRefreshToken: true,
+            // 일부 브라우저/확장프로그램의 Web Locks 충돌을 피하기 위해 자동 리프레시 비활성화
+            // (세션 만료 시 재로그인 필요)
+            autoRefreshToken: false,
             detectSessionInUrl: true,
           },
         }
@@ -463,7 +465,20 @@ export class SupabaseService {
     const page = Math.max(1, params?.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params?.pageSize ?? 15));
     const from = (page - 1) * pageSize; const to = from + pageSize - 1;
-    const cols = ['product_code','name_kr','name_en','category','status','remarks'];
+    // Columns included in keyword search for products
+    const cols = [
+      'product_code',
+      'main_code',
+      'name_kr',
+      'name_en',
+      'asset_category',
+      'item_category',
+      'item_midcategory',
+      'item_status',
+      'spec',
+      'unit',
+      'remarks'
+    ];
     const kw = (params?.keyword || '').trim();
     const words = kw ? kw.split(/\s+/).map(s=>s.trim()).filter(Boolean) : [];
     const op = (params?.keywordOp || 'AND').toUpperCase() as 'AND'|'OR';
@@ -492,7 +507,19 @@ export class SupabaseService {
       }
       const { data: superset } = await supQ.limit(supersetLimit) as any;
       const rows: any[] = Array.isArray(superset) ? superset : [];
-      const toHay = (r:any) => [r.product_code,r.name_kr,r.name_en,r.category,r.status,r.remarks].filter(Boolean).join(' ').toLowerCase();
+      const toHay = (r:any) => [
+        r.product_code,
+        r.main_code,
+        r.name_kr,
+        r.name_en,
+        r.asset_category,
+        r.item_category,
+        r.item_midcategory,
+        r.item_status,
+        r.spec,
+        r.unit,
+        r.remarks
+      ].filter(Boolean).join(' ').toLowerCase();
       const filtered = rows.filter(r => words.every(w => toHay(r).includes(w.toLowerCase())));
       const start = (page - 1) * pageSize; const end = start + pageSize;
       return { data: filtered.slice(start,end), count: filtered.length } as any;
@@ -515,103 +542,134 @@ export class SupabaseService {
   }
   async deleteProductComposition(id: string){ return this.ensureClient().from('product_compositions').delete().eq('id', id); }
 
-  // Excel sync RPC stub (implement later if needed)
+  // Product column map (for Korean labels)
+  async getProductColumnMap(){
+    const { data } = await this.ensureClient().from('product_column_map').select('*').order('display_order', { ascending: true }) as any;
+    return Array.isArray(data) ? data : [];
+  }
+
+  // Excel sync implementation with diffing and error reporting
   async syncProductsByExcel(payload: { sheet: any[]; headerMap?: Record<string,string> }){
     const rows = payload?.sheet || [];
-    if (!rows.length) return { ok: true, updated: 0 } as any;
-    const map = Object.assign({
-      '품번': 'product_code',
-      '품목코드': 'product_code',
-      '대표품번': 'main_code',
-      '품명': 'name_kr',
-      '대표품명': 'name_kr',
-      '영문명': 'name_en',
-      '품목설명': 'remarks',
-      '품목상태': 'item_status',
-      '품목대분류': 'item_category',
-      '품목중분류': 'item_midcategory',
-      '품목소분류': 'item_subcategory',
-      '기준단위': 'unit',
-      '규격': 'spec',
-      '대표규격': 'main_spec',
-      '검색어(이명(異名))': 'keywords_alias',
-      '사양': 'specification',
-      '품목특이사항': 'special_notes',
-      'CAS NO': 'cas_no',
-      'MOQ': 'moq',
-      '포장단위': 'package_unit',
-      'Manufacturer': 'manufacturer',
-      'Country of Manufacture': 'country_of_manufacture',
-      'Source of Origin(Method)': 'source_of_origin_method',
-      'Plant Part': 'plant_part',
-      'Country of Origin': 'country_of_origin',
-      '중국원료신고번호(NMPA)': 'nmpa_no',
-      '알러젠성분': 'allergen',
-      'Furocoumarines': 'furocoumarins',
-      '효능': 'efficacy',
-      '특허': 'patent',
-      '논문': 'paper',
-      '임상': 'clinical',
-      '사용기한': 'expiration_date',
-      '보관위치': 'storage_location',
-      '보관방법1': 'storage_method1',
-      '안정성 및 유의사항1': 'stability_note1',
-      'Note on storage1': 'storage_note1',
-      'Safety & Handling1': 'safety_handling1',
-      'NOTICE (COA3 영문)1': 'notice_coa3_en_1',
-      'NOTICE (COA3 국문)1': 'notice_coa3_kr_1',
-      'NOTICE (Composition 국문)1': 'notice_comp_kr_1',
-      'NOTICE (Composition 영문)1': 'notice_comp_en_1',
-      'CAUTION (Origin)1': 'caution_origin_1',
-      '유기농 인증': 'cert_organic',
-      'KOSHER 인증': 'cert_kosher',
-      'HALAL 인증': 'cert_halal',
-      'VEGAN 인증': 'cert_vegan',
-      'ISAAA 인증': 'cert_isaaa',
-      'RSPO 인증': 'cert_rspo',
-      'REACH 인증': 'cert_reach',
-      'Expiration Date': 'expiration_date2',
-      '보관방법2': 'storage_method2',
-      '안정성 및 유의사항2': 'stability_note2',
-      'Note on storage2': 'storage_note2',
-      'Safety & Handling2': 'safety_handling2',
-      'NOTICE (COA3 영문)2': 'notice_coa3_en_2',
-      'NOTICE (COA3 국문)2': 'notice_coa3_kr_2',
-      'NOTICE (Composition 국문)2': 'notice_comp_kr_2',
-      'NOTICE (Composition 영문)2': 'notice_comp_en_2',
-      'CAUTION (Origin)2': 'caution_origin_2'
-    }, payload?.headerMap || {});
+    const errors: Array<{ product_code: string; column?: string; message: string }> = [];
+    if (!rows.length) return { ok: true, total: 0, updated: 0, skipped: 0, inserted: 0, errors } as any;
 
-    let updated = 0;
+    // Build mapping: DB mapping first, then fallback to built-ins, then caller overrides
+    const { data: mapRows } = await this.ensureClient().from('product_column_map').select('sheet_label_kr, db_column');
+    const dbMap: Record<string,string> = {};
+    (mapRows||[]).forEach(m => { if (m?.sheet_label_kr && m?.db_column) dbMap[m.sheet_label_kr] = m.db_column; });
+    const builtin: Record<string,string> = {
+      '품번': 'product_code', '품목코드': 'product_code', '대표품번': 'main_code', '품명': 'name_kr', '대표품명': 'name_kr', '영문명': 'name_en', '품목설명': 'remarks',
+      // Registration / meta (accept multiple label variants)
+      '등록일': 'reg_date', '등록일자': 'reg_date',
+      '등록자': 'reg_user',
+      '최종수정일': 'last_update_date', '최종수정일자': 'last_update_date',
+      '최종수정자': 'last_update_user',
+      '품목상태':'item_status','품목대분류':'item_category','품목중분류':'item_midcategory','품목소분류':'item_subcategory','기준단위':'unit','규격':'spec','대표규격':'main_spec',
+      '검색어(이명(異名))':'keywords_alias','사양':'specification','품목특이사항':'special_notes','CAS NO':'cas_no','MOQ':'moq','포장단위':'package_unit','Manufacturer':'manufacturer',
+      'Country of Manufacture':'country_of_manufacture','Source of Origin(Method)':'source_of_origin_method','Plant Part':'plant_part','Country of Origin':'country_of_origin',
+      '중국원료신고번호(NMPA)':'nmpa_no','알러젠성분':'allergen','Furocoumarines':'furocoumarins','효능':'efficacy','특허':'patent','논문':'paper','임상':'clinical',
+      '사용기한':'expiration_date','보관위치':'storage_location','보관방법1':'storage_method1','안정성 및 유의사항1':'stability_note1','Note on storage1':'storage_note1','Safety & Handling1':'safety_handling1',
+      'NOTICE (COA3 영문)1':'notice_coa3_en_1','NOTICE (COA3 국문)1':'notice_coa3_kr_1','NOTICE (Composition 국문)1':'notice_comp_kr_1','NOTICE (Composition 영문)1':'notice_comp_en_1','CAUTION (Origin)1':'caution_origin_1',
+      '유기농 인증':'cert_organic','KOSHER 인증':'cert_kosher','HALAL 인증':'cert_halal','VEGAN 인증':'cert_vegan','ISAAA 인증':'cert_isaaa','RSPO 인증':'cert_rspo','REACH 인증':'cert_reach',
+      'Expiration Date':'expiration_date2','보관방법2':'storage_method2','안정성 및 유의사항2':'stability_note2','Note on storage2':'storage_note2','Safety & Handling2':'safety_handling2',
+      'NOTICE (COA3 영문)2':'notice_coa3_en_2','NOTICE (COA3 국문)2':'notice_coa3_kr_2','NOTICE (Composition 국문)2':'notice_comp_kr_2','NOTICE (Composition 영문)2':'notice_comp_en_2','CAUTION (Origin)2':'caution_origin_2'
+    };
+    const map: Record<string,string> = Object.assign({}, dbMap, builtin, payload?.headerMap || {});
+
+    // Determine header that provides product_code
+    const codeHeaders = Object.keys(map).filter(k => map[k] === 'product_code');
+    let updated = 0, skipped = 0, inserted = 0;
+
+    // Normalize upload rows and collect columns present
+    const normalized: Array<{ product_code: string; row: any }> = [];
+    const colsInUpload = new Set<string>(['product_code']);
     for (const r of rows){
-      const code = r['품번'] || r['품목코드'];
-      if (!code) continue;
-      const dbRow: any = { product_code: String(code).trim() };
-      for (const [k, v] of Object.entries(map)){
-        if (!(k in r)) continue;
-        const col = v as string;
-        if (['product_code','name_kr','name_en','remarks','status','category'].includes(col)){
-          // legacy mapping kept for backward compatibility
-          dbRow[col] = r[k];
-        }
-        if ([
-          'item_status','item_category','item_midcategory','item_subcategory','unit','spec','main_spec','keywords_alias','specification','special_notes','cas_no','moq','package_unit','manufacturer','country_of_manufacture','source_of_origin_method','plant_part','country_of_origin','nmpa_no','allergen','furocoumarins','efficacy','patent','paper','clinical','expiration_date','storage_location','storage_method1','stability_note1','storage_note1','safety_handling1','notice_coa3_en_1','notice_coa3_kr_1','notice_comp_kr_1','notice_comp_en_1','caution_origin_1','cert_organic','cert_kosher','cert_halal','cert_vegan','cert_isaaa','cert_rspo','cert_reach','expiration_date2','storage_method2','stability_note2','storage_note2','safety_handling2','notice_coa3_en_2','notice_coa3_kr_2','notice_comp_kr_2','notice_comp_en_2','caution_origin_2'
-        ].includes(col)){
-          dbRow[col] = r[k];
-        }
+      const codeRaw = codeHeaders.map(h => r[h]).find(v => v!==undefined && v!==null && String(v).trim()!=='');
+      const code = codeRaw ? String(codeRaw).trim() : '';
+      if (!code) { skipped++; continue; }
+      const obj: any = { product_code: code };
+      for (const [erp, dbcol] of Object.entries(map)){
+        if (r[erp] === undefined) continue;
+        const v = r[erp];
+        obj[dbcol] = (v===undefined || v===null || String(v).trim()==='') ? null : v;
+        colsInUpload.add(dbcol);
       }
-      // Merge attrs: store all headers from sheet except the core mapped ones
-      const coreHeaders = new Set(Object.keys(map));
-      const { data: existing } = await this.ensureClient().from('products').select('*').eq('product_code', dbRow.product_code).maybeSingle();
-      const mergedAttrs = Object.assign({}, (existing as any)?.attrs || {});
-      for (const [key, val] of Object.entries(r)){
-        if (map[key]) continue; // handled as core field
-        mergedAttrs[key] = val;
-      }
-      dbRow.attrs = mergedAttrs;
-      await this.upsertProduct(dbRow);
-      updated++;
+      normalized.push({ product_code: code, row: obj });
     }
-    return { ok: true, updated } as any;
+    if (!normalized.length) return { ok: true, total: rows.length, updated, skipped, inserted, errors } as any;
+
+    // Fetch existing rows (only necessary columns + attrs for row_hash)
+    const codes = normalized.map(n => n.product_code);
+    const selectCols = Array.from(new Set<string>([...Array.from(colsInUpload), 'attrs'])).join(',');
+    const { data: existingList } = await this.ensureClient().from('products').select(selectCols).in('product_code', codes) as any;
+    const codeToExisting: Record<string, any> = {};
+    for (const ex of (existingList || [])) codeToExisting[ex.product_code] = ex;
+
+    const toUpsert: any[] = [];
+    // Simple stable signature of a row for fast skip
+    const signatureOf = (row:any) => {
+      const keys = Array.from(colsInUpload).filter(k=>k!=='product_code').sort();
+      const parts = keys.map(k => `${k}:${row[k]===undefined||row[k]===null?'':String(row[k])}`);
+      // djb2
+      let h = 5381; const s = parts.join('|');
+      for (let i=0;i<s.length;i++){ h = ((h << 5) + h) ^ s.charCodeAt(i); }
+      // to unsigned string to reduce size
+      return (h >>> 0).toString(36);
+    };
+
+    for (const n of normalized){
+      const existing = codeToExisting[n.product_code];
+      if (!existing){
+        const row = { ...n.row };
+        if (!row.name_kr) row.name_kr = n.product_code;
+        if (!row.asset_category) row.asset_category = 'unspecified';
+        const sig = signatureOf(row);
+        const prevAttrs = (row as any).attrs || {};
+        row.attrs = { ...prevAttrs, row_hash: sig };
+        toUpsert.push(row);
+        inserted++;
+        continue;
+      }
+      // Fast path: skip if signature unchanged
+      const newSig = signatureOf(n.row);
+      const oldSig = (existing as any)?.attrs?.row_hash || null;
+      if (oldSig && newSig === oldSig){ skipped++; continue; }
+
+      // Compute diff only on columns present in upload when signature changed
+      const diff: any = { product_code: n.product_code };
+      let changed = false;
+      for (const col of colsInUpload){
+        if (col==='product_code') continue;
+        const newVal = (n.row as any)[col];
+        if (newVal === undefined) continue;
+        const oldVal = (existing as any)[col];
+        const oldNorm = (oldVal===undefined || oldVal===null || String(oldVal).trim()==='') ? null : oldVal;
+        const newNorm = (newVal===undefined || newVal===null || String(newVal).trim()==='') ? null : newVal;
+        if (JSON.stringify(oldNorm) !== JSON.stringify(newNorm)) { (diff as any)[col] = newNorm; changed = true; }
+      }
+      if (changed){
+        const prevAttrs = (existing as any)?.attrs || {};
+        diff.attrs = { ...prevAttrs, row_hash: newSig };
+        toUpsert.push(diff); updated++;
+      } else { skipped++; }
+    }
+
+    if (toUpsert.length){
+      const client = this.ensureClient();
+      // Batch upsert
+      const { error } = await client.from('products').upsert(toUpsert, { onConflict: 'product_code', ignoreDuplicates: false, defaultToNull: true });
+      if (error){
+        // Fallback to smaller chunks to isolate failing rows
+        const B = 200;
+        for (let i=0;i<toUpsert.length;i+=B){
+          const part = toUpsert.slice(i,i+B);
+          const { error: e2 } = await client.from('products').upsert(part, { onConflict: 'product_code' });
+          if (e2){ errors.push({ product_code: part[0]?.product_code || '-', message: e2.message || String(e2) }); }
+        }
+      }
+    }
+
+    return { ok: true, total: rows.length, updated, skipped, inserted, errors } as any;
   }
 }
