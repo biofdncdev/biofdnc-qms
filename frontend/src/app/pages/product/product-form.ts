@@ -104,7 +104,7 @@ import { SupabaseService } from '../../services/supabase.service';
           </div>
           <div class="modal-body">
             <div class="search-bar">
-              <input [(ngModel)]="pickerQuery" (input)="debouncedPickerSearch()" (keydown.arrowDown)="movePickerPointer(1)" (keydown.arrowUp)="movePickerPointer(-1)" (keydown.enter)="onPickerEnter($event)" placeholder="INCI/국문명 검색" />
+              <input [(ngModel)]="pickerQuery" (keydown.arrowDown)="movePickerPointer(1)" (keydown.arrowUp)="movePickerPointer(-1)" (keydown.enter)="onPickerSearchEnter($event)" placeholder="INCI/국문명 검색" />
             </div>
             <div class="table-scroll small">
               <table class="grid">
@@ -233,8 +233,10 @@ export class ProductFormComponent implements OnInit {
   pickerQuery = '';
   pickerRows: Array<{ id: string; inci_name: string; korean_name?: string; chinese_name?: string; cas_no?: string }> = [];
   private pickerTimer: any = null;
+  private pickerDefaultsCache: Array<{ id: string; inci_name: string; korean_name?: string; chinese_name?: string; cas_no?: string }> | null = null;
   saved = true;
-  pickerPointer = 0;
+  pickerPointer = -1;
+  private pickerPointerMoved = false;
   // Product picker
   productQuery = '';
   productResults: Array<{ id: string; product_code: string; name_kr?: string; spec?: string; specification?: string }> = [];
@@ -350,7 +352,10 @@ export class ProductFormComponent implements OnInit {
     this.pickerOpen = true;
     this.pickerQuery = '';
     this.pickerRows = [];
-    this.pickerPointer = 0;
+    this.pickerPointer = -1;
+    this.pickerPointerMoved = false;
+    // Immediately load defaults for empty query
+    this.runPickerSearch();
     setTimeout(()=>{
       const modalInput = document.querySelector('.modal input') as HTMLInputElement | null;
       modalInput?.focus();
@@ -405,33 +410,68 @@ export class ProductFormComponent implements OnInit {
   async runPickerSearch(){
     const q = (this.pickerQuery||'').trim();
     if (!q){
-      // default showcase list (top 5) when no query
-      const top5 = ['1,2-Hexanediol','Butylene Glycol','Ethylhexylglycerin','Sodium Hyaluronate','Water'];
+      // default showcase list (top 5) when no query (fixed order)
+      const top5 = ['Water','1,2-Hexanediol','Ethylhexylglycerin','Butylene Glycol','Sodium Hyaluronate'];
+      if (this.pickerDefaultsCache){ this.pickerRows = this.pickerDefaultsCache.slice(); return; }
       try{
         const { data } = await this.supabase.getIngredientsByNames(top5);
-        this.pickerRows = data || [];
+        const arr = Array.isArray(data) ? data : [];
+        // Keep the desired order even if DB returns unordered
+        const ordered = top5
+          .map(name => arr.find((d:any)=> (d?.inci_name||'').toLowerCase() === name.toLowerCase()))
+          .filter(Boolean) as any[];
+        this.pickerDefaultsCache = ordered;
+        this.pickerRows = ordered.slice();
       }catch{ this.pickerRows = []; }
+      // keep pointer at none when showing defaults and ensure input focus remains
+      this.pickerPointer = -1; this.pickerPointerMoved = false;
+      setTimeout(()=>{ const modalInput = document.querySelector('.modal input') as HTMLInputElement | null; modalInput?.focus(); }, 0);
       return;
     }
     // reuse existing ingredient search; ideally include chinese_name, cas_no
     const { data } = await this.supabase.listIngredients({ page: 1, pageSize: 20, keyword: q, keywordOp: 'AND' }) as any;
     this.pickerRows = (data||[]).map((r:any)=>({ id: r.id, inci_name: r.inci_name, korean_name: r.korean_name, chinese_name: r.chinese_name, cas_no: r.cas_no }));
+    this.pickerPointer = (this.pickerRows.length > 0 && this.pickerPointerMoved) ? 0 : -1;
   }
   debouncedPickerSearch(){ if (this.pickerTimer) clearTimeout(this.pickerTimer); this.pickerTimer = setTimeout(()=> this.runPickerSearch(), 250); }
+  onPickerSearchEnter(ev:any){
+    if (ev?.preventDefault) ev.preventDefault();
+    // If a row is selected via arrow keys, Enter should add it. Otherwise perform search.
+    if (this.pickerPointer >= 0){
+      const row = this.pickerRows[this.pickerPointer];
+      if (row) this.addPicked(row);
+      return;
+    }
+    this.runPickerSearch();
+  }
   addPicked(row:any){
-    this.compositions.push({ ingredient_id: row.id, percent: null, note: '', inci_name: row.inci_name, korean_name: row.korean_name||'', cas_no: row.cas_no||'', chinese_name: row.chinese_name||'' } as any);
+    // Prevent duplicates by ingredient_id or INCI name (case-insensitive)
+    const exists = this.compositions.some(c => (c.ingredient_id && c.ingredient_id === row.id) || ((c.inci_name||'').toLowerCase() === (row.inci_name||'').toLowerCase()));
+    if (!exists){
+      this.compositions.push({ ingredient_id: row.id, percent: null, note: '', inci_name: row.inci_name, korean_name: row.korean_name||'', cas_no: row.cas_no||'', chinese_name: row.chinese_name||'' } as any);
+    }
     // keep picker open; reset search to allow adding more items immediately
     this.pickerQuery = '';
     this.pickerRows = [];
-    this.pickerPointer = 0;
+    this.pickerPointer = -1;
+    this.pickerPointerMoved = false;
     setTimeout(()=>{
       const modalInput = document.querySelector('.modal input') as HTMLInputElement | null;
       modalInput?.focus();
     }, 0);
+    this.runPickerSearch();
     this.saved = false;
   }
-  movePickerPointer(delta:number){ const max = this.pickerRows.length; if (!max) return; this.pickerPointer = Math.max(0, Math.min(max-1, this.pickerPointer + delta)); }
-  onPickerEnter(ev: any){ if (ev?.preventDefault) ev.preventDefault(); const row = this.pickerRows[this.pickerPointer]; if (row) this.addPicked(row); }
+  movePickerPointer(delta:number){
+    const max = this.pickerRows.length; if (!max) return; this.pickerPointerMoved = true;
+    if (this.pickerPointer < 0){
+      // First movement: go to first on ArrowDown, last on ArrowUp
+      this.pickerPointer = delta > 0 ? 0 : max-1;
+      return;
+    }
+    this.pickerPointer = Math.max(0, Math.min(max-1, this.pickerPointer + delta));
+  }
+  onPickerEnter(ev: any){ if (ev?.preventDefault) ev.preventDefault(); if (this.pickerPointer < 0) return; const row = this.pickerRows[this.pickerPointer]; if (row) this.addPicked(row); }
   removeRow(row:any){ this.compositions = this.compositions.filter(r => r !== row); if (this.selectedComp===row) this.selectedComp=null; }
   removeSelected(){ if (!this.selectedComp) return; this.compositions = this.compositions.filter(r => r !== this.selectedComp); this.selectedComp = null; }
   onPercentChange(){ this.saved = false; }
