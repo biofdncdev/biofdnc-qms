@@ -11,7 +11,7 @@ import { SupabaseService } from '../../services/supabase.service';
   template: `
   <div class="form-page">
     <header class="form-header">
-      <h2>Ingredient 성분등록</h2>
+      <h2>Ingredient <span class="sub">성분등록</span></h2>
       <div class="actions">
         <button class="btn primary" (click)="save()">저장</button>
         <button class="btn ghost" (click)="cancel()">취소</button>
@@ -55,6 +55,8 @@ import { SupabaseService } from '../../services/supabase.service';
   styles: [`
   .form-page{ padding:12px 16px; }
   .form-header{ display:flex; align-items:center; justify-content:space-between; position:sticky; top:12px; background:#fff; z-index:5; padding:8px 0; }
+  .form-header h2{ margin:0; font-size:20px; font-weight:800; }
+  .form-header .sub{ font-size:14px; font-weight:700; margin-left:6px; color:#6b7280; }
   .actions{ display:flex; gap:8px; }
   .btn{ height:30px; padding:0 12px; border-radius:8px; border:1px solid #d1d5db; background:#fff; cursor:pointer; }
   .btn.primary{ background:#111827; color:#fff; border-color:#111827; }

@@ -38,15 +38,15 @@ type IngredientRow = { [key: string]: any } & {
         </div>
         <div class="col-picker" (click)="$event.stopPropagation()">
           <button class="btn ghost" (click)="toggleColMenu()">열</button>
-          <div class="menu" *ngIf="showColMenu">
+          <div class="menu" *ngIf="showColMenu" cdkScrollable #menuEl (wheel)="onMenuWheel($event)">
             <div class="menu-head">
               <b>표시할 열</b>
               <span class="spacer"></span>
               <button class="mini" (click)="selectAllCols()">모두 선택</button>
               <button class="mini" (click)="clearAllCols()">모두 해제</button>
             </div>
-            <div class="menu-list" cdkDropList (cdkDropListDropped)="onReorderMenu($event)">
-              <label class="menu-item" *ngFor="let c of orderedMenuColumns(); let i = index" cdkDrag>
+            <div class="menu-list" cdkDropList (cdkDropListDropped)="onReorderMenu($event)" #menuList>
+              <label class="menu-item" *ngFor="let c of orderedMenuColumns(); let i = index" cdkDrag (cdkDragMoved)="onMenuDragMove($event)" (cdkDragEnded)="onMenuDragEnd()">
                 <input type="checkbox" [checked]="isVisible(c)" (change)="setVisible(c, $event.target.checked)" />
                 <span>{{ headerLabel(c) }}</span>
               </label>
@@ -119,8 +119,8 @@ type IngredientRow = { [key: string]: any } & {
   .col-picker .menu-head{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
   .col-picker .menu-head .spacer{ flex:1; }
   .col-picker .mini{ height:24px; padding:0 8px; border-radius:6px; border:1px solid #e5e7eb; background:#fff; font-size:11px; cursor:pointer; }
-  .col-picker .menu-list{ display:flex; flex-direction:column; gap:6px; }
-  .col-picker .menu-item{ display:flex; align-items:center; gap:8px; font-size:12px; padding:6px 8px; border-radius:8px; border:1px solid transparent; background:#fff; }
+  .col-picker .menu-list{ display:flex; flex-direction:column; gap:0; }
+  .col-picker .menu-item{ display:flex; align-items:center; gap:8px; font-size:12px; padding:2px 8px; margin:2px 0; border-radius:6px; border:1px solid transparent; background:#fff; }
   /* Drag & drop visuals for column menu */
   .col-picker .menu-list.cdk-drop-list-dragging .menu-item{ transition: transform .18s ease; }
   .col-picker .menu-item.cdk-drag-preview{ box-shadow:0 10px 24px rgba(0,0,0,0.18); border-color:#93c5fd; background:#f8fbff; transform:rotate(1deg); pointer-events:none; }
@@ -178,6 +178,9 @@ export class IngredientListComponent implements OnInit {
   @ViewChild('tableWrap') tableWrapRef!: ElementRef<HTMLDivElement>;
   private autoScrollInterval: any = null;
   private dragStartIndex: number | null = null;
+  @ViewChild('menuEl') menuElRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('menuList') menuListRef!: ElementRef<HTMLDivElement>;
+  private menuAutoScrollInterval: any = null;
   hoverId: string | null = null;
   selectedId: string | null = null;
 
@@ -344,6 +347,28 @@ export class IngredientListComponent implements OnInit {
     }
   }
   onDragEnd(){ if (this.autoScrollInterval){ clearInterval(this.autoScrollInterval); this.autoScrollInterval = null; } }
+
+  // Column menu wheel + edge auto-scroll during drag
+  onMenuWheel(ev: WheelEvent){
+    const container = this.menuElRef?.nativeElement || this.menuListRef?.nativeElement; if (!container) return;
+    container.scrollTop += (ev.deltaY || ev.deltaX);
+    ev.preventDefault();
+  }
+  onMenuDragMove(event: CdkDragMove){
+    const container = this.menuElRef?.nativeElement || this.menuListRef?.nativeElement; if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const y = event.pointerPosition.y;
+    const edge = 30; const speed = 12;
+    let dy = 0;
+    if (y < rect.top + edge) dy = -speed;
+    else if (y > rect.bottom - edge) dy = speed;
+    if (dy !== 0){
+      if (!this.menuAutoScrollInterval){ this.menuAutoScrollInterval = setInterval(()=>{ container.scrollTop += dy; }, 16); }
+    } else {
+      this.onMenuDragEnd();
+    }
+  }
+  onMenuDragEnd(){ if (this.menuAutoScrollInterval){ clearInterval(this.menuAutoScrollInterval); this.menuAutoScrollInterval = null; } }
 
   // Close column menu on ESC
   @HostListener('document:keydown.escape', ['$event'])

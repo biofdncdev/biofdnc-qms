@@ -552,6 +552,16 @@ export class SupabaseService {
     const start = (page - 1) * pageSize; const end = start + pageSize;
     return { data: filtered.slice(start, end), count: filtered.length } as any;
   }
+  async quickSearchProducts(keyword: string){
+    const kw = (keyword||'').trim();
+    if (!kw) return { data: [] as any[] } as any;
+    const { data } = await this.ensureClient()
+      .from('products')
+      .select('id, product_code, name_kr, spec, specification')
+      .or(`product_code.ilike.*${kw}*,name_kr.ilike.*${kw}*`)
+      .limit(20) as any;
+    return { data: Array.isArray(data)? data: [] } as any;
+  }
   async getProduct(id: string){ return this.ensureClient().from('products').select('*').eq('id', id).single(); }
   async upsertProduct(row: any){ return this.ensureClient().from('products').upsert(row, { onConflict: 'id' }).select('*').single(); }
   async deleteProduct(id: string){ return this.ensureClient().from('products').delete().eq('id', id); }
@@ -580,6 +590,33 @@ export class SupabaseService {
       .order('inci_name', { ascending: true })
       .limit(50) as any;
     return { data: Array.isArray(data)? data: [] } as any;
+  }
+
+  // Fetch ingredients by exact INCI names
+  async getIngredientsByNames(names: string[]){
+    const list = Array.from(new Set((names||[]).filter(Boolean)));
+    if (!list.length) return { data: [] as any[] } as any;
+    const { data } = await this.ensureClient()
+      .from('ingredients')
+      .select('id, inci_name, korean_name, chinese_name, cas_no')
+      .in('inci_name', list) as any;
+    return { data: Array.isArray(data)? data: [] } as any;
+  }
+
+  // Count how many times each ingredient is used in product compositions for a given set of ingredient IDs
+  async getCompositionCountsForIngredients(ingredientIds: string[]){
+    const ids = Array.from(new Set((ingredientIds||[]).filter(Boolean)));
+    if (!ids.length) return {} as Record<string, number>;
+    const { data } = await this.ensureClient()
+      .from('product_compositions')
+      .select('ingredient_id')
+      .in('ingredient_id', ids) as any;
+    const counts: Record<string, number> = {};
+    for (const row of (data||[])){
+      const k = row?.ingredient_id as string; if (!k) continue;
+      counts[k] = (counts[k]||0) + 1;
+    }
+    return counts;
   }
 
   // Product column map (for Korean labels)
