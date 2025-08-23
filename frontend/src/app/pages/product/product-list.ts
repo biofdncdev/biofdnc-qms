@@ -66,9 +66,8 @@ type ProductRow = { [key:string]: any } & {
         <span class="chip">키워드</span>
         <input [(ngModel)]="keyword" (ngModelChange)="onKeywordChange($event)" (keydown.escape)="onEscClear()" placeholder="통합 검색 (띄어쓰기로 여러 키워드)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
         <span class="chip">연산</span>
-        <select [(ngModel)]="keywordOp" (ngModelChange)="load()">
-          <option value="AND">AND</option>
-          <option value="OR">OR</option>
+        <select disabled>
+          <option>AND</option>
         </select>
       </div>
     </section>
