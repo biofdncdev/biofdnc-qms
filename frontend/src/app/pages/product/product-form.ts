@@ -89,7 +89,7 @@ import { SupabaseService } from '../../services/supabase.service';
             <tfoot>
               <tr>
                 <td colspan="6" class="sum-label">합계</td>
-                <td class="sum" [class.ok]="percentSum()===100" [class.bad]="percentSum()!==100">{{ percentSum() | number:'1.0-2' }}%</td>
+                <td class="sum" [class.ok]="percentIsHundred()" [class.bad]="!percentIsHundred()">{{ percentSum() }}%</td>
               </tr>
             </tfoot>
           </table>
@@ -311,8 +311,18 @@ export class ProductFormComponent implements OnInit {
     }
   }
 
-  // Percent sum helper for validation banner
-  percentSum(){ return Math.round((this.compositions.reduce((a,c)=> a + (Number(c.percent)||0), 0)) * 100) / 100; }
+  // Percent sum helpers
+  private percentTotalRaw(){ return this.compositions.reduce((a,c)=> a + (Number(c.percent)||0), 0); }
+  percentSum(){
+    // Backward-compat function (kept for other uses). Returns truncated to 6 decimals
+    const raw = this.percentTotalRaw();
+    return Math.trunc(raw * 1_000_000) / 1_000_000;
+  }
+  percentSumStr(){
+    const v = this.percentSum();
+    return String(v);
+  }
+  percentIsHundred(){ return Math.round(this.percentTotalRaw() * 1_000_000) / 1_000_000 === 100; }
 
   // Ingredient search panel logic
   private ingDebounce: any = null;
@@ -410,14 +420,19 @@ export class ProductFormComponent implements OnInit {
   async runPickerSearch(){
     const q = (this.pickerQuery||'').trim();
     if (!q){
-      // default showcase list (top 5) when no query (fixed order)
-      const top5 = ['Water','1,2-Hexanediol','Ethylhexylglycerin','Butylene Glycol','Sodium Hyaluronate'];
-      if (this.pickerDefaultsCache){ this.pickerRows = this.pickerDefaultsCache.slice(); return; }
+      // default showcase list when no query (fixed order)
+      const defaults = ['Water','1,2-Hexanediol','Ethylhexylglycerin','Butylene Glycol','Sodium Hyaluronate','Sodium DNA'];
+      if (this.pickerDefaultsCache){
+        this.pickerRows = this.pickerDefaultsCache.slice();
+        this.pickerPointer = -1; this.pickerPointerMoved = false;
+        setTimeout(()=>{ const modalInput = document.querySelector('.modal input') as HTMLInputElement | null; modalInput?.focus(); }, 0);
+        return;
+      }
       try{
-        const { data } = await this.supabase.getIngredientsByNames(top5);
+        const { data } = await this.supabase.getIngredientsByNames(defaults);
         const arr = Array.isArray(data) ? data : [];
         // Keep the desired order even if DB returns unordered
-        const ordered = top5
+        const ordered = defaults
           .map(name => arr.find((d:any)=> (d?.inci_name||'').toLowerCase() === name.toLowerCase()))
           .filter(Boolean) as any[];
         this.pickerDefaultsCache = ordered;
