@@ -11,7 +11,7 @@ import { SupabaseService } from '../../services/supabase.service';
   template: `
   <div class="form-page">
     <header class="form-header">
-      <h2>Product 제품등록</h2>
+      <h2>Product 제품 조성비 등록</h2>
       <div class="actions">
         <button class="btn danger" (click)="onDelete()">삭제</button>
       </div>

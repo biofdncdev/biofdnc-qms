@@ -2,3 +2,26 @@
 
 html, body { height: 100%; }
 body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+
+/* Table row hover and selection styles */
+table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+table tbody tr.hovered {
+  background-color: #f1f5f9;
+}
+
+table tbody tr.selected {
+  background-color: #dbeafe;
+  border-left: 3px solid #3b82f6;
+}
+
+table tbody tr.selected:hover {
+  background-color: #bfdbfe;
+}
