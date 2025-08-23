@@ -206,6 +206,8 @@ export class AppShellComponent {
     if (user) {
       await this.supabase.updateLoginState(user.id, false);
     }
+    // Clear transient UI states that should not persist across login sessions
+    try { sessionStorage.removeItem('product.list.state.v1'); } catch {}
     await this.supabase.signOut();
     this.router.navigate(['/login']);
   }

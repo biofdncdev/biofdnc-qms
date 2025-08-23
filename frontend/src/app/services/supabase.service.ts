@@ -555,16 +555,50 @@ export class SupabaseService {
   async quickSearchProducts(keyword: string){
     const kw = (keyword||'').trim();
     if (!kw) return { data: [] as any[] } as any;
+    const words = kw.split(/\s+/).map(s=>s.trim()).filter(Boolean);
+    const cols = ['product_code','name_kr','name_en','cas_no','spec','specification','keywords_alias'];
+    // Build OR superset across all words and columns
+    const makeGroup = (w:string)=> cols.map(c=> `${c}.ilike.*${w}*`).join(',');
+    const logic = `or(${words.map(w=> makeGroup(w)).join(',')})`;
     const { data } = await this.ensureClient()
       .from('products')
-      .select('id, product_code, name_kr, spec, specification')
-      .or(`product_code.ilike.*${kw}*,name_kr.ilike.*${kw}*`)
-      .limit(20) as any;
-    return { data: Array.isArray(data)? data: [] } as any;
+      .select('id, product_code, name_kr, name_en, cas_no, spec, specification, keywords_alias')
+      .or(logic)
+      .limit(200) as any;
+    const rows = Array.isArray(data) ? data : [];
+    // Client-side AND filter: all tokens must be included in concatenated searchable string
+    const filtered = rows.filter((r:any)=>{
+      const source = [r.product_code,r.name_kr,r.name_en,r.cas_no,r.spec,r.specification,r.keywords_alias].map((x:any)=> String(x||'')).join(' ').toLowerCase();
+      return words.every(w => source.includes(w.toLowerCase()));
+    });
+    return { data: filtered.slice(0,20) } as any;
   }
   async getProduct(id: string){ return this.ensureClient().from('products').select('*').eq('id', id).single(); }
   async upsertProduct(row: any){ return this.ensureClient().from('products').upsert(row, { onConflict: 'id' }).select('*').single(); }
   async deleteProduct(id: string){ return this.ensureClient().from('products').delete().eq('id', id); }
+
+  // Product verification logs (persisted in products.verify_logs JSONB)
+  async getProductVerifyLogs(id: string){
+    try{
+      const { data, error } = await this.ensureClient().from('products').select('verify_logs').eq('id', id).single();
+      if (error) throw error;
+      const logs = (data && (data as any).verify_logs) || [];
+      return Array.isArray(logs) ? logs : [];
+    }catch(e){
+      console.warn('getProductVerifyLogs failed (column may not exist yet); falling back to empty', e);
+      return [] as any[];
+    }
+  }
+  async setProductVerifyLogs(id: string, logs: Array<{ user: string; time: string }>){
+    try{
+      const { error } = await this.ensureClient().from('products').update({ verify_logs: logs }).eq('id', id);
+      if (error) throw error;
+      return true;
+    }catch(e){
+      console.warn('setProductVerifyLogs failed (column may not exist yet); ignoring', e);
+      return false;
+    }
+  }
 
   // Product compositions
   async listProductCompositions(product_id: string){

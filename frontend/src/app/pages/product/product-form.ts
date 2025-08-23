@@ -14,12 +14,10 @@ import { SupabaseService } from '../../services/supabase.service';
       <h2>Product <span class="sub">품목등록</span></h2>
     </div>
 
-    <!-- 탭: 일반사항/부가정보/불순물/조성성분/첨부파일 -->
+    <!-- 탭: 조성성분/RMI -->
     <nav class="tabs">
       <button class="tab" [class.active]="activeTab==='composition'" (click)="activeTab='composition'">조성성분</button>
-      <button class="tab" [class.active]="activeTab==='extra'" (click)="activeTab='extra'">부가정보</button>
-      <button class="tab" [class.active]="activeTab==='impurity'" (click)="activeTab='impurity'">불순물 또는 잔류물질</button>
-      <button class="tab" [class.active]="activeTab==='files'" (click)="activeTab='files'">첨부파일</button>
+      <button class="tab" [class.active]="activeTab==='extra'" (click)="activeTab='extra'">RMI</button>
     </nav>
 
 
@@ -31,8 +29,8 @@ import { SupabaseService } from '../../services/supabase.service';
           <div class="grid-ro">
             <div class="field"><label>등록상태</label><div class="ro-display">{{ model.item_status }}</div></div>
             <div class="field"><label>품목자산분류</label><div class="ro-display">{{ model.asset_category }}</div></div>
-            <div class="field"><label>품번</label><div class="ro-display">{{ model.product_code }}</div></div>
-            <div class="field"><label>품명</label><div class="ro-display">{{ model.name_kr }}</div></div>
+            <div class="field key"><label>품번</label><div class="ro-display">{{ model.product_code }}</div></div>
+            <div class="field key"><label>품명</label><div class="ro-display">{{ model.name_kr }}</div></div>
             <div class="field"><label>영문명</label><div class="ro-display">{{ model.name_en }}</div></div>
             <div class="field"><label>규격</label><div class="ro-display">{{ model.spec }}</div></div>
             <div class="field"><label>CAS</label><div class="ro-display">{{ model.cas_no }}</div></div>
@@ -45,7 +43,7 @@ import { SupabaseService } from '../../services/supabase.service';
           </div>
           <div class="product-picker">
             <label class="picker-label">품목 선택</label>
-            <input class="picker-input" [(ngModel)]="productQuery" (input)="debouncedProductSearch()" (keydown.arrowDown)="moveProductPointer(1)" (keydown.arrowUp)="moveProductPointer(-1)" (keydown.enter)="onProductEnter($event)" (keydown.escape)="onProductEsc($event)" placeholder="품번/품명 검색" />
+            <input class="picker-input" [(ngModel)]="productQuery" (keydown.arrowDown)="moveProductPointer(1)" (keydown.arrowUp)="moveProductPointer(-1)" (keydown.enter)="onProductSearchEnter($event)" (keydown.escape)="onProductEsc($event)" placeholder="품번/품명/영문명/CAS/사양/검색어 검색 (공백=AND)" />
             <ul class="picker-list" *ngIf="productResults.length">
               <li *ngFor="let p of productResults; let i = index" [class.selected]="i===productPointer" (click)="pickProduct(p)">{{ p.product_code }} · {{ p.name_kr }} · {{ p.spec || p.specification || '-' }}</li>
             </ul>
@@ -81,8 +79,8 @@ import { SupabaseService } from '../../services/supabase.service';
                 <td class="col-kor">{{ c.korean_name }}</td>
                 <td class="col-cn">{{ c.chinese_name || '' }}</td>
                 <td class="col-cas">{{ c.cas_no || '' }}</td>
-                <td class="col-pct"><input type="number" step="0.01" [(ngModel)]="c.percent" (ngModelChange)="onPercentChange()" /></td>
-                <td class="col-act"><button class="mini" (click)="$event.stopPropagation(); removeRow(c)">삭제</button></td>
+                <td class="col-pct"><input type="number" step="0.01" [(ngModel)]="c.percent" (ngModelChange)="onPercentChange()" (keydown.enter)="navigatePercent($event, i, 1)" (keydown.arrowDown)="navigatePercent($event, i, 1)" (keydown.arrowUp)="navigatePercent($event, i, -1)" /></td>
+                <td class="col-act"><button class="btn mini" (click)="$event.stopPropagation(); removeRow(c)">삭제</button></td>
               </tr>
               <tr *ngIf="compositions.length===0"><td colspan="7" class="empty">성분을 추가해 주세요.</td></tr>
             </tbody>
@@ -115,11 +113,21 @@ import { SupabaseService } from '../../services/supabase.service';
                     <td>{{ r.korean_name }}</td>
                     <td>{{ r.chinese_name || '' }}</td>
                     <td>{{ r.cas_no || '' }}</td>
-                    <td class="col-act"><button class="mini" (click)="addPicked(r)">추가</button></td>
+                    <td class="col-act"><button class="btn mini filled-light" (click)="addPicked(r)">추가</button></td>
                   </tr>
                   <tr *ngIf="pickerRows.length===0"><td colspan="5" class="empty">검색 결과가 없습니다.</td></tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+        <!-- 확인자 영역 -->
+        <div class="verifier">
+          <button class="btn" [disabled]="verifyDisabled()" (click)="confirmComposition()">조성성분 확인</button>
+          <div class="logs">
+            <div class="log-item" *ngFor="let l of verifyLogs; let i = index">
+              {{ i+1 }}차 확인: {{ l.user }} · {{ l.time }}
+              <button class="log-x" *ngIf="isAdmin" title="확인 취소" (click)="removeVerify(i)">×</button>
             </div>
           </div>
         </div>
@@ -143,15 +151,19 @@ import { SupabaseService } from '../../services/supabase.service';
     .btn.primary{ background:#111827; color:#fff; border-color:#111827; }
     .btn.ghost{ background:#fff; color:#111827; }
     .btn.danger{ background:#fee2e2; color:#b91c1c; border-color:#fecaca; font-weight:700; }
+    .mini{ height:24px; padding:0 8px; border-radius:6px; font-weight:700; }
+    .filled-light{ background:#eef2ff; border-color:#c7d2fe; color:#111827; }
     .form-body{ border:none; border-radius:12px; padding:8px; margin-bottom:10px; }
     /* 상단 참조 정보: 최대한 콤팩트 */
     .form-body.ro{ font-size:12px; }
-    .form-body.ro .grid-ro{ display:grid; grid-template-columns: repeat(2, minmax(100px, 1fr)); gap:6px 10px; }
+    .form-body.ro .grid-ro{ display:grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap:6px 10px; }
     .grid-ro .col-span-2{ grid-column: 1 / -1; }
     .ro .field{ display:flex; flex-direction:column; gap:4px; }
     .ro .field label{ font-size:11px; color:#6b7280; }
     .ro input, .ro textarea{ height:26px; padding:3px 6px; font-size:12px; }
     .ro .ro-display{ min-height:26px; padding:4px 6px; border:1px solid #e5e7eb; border-radius:8px; background:#f9fafb; font-size:12px; line-height:1.3; white-space:normal; word-break:break-word; color:#6b7280; }
+    /* 강조 표시: 품번/품명 (연한 녹색 계열) */
+    .ro .field.key .ro-display{ background:#f0fdf4; color:#000000; font-weight:400; border-color:#bbf7d0; }
     .ro-note{ margin-top:6px; font-size:11px; color:#6b7280; }
     .row-3{ display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap:10px; align-items:end; }
     .row-1{ display:grid; grid-template-columns:1fr; gap:12px; margin-top:10px; }
@@ -170,8 +182,8 @@ import { SupabaseService } from '../../services/supabase.service';
     .ing-search .results li.hover{ background:#f3f4f6; }
     .ing-search .results .inci{ min-width:200px; font-weight:600; }
     .ing-search .results .kor{ color:#4b5563; }
-    .comp-layout{ display:grid; grid-template-columns: 360px 1fr; gap:30px; align-items:stretch; margin:24px 0 16px; }
-    .left-placeholder{ min-height:420px; max-width:380px; display:flex; }
+    .comp-layout{ display:grid; grid-template-columns: minmax(280px, 360px) 1fr; gap:30px; align-items:stretch; margin:24px 0 16px; }
+    .left-placeholder{ min-height:420px; max-width:100%; display:flex; }
     .left-card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.06); flex:1; }
     .right-main{ min-height:420px; min-width:0; }
     .comp-wrap .toolbar{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
@@ -190,7 +202,7 @@ import { SupabaseService } from '../../services/supabase.service';
     .grid input[type='number']{ width:100%; box-sizing:border-box; padding:4px 6px; }
     .table-scroll{ max-height:60vh; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; }
     .table-scroll.small{ max-height:50vh; }
-    table tfoot .sum{ text-align:right; font-weight:700; }
+    table tfoot .sum{ text-align:right; font-weight:400; }
     table tfoot .sum.ok{ color:#059669; }
     table tfoot .sum.bad{ color:#b91c1c; }
     tr.selected{ background:#f0f9ff; }
@@ -208,6 +220,20 @@ import { SupabaseService } from '../../services/supabase.service';
     .product-picker .picker-list li{ padding:6px 8px; cursor:pointer; }
     .product-picker .picker-list li.selected{ background:#eef6ff; }
     .product-picker .picker-list li:hover{ background:#f3f4f6; }
+    /* Responsive tweaks */
+    @media (max-width: 1024px){
+      .comp-layout{ grid-template-columns: 320px 1fr; gap:20px; }
+    }
+    @media (max-width: 820px){
+      .comp-layout{ grid-template-columns: 1fr; }
+      .left-placeholder{ max-width: none; }
+      .form-body.ro .grid-ro{ grid-template-columns: 1fr; }
+    }
+    .verifier{ margin-top:10px; display:flex; align-items:center; gap:12px; }
+    .verifier .logs{ color:#6b7280; font-size:11px; }
+    .verifier .log-item{ position:relative; padding-right:14px; }
+    .verifier .log-x{ margin-left:6px; border:none; background:transparent; color:#9ca3af; cursor:pointer; font-size:12px; line-height:1; padding:0 2px; }
+    .verifier .log-x:hover{ color:#ef4444; }
   `]
 })
 export class ProductFormComponent implements OnInit {
@@ -246,11 +272,14 @@ export class ProductFormComponent implements OnInit {
   dragging = false; private dragOffsetX = 0; private dragOffsetY = 0;
 
   constructor(private route: ActivatedRoute, private router: Router, private supabase: SupabaseService) {}
+  isAdmin = false;
   async ngOnInit(){
     const id = this.route.snapshot.queryParamMap.get('id');
     if (id) {
       this.id.set(id);
       const { data } = await this.supabase.getProduct(id);
+      // role check for admin-only actions
+      try{ const u = await this.supabase.getCurrentUser(); if (u){ const prof = await this.supabase.getUserProfile(u.id); this.isAdmin = (prof?.data?.role === 'admin'); } }catch{ this.isAdmin = false; }
       this.model = data || {};
       this.meta = {
         created_at: data?.created_at,
@@ -269,6 +298,8 @@ export class ProductFormComponent implements OnInit {
         cas_no: (c.ingredient && c.ingredient.cas_no) || '',
       }));
       this.ingredientSuggest = this.compositions.map(()=>[]);
+      // Load persisted verification state
+      this.loadVerifyState();
     }
   }
   addComposition(){ this.compositions.push({ ingredient_id: '', percent: null, note: '' }); }
@@ -349,6 +380,8 @@ export class ProductFormComponent implements OnInit {
   moveSearchPointer(delta:number){ const max = this.ingPage().length; this.pointer = Math.max(0, Math.min(max-1, this.pointer + delta)); }
   pickPointer(){ const row = this.ingPage()[this.pointer]; if (row) this.addIngredientToComposition(row); }
   addIngredientToComposition(row: { id: string; inci_name: string; korean_name?: string }){
+    // Prevent duplicate ingredient rows by ingredient_id
+    if (this.compositions.some(c => c.ingredient_id === row.id)) return;
     this.compositions.push({ ingredient_id: row.id, percent: null, note: '', inci_name: row.inci_name, korean_name: row.korean_name||'' });
     setTimeout(()=>{
       const inputs = Array.from(document.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
@@ -490,6 +523,21 @@ export class ProductFormComponent implements OnInit {
   removeRow(row:any){ this.compositions = this.compositions.filter(r => r !== row); if (this.selectedComp===row) this.selectedComp=null; }
   removeSelected(){ if (!this.selectedComp) return; this.compositions = this.compositions.filter(r => r !== this.selectedComp); this.selectedComp = null; }
   onPercentChange(){ this.saved = false; }
+  navigatePercent(ev: KeyboardEvent, rowIndex: number, delta: number){
+    if (ev?.preventDefault) ev.preventDefault();
+    const inputs = Array.from(document.querySelectorAll('td.col-pct input[type="number"]')) as HTMLInputElement[];
+    // inputs are in row order; find index of current input and move by delta
+    const cur = ev.target as HTMLInputElement;
+    const idx = inputs.indexOf(cur);
+    let nextIndex = -1;
+    if (idx !== -1){ nextIndex = Math.max(0, Math.min(inputs.length-1, idx + delta)); }
+    else {
+      // fallback: compute by row index
+      nextIndex = Math.max(0, Math.min(inputs.length-1, rowIndex + delta));
+    }
+    const target = inputs[nextIndex];
+    if (target) target.focus();
+  }
 
   // Product search/pick handlers
   private productTimer: any = null;
@@ -515,17 +563,33 @@ export class ProductFormComponent implements OnInit {
   // Keyboard helpers for product picker
   moveProductPointer(delta:number){ const max = this.productResults.length; if (!max) return; this.productPointer = Math.max(0, Math.min(max-1, this.productPointer + delta)); }
   onProductEnter(ev:any){ if (ev?.preventDefault) ev.preventDefault(); const row = this.productResults[this.productPointer]; if (row) this.pickProduct(row); }
+  onProductSearchEnter(ev:any){ if (ev?.preventDefault) ev.preventDefault(); this.runProductSearch(); }
   onProductEsc(ev:any){ if (ev?.preventDefault) ev.preventDefault(); this.productQuery = ''; this.productResults = []; this.productPointer = 0; }
 
   async saveCompositions(){
     if (!this.id()) { alert('품목이 선택되지 않았습니다. 좌측에서 품목을 검색하여 선택해 주세요.'); this.saved = false; return; }
     try{
+      // 1) Build latest percent per ingredient and identify existing rows by ingredient_id
+      const latestPercent: Record<string, number> = {};
+      const existingByIngredient: Record<string, string> = {}; // ingredient_id -> composition id
       for (const c of this.compositions){
-        if (c.id){ await this.supabase.updateProductComposition(c.id, { percent: Number(c.percent)||0 }); }
-        else if (c.ingredient_id){ await this.supabase.addProductComposition({ product_id: this.id()!, ingredient_id: c.ingredient_id, percent: Number(c.percent)||0 }); }
+        if (c.ingredient_id){ latestPercent[c.ingredient_id] = Number(c.percent)||0; }
+        if (c.id && c.ingredient_id){ existingByIngredient[c.ingredient_id] = c.id as any; }
+      }
+      // 2) Apply updates to existing rows first
+      for (const [ingredientId, compId] of Object.entries(existingByIngredient)){
+        const pct = latestPercent[ingredientId] ?? 0;
+        await this.supabase.updateProductComposition(compId, { percent: pct });
+      }
+      // 3) Insert only for ingredients that don't already exist
+      const pid = this.id()!;
+      for (const [ingredientId, pct] of Object.entries(latestPercent)){
+        if (!existingByIngredient[ingredientId]){
+          await this.supabase.addProductComposition({ product_id: pid, ingredient_id: ingredientId, percent: pct });
+        }
       }
       // Re-fetch compositions sorted by percent desc
-      const { data: comps } = await this.supabase.listProductCompositions(this.id()!) as any;
+      const { data: comps } = await this.supabase.listProductCompositions(pid) as any;
       const mapped = (comps || []).map((c:any)=>({
         ...c,
         inci_name: (c.ingredient && c.ingredient.inci_name) || '',
@@ -535,8 +599,54 @@ export class ProductFormComponent implements OnInit {
       mapped.sort((a:any,b:any)=> (Number(b.percent)||0) - (Number(a.percent)||0));
       this.compositions = mapped as any;
       this.saved = true;
+      // After successful save, persist verification logs to DB as-is
+      try{ await this.supabase.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
+      // 저장 이후 확인 버튼을 다시 활성화
+      this.lastVerifiedAt = null;
     }catch{ this.saved = false; }
   }
+
+  // 확인 로그 처리
+  verifyLogs: Array<{ user: string; time: string }> = [];
+  private lastVerifiedAt: string | null = null;
+  verifyDisabled(){ return this.lastVerifiedAt !== null; }
+  async confirmComposition(){
+    try{
+      const user = await this.supabase.getCurrentUser();
+      const name = user ? (user.email || (user as any).user_metadata?.name || user.id || 'user') : 'anonymous';
+      const now = new Date();
+      const pad = (n:number)=> String(n).padStart(2,'0');
+      const time = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      this.verifyLogs = [...this.verifyLogs, { user: name, time }];
+      this.lastVerifiedAt = time;
+      this.saveVerifyState();
+      const pid = this.id(); if (pid) try{ await this.supabase.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
+    }catch{}
+  }
+  removeVerify(index:number){
+    if (index < 0 || index >= this.verifyLogs.length) return;
+    this.verifyLogs = this.verifyLogs.filter((_,i)=> i !== index);
+    // If there is any log left, keep disabled state; otherwise enable button
+    this.lastVerifiedAt = this.verifyLogs.length ? (this.verifyLogs[this.verifyLogs.length-1].time) : null;
+    this.saveVerifyState();
+    const pid = this.id(); if (pid) try{ this.supabase.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
+  }
+
+  // Persist verification state per product (localStorage, survives logout/browser restarts)
+  private verifyKey(){ const pid = this.id(); return pid ? `product.verify.${pid}` : null; }
+  private async loadVerifyState(){
+    try{
+      const key=this.verifyKey(); if(!key) return;
+      // Prefer DB logs when available
+      const pid = this.id();
+      if (pid){
+        const dbLogs = await this.supabase.getProductVerifyLogs(pid);
+        if (Array.isArray(dbLogs) && dbLogs.length){ this.verifyLogs = dbLogs; this.lastVerifiedAt = null; return; }
+      }
+      const raw=localStorage.getItem(key); if(!raw) return; const s=JSON.parse(raw); this.verifyLogs = Array.isArray(s?.logs)? s.logs: []; this.lastVerifiedAt = s?.lastVerifiedAt || null;
+    }catch{}
+  }
+  private saveVerifyState(){ try{ const key=this.verifyKey(); if(!key) return; const payload = { logs: this.verifyLogs, lastVerifiedAt: this.lastVerifiedAt }; localStorage.setItem(key, JSON.stringify(payload)); }catch{} }
 }
 
 
