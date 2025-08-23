@@ -1,10 +1,11 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TabService } from '../../services/tab.service';
 import { SupabaseService } from '../../services/supabase.service';
-import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
+import { DragDropModule, CdkDragDrop, moveItemInArray, CdkDragMove } from '@angular/cdk/drag-drop';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 
 
 type IngredientRow = { [key: string]: any } & {
@@ -17,7 +18,7 @@ type IngredientRow = { [key: string]: any } & {
 @Component({
   selector: 'app-ingredient-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, DragDropModule],
+  imports: [CommonModule, FormsModule, DragDropModule, ScrollingModule],
   template: `
   <div class="page" (click)="showColMenu=false">
     <header class="top top-sticky">
@@ -44,8 +45,8 @@ type IngredientRow = { [key: string]: any } & {
               <button class="mini" (click)="selectAllCols()">모두 선택</button>
               <button class="mini" (click)="clearAllCols()">모두 해제</button>
             </div>
-            <div class="menu-list">
-              <label class="menu-item" *ngFor="let c of allColumns">
+            <div class="menu-list" cdkDropList (cdkDropListDropped)="onReorderMenu($event)">
+              <label class="menu-item" *ngFor="let c of orderedMenuColumns(); let i = index" cdkDrag>
                 <input type="checkbox" [checked]="isVisible(c)" (change)="setVisible(c, $event.target.checked)" />
                 <span>{{ headerLabel(c) }}</span>
               </label>
@@ -67,11 +68,11 @@ type IngredientRow = { [key: string]: any } & {
     </section>
 
     <section class="table">
-      <div class="table-wrap" (wheel)="onWheel($event)">
+      <div class="table-wrap" cdkScrollable (wheel)="onWheel($event)" #tableWrap>
         <table class="wide compact">
           <thead>
             <tr cdkDropList cdkDropListOrientation="horizontal" (cdkDropListDropped)="onReorder($event)">
-              <th *ngFor="let c of visibleColumns()" cdkDrag [ngStyle]="getColStyle(c)" [class]="'col-'+c">
+              <th *ngFor="let c of visibleColumns(); let i = index" cdkDrag cdkDragLockAxis="x" (cdkDragStarted)="onDragStart(i)" (cdkDragMoved)="onDragMove($event)" (cdkDragEnded)="onDragEnd()" [ngStyle]="getColStyle(c)" [class]="'col-'+c">
                 {{ headerLabel(c) }}
                 <span class="resize-handle" (mousedown)="startResize($event, c)"></span>
               </th>
@@ -119,7 +120,11 @@ type IngredientRow = { [key: string]: any } & {
   .col-picker .menu-head .spacer{ flex:1; }
   .col-picker .mini{ height:24px; padding:0 8px; border-radius:6px; border:1px solid #e5e7eb; background:#fff; font-size:11px; cursor:pointer; }
   .col-picker .menu-list{ display:flex; flex-direction:column; gap:6px; }
-  .col-picker .menu-item{ display:flex; align-items:center; gap:8px; font-size:12px; }
+  .col-picker .menu-item{ display:flex; align-items:center; gap:8px; font-size:12px; padding:6px 8px; border-radius:8px; border:1px solid transparent; background:#fff; }
+  /* Drag & drop visuals for column menu */
+  .col-picker .menu-list.cdk-drop-list-dragging .menu-item{ transition: transform .18s ease; }
+  .col-picker .menu-item.cdk-drag-preview{ box-shadow:0 10px 24px rgba(0,0,0,0.18); border-color:#93c5fd; background:#f8fbff; transform:rotate(1deg); pointer-events:none; }
+  .col-picker .menu-item.cdk-drag-placeholder{ opacity:0; }
 
   .filters{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; margin:14px 0 18px; }
   .filters-sticky{ position:sticky; top:60px; z-index:10; }
@@ -170,6 +175,9 @@ export class IngredientListComponent implements OnInit {
   private readonly storageKey = 'ingredient.columns.v2';
   private colWidths: Record<string, number | undefined> = {};
   private resizing: { col: string; startX: number; startW: number } | null = null;
+  @ViewChild('tableWrap') tableWrapRef!: ElementRef<HTMLDivElement>;
+  private autoScrollInterval: any = null;
+  private dragStartIndex: number | null = null;
   hoverId: string | null = null;
   selectedId: string | null = null;
 
@@ -288,13 +296,54 @@ export class IngredientListComponent implements OnInit {
 
   onReorder(event: CdkDragDrop<string[]>) {
     const vis = this.visibleColumns();
-    const moved = vis[event.previousIndex];
-    const target = vis[event.currentIndex];
+    const prevIndex = typeof event.previousIndex === 'number' ? event.previousIndex : (this.dragStartIndex ?? 0);
+    const currIndex = typeof event.currentIndex === 'number' ? event.currentIndex : prevIndex;
+    const moved = vis[prevIndex];
+    const target = vis[currIndex];
     const from = this.columns.indexOf(moved);
     const to = this.columns.indexOf(target);
     moveItemInArray(this.columns, from, to);
     this.saveLayout();
+    this.dragStartIndex = null;
   }
+
+  // Keep menu list order in sync with table left-to-right order
+  orderedMenuColumns(){
+    const order = this.columns.slice();
+    const set = new Set(order);
+    for (const c of this.allColumns){ if (!set.has(c)) order.push(c); }
+    return order.filter(c => this.allColumns.includes(c));
+  }
+
+  onReorderMenu(e: CdkDragDrop<string[]>) {
+    const ordered = this.orderedMenuColumns();
+    const moved = ordered[e.previousIndex];
+    const target = ordered[e.currentIndex];
+    const from = this.columns.indexOf(moved);
+    const to = this.columns.indexOf(target);
+    if (from >= 0 && to >= 0 && from !== to){
+      moveItemInArray(this.columns, from, to);
+      this.saveLayout();
+    }
+  }
+
+  onDragStart(i:number){ this.dragStartIndex = i; }
+  onDragMove(event: CdkDragMove){
+    const wrap = this.tableWrapRef?.nativeElement; if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const x = event.pointerPosition.x;
+    const edge = 40; // px
+    const speed = 20; // px per tick
+    let dx = 0;
+    if (x < rect.left + edge) dx = -speed;
+    else if (x > rect.right - edge) dx = speed;
+    if (dx !== 0){
+      if (!this.autoScrollInterval){ this.autoScrollInterval = setInterval(()=>{ wrap.scrollLeft += dx; }, 16); }
+    } else {
+      this.onDragEnd();
+    }
+  }
+  onDragEnd(){ if (this.autoScrollInterval){ clearInterval(this.autoScrollInterval); this.autoScrollInterval = null; } }
 
   getColStyle(col: string){
     const w = this.colWidths[col];

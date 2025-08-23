@@ -126,7 +126,11 @@ type ProductRow = { [key:string]: any } & {
   .col-picker .menu-head .spacer{ flex:1; }
   .col-picker .mini{ height:24px; padding:0 8px; border-radius:6px; border:1px solid #e5e7eb; background:#fff; font-size:11px; cursor:pointer; }
   .col-picker .menu-list{ display:flex; flex-direction:column; gap:6px; }
-  .col-picker .menu-item{ display:flex; align-items:center; gap:8px; font-size:12px; }
+  .col-picker .menu-item{ display:flex; align-items:center; gap:8px; font-size:12px; padding:6px 8px; border-radius:8px; border:1px solid transparent; background:#fff; }
+  /* Drag & drop visuals for column menu */
+  .col-picker .menu-list.cdk-drop-list-dragging .menu-item{ transition: transform .18s ease; }
+  .col-picker .menu-item.cdk-drag-preview{ box-shadow:0 10px 24px rgba(0,0,0,0.18); border-color:#93c5fd; background:#f8fbff; transform:rotate(1deg); pointer-events:none; }
+  .col-picker .menu-item.cdk-drag-placeholder{ opacity:0; }
   .filters-sticky{ position:sticky; top:60px; z-index:5; }
   .grid{ display:grid; grid-template-columns:64px 1fr 52px 120px; gap:8px; align-items:center; }
   .grid input, select{ height:30px; padding:4px 6px; border:1px solid #e5e7eb; border-radius:8px; font-size:12px; }
