@@ -61,7 +61,7 @@ import { SupabaseService } from '../../services/supabase.service';
           <button class="btn" (click)="saveCompositions()">저장</button>
           <button class="btn primary" (click)="openPicker()">성분 추가</button>
         </div>
-        <div class="table-scroll">
+        <div class="table-scroll" #compTableRef>
           <table class="grid">
             <thead>
               <tr>
@@ -97,8 +97,8 @@ import { SupabaseService } from '../../services/supabase.service';
 
         <!-- 피커 모달 -->
         <div class="modal-backdrop" *ngIf="pickerOpen" (click)="closePicker()"></div>
-        <div class="modal" *ngIf="pickerOpen" (click)="$event.stopPropagation()">
-          <div class="modal-head">
+        <div class="modal" *ngIf="pickerOpen" (click)="$event.stopPropagation()" [style.top.px]="modalTop" [style.left.px]="modalLeft" [style.transform]="'none'">
+          <div class="modal-head" (mousedown)="startDrag($event)">
             <b>성분 선택</b>
             <div class="spacer"></div>
           </div>
@@ -237,6 +237,9 @@ export class ProductFormComponent implements OnInit {
   // Product picker
   productQuery = '';
   productResults: Array<{ id: string; product_code: string; name_kr?: string; spec?: string; specification?: string }> = [];
+  modalTop = 0;
+  modalLeft = Math.round(window.innerWidth/2 - 460); // 920px 모달 가정, 중앙 정렬 좌표로 시작
+  dragging = false; private dragOffsetX = 0; private dragOffsetY = 0;
 
   constructor(private route: ActivatedRoute, private router: Router, private supabase: SupabaseService) {}
   async ngOnInit(){
@@ -349,7 +352,52 @@ export class ProductFormComponent implements OnInit {
     setTimeout(()=>{
       const modalInput = document.querySelector('.modal input') as HTMLInputElement | null;
       modalInput?.focus();
+      this.updateModalTop();
     }, 0);
+  }
+  private updateModalTop(){
+    try{
+      const table = (document.querySelector('.table-scroll') as HTMLElement);
+      if (table){
+        const rect = table.getBoundingClientRect();
+        const desired = rect.bottom + 50; // 50px 아래
+        // Clamp to viewport bottom with small margin
+        const maxTop = Math.max(10, window.innerHeight - 100);
+        this.modalTop = Math.min(desired, maxTop);
+      } else { this.modalTop = 200; }
+    }catch{ this.modalTop = 200; }
+  }
+
+  // Drag handlers for modal
+  startDrag(ev: MouseEvent){
+    ev.preventDefault();
+    this.dragging = true;
+    const modal = document.querySelector('.modal') as HTMLElement | null;
+    if (modal){
+      const rect = modal.getBoundingClientRect();
+      this.dragOffsetX = ev.clientX - rect.left;
+      this.dragOffsetY = ev.clientY - rect.top;
+    } else { this.dragOffsetX = 0; this.dragOffsetY = 0; }
+    const move = (e: MouseEvent) => {
+      if (!this.dragging) return;
+      // viewport 내에서만 이동하도록 보정
+      const newLeft = e.clientX - this.dragOffsetX;
+      const newTop = e.clientY - this.dragOffsetY;
+      const modal = document.querySelector('.modal') as HTMLElement | null;
+      const width = modal?.offsetWidth || 920;
+      const height = modal?.offsetHeight || 300;
+      const minLeft = 0; const maxLeft = window.innerWidth - width;
+      const minTop = 0; const maxTop = window.innerHeight - height;
+      this.modalLeft = Math.max(minLeft, Math.min(maxLeft, newLeft));
+      this.modalTop = Math.max(minTop, Math.min(maxTop, newTop));
+    };
+    const up = () => {
+      this.dragging = false;
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
   }
   closePicker(){ this.pickerOpen = false; }
   async runPickerSearch(){
