@@ -1,6 +1,7 @@
 import { Component, OnInit, signal, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 import { Router } from '@angular/router';
 import { SupabaseService } from '../../services/supabase.service';
 import { DragDropModule, CdkDragDrop, moveItemInArray, CdkDragMove } from '@angular/cdk/drag-drop';
@@ -23,7 +24,7 @@ type ProductRow = { [key:string]: any } & {
 @Component({
   selector: 'app-product-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, DragDropModule],
+  imports: [CommonModule, FormsModule, DragDropModule, ScrollingModule],
   template: `
   <div class="page" (click)="showColMenu=false">
     <header class="top top-sticky">
@@ -73,7 +74,7 @@ type ProductRow = { [key:string]: any } & {
     </section>
 
     <section class="table">
-      <div class="table-wrap" (wheel)="onWheel($event)" #tableWrap>
+      <div class="table-wrap" cdkScrollable (wheel)="onWheel($event)" #tableWrap>
         <table class="wide compact">
           <thead>
             <tr cdkDropList cdkDropListOrientation="horizontal" (cdkDropListDropped)="onReorder($event)">
@@ -202,7 +203,7 @@ export class ProductListComponent implements OnInit {
     main_spec: '대표규격',
     spec: '규격',
     name_en: '영문명',
-    remarks: '비고',
+    remarks: '품목설명',
     unit: '기준단위',
     item_subdivision: '세부품목',
     keywords_alias: '검색어(이명)',
