@@ -1,9 +1,9 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { SupabaseService } from '../../services/supabase.service';
-import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
+import { DragDropModule, CdkDragDrop, moveItemInArray, CdkDragMove } from '@angular/cdk/drag-drop';
 
 type ProductRow = { [key:string]: any } & {
   id: string;
@@ -50,8 +50,8 @@ type ProductRow = { [key:string]: any } & {
               <button class="mini" (click)="selectAllCols()">모두 선택</button>
               <button class="mini" (click)="clearAllCols()">모두 해제</button>
             </div>
-            <div class="menu-list">
-              <label class="menu-item" *ngFor="let c of allColumns">
+            <div class="menu-list" cdkDropList (cdkDropListDropped)="onReorderMenu($event)">
+              <label class="menu-item" *ngFor="let c of orderedMenuColumns(); let i = index" cdkDrag>
                 <input type="checkbox" [checked]="isVisible(c)" (change)="setVisible(c, $event.target.checked)" />
                 <span>{{ headerLabel(c) }}</span>
               </label>
@@ -73,11 +73,11 @@ type ProductRow = { [key:string]: any } & {
     </section>
 
     <section class="table">
-      <div class="table-wrap" (wheel)="onWheel($event)">
+      <div class="table-wrap" (wheel)="onWheel($event)" #tableWrap>
         <table class="wide compact">
           <thead>
             <tr cdkDropList cdkDropListOrientation="horizontal" (cdkDropListDropped)="onReorder($event)">
-              <th *ngFor="let c of visibleColumns()" cdkDrag [ngStyle]="getColStyle(c)" [class]="'col-'+c">
+              <th *ngFor="let c of visibleColumns(); let i = index" cdkDrag cdkDragLockAxis="x" (cdkDragStarted)="onDragStart(i)" (cdkDragMoved)="onDragMove($event)" (cdkDragEnded)="onDragEnd()" [ngStyle]="getColStyle(c)" [class]="'col-'+c">
                 {{ headerLabel(c) }}
                 <span class="resize-handle" (mousedown)="startResize($event, c)"></span>
               </th>
@@ -149,6 +149,9 @@ export class ProductListComponent implements OnInit {
   rows = signal<ProductRow[]>([]);
   loading = false; page = 1; pageSize = 15; total = 0; pages = 1;
   keyword = ''; keywordOp: 'AND' | 'OR' = 'AND';
+  @ViewChild('tableWrap') tableWrapRef!: ElementRef<HTMLDivElement>;
+  private autoScrollInterval: any = null;
+  private dragStartIndex: number | null = null;
   columns: string[] = []; allColumns: string[] = []; extraCols: string[] = [];
   // 기본 표시 열: 품목자산분류, 품번, 품명
   private readonly baseColumns = [
@@ -300,6 +303,32 @@ export class ProductListComponent implements OnInit {
   onAdd(){ this.router.navigate(['/app/product/form']); }
   onWheel(ev: WheelEvent){ if (ev.shiftKey) { const wrap = ev.currentTarget as HTMLElement; wrap.scrollLeft += (ev.deltaY || ev.deltaX); ev.preventDefault(); } }
 
+  // Auto-scroll table container while dragging a header near edges
+  onDragMove(event: CdkDragMove){
+    const wrap = this.tableWrapRef?.nativeElement; if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const x = event.pointerPosition.x;
+    const edge = 40; // px threshold
+    const speed = 20; // px per tick
+    // Determine scroll direction
+    let dx = 0;
+    if (x < rect.left + edge) dx = -speed;
+    else if (x > rect.right - edge) dx = speed;
+    if (dx !== 0){
+      if (!this.autoScrollInterval){
+        this.autoScrollInterval = setInterval(()=>{ wrap.scrollLeft += dx; }, 16);
+      }
+    } else {
+      this.onDragEnd();
+    }
+  }
+  onDragEnd(){ if (this.autoScrollInterval){ clearInterval(this.autoScrollInterval); this.autoScrollInterval = null; } }
+  onHeaderEnter(index:number){
+    // When dragging across hidden columns via scroll, ensure current hover index is updated
+    // so that dropping reorders relative to the newly entered header
+    this.dragStartIndex = this.dragStartIndex ?? index;
+  }
+
   headerLabel(col:string){
     // Use dynamic mapping if available
     // Prefer ERP fallback first for stability; DB mapping can override only if meaningful
@@ -312,7 +341,40 @@ export class ProductListComponent implements OnInit {
   isVisible(c:string){ return !this.hiddenCols.has(c); }
   setVisible(c:string, checked:boolean){ if (checked) this.hiddenCols.delete(c); else this.hiddenCols.add(c); this.saveLayout(); }
   toggleColMenu(){ this.showColMenu = !this.showColMenu; } selectAllCols(){ this.hiddenCols.clear(); this.saveLayout(); } clearAllCols(){ this.hiddenCols = new Set(this.allColumns); this.saveLayout(); }
-  onReorder(e:CdkDragDrop<string[]>) { const vis = this.visibleColumns(); const moved = vis[e.previousIndex]; const target = vis[e.currentIndex]; const from = this.columns.indexOf(moved); const to = this.columns.indexOf(target); moveItemInArray(this.columns, from, to); this.saveLayout(); }
+  orderedMenuColumns(){
+    // Show columns in the same order as currently arranged left-to-right
+    const order = this.columns.slice();
+    const set = new Set(order);
+    // Include any columns not in order at the end (safety)
+    for (const c of this.allColumns){ if (!set.has(c)) order.push(c); }
+    return order.filter(c => this.allColumns.includes(c));
+  }
+  onReorderMenu(e: CdkDragDrop<string[]>) {
+    const ordered = this.orderedMenuColumns();
+    const moved = ordered[e.previousIndex];
+    const target = ordered[e.currentIndex];
+    const from = this.columns.indexOf(moved);
+    const to = this.columns.indexOf(target);
+    if (from >= 0 && to >= 0 && from !== to){
+      moveItemInArray(this.columns, from, to);
+      this.saveLayout();
+    }
+  }
+  onReorder(e:CdkDragDrop<string[]>) {
+    const vis = this.visibleColumns();
+    const prevIndex = typeof e.previousIndex === 'number' ? e.previousIndex : (this.dragStartIndex ?? 0);
+    const currIndex = typeof e.currentIndex === 'number' ? e.currentIndex : prevIndex;
+    const moved = vis[prevIndex];
+    const target = vis[currIndex];
+    const from = this.columns.indexOf(moved);
+    const to = this.columns.indexOf(target);
+    if (from >= 0 && to >= 0 && from !== to) {
+      moveItemInArray(this.columns, from, to);
+      this.saveLayout();
+    }
+    this.dragStartIndex = null;
+  }
+  onDragStart(i:number){ this.dragStartIndex = i; }
   getColStyle(col:string){ const w = this.colWidths[col]; return w ? { width: w + 'px', maxWidth: w + 'px' } : {}; }
   startResize(ev:MouseEvent, col:string){ ev.preventDefault(); ev.stopPropagation(); const th=(ev.currentTarget as HTMLElement).closest('th') as HTMLElement|null; const startW = th? th.getBoundingClientRect().width: (this.colWidths[col]||120); this.resizing={col,startX:ev.clientX,startW}; const move=(e:MouseEvent)=>{ if(!this.resizing) return; const dx=e.clientX-this.resizing.startX; this.colWidths[this.resizing.col]=Math.max(10, Math.min(2000, Math.round(this.resizing.startW+dx))); }; const up=()=>{ document.removeEventListener('mousemove',move); document.removeEventListener('mouseup',up); if(this.resizing){ this.saveLayout(); } this.resizing=null; }; document.addEventListener('mousemove',move); document.addEventListener('mouseup',up); }
   private mergeOrder(saved:string[], desired:string[]){ const set=new Set(desired); const kept=saved.filter(c=>set.has(c)); for(const c of desired){ if(!kept.includes(c)) kept.push(c); } return kept; }

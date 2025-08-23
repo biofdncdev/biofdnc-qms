@@ -123,11 +123,45 @@ export class SupabaseService {
     const page = Math.max(1, params?.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params?.pageSize ?? 15));
 
-    // Prefer RPC for robust keyword search (supports commas, dots, unicode)
+    // New unified search logic (same as product list):
+    // - Split by whitespace, ignore blanks, AND-only
+    // - Build server-side AND-of-OR superset across common columns
+    // - Concatenate all fields per row and filter client-side to guarantee correctness
     const kwRaw = params?.keyword || '';
     const kwTrim = kwRaw.trim();
-    const words = kwTrim ? kwTrim.split(/\s+/).map(s => s.trim()).filter(Boolean) : [];
-    const op = (params?.keywordOp || 'AND').toUpperCase() as 'AND' | 'OR';
+    const words = kwTrim ? kwTrim.split(/\s+/).map(s => s.trim()).filter(Boolean).slice(0, 10) : [];
+    const op = 'AND' as const;
+
+    if (words.length > 0) {
+      const from = (page - 1) * pageSize; const to = from + pageSize - 1; // for fallback when needed
+      // Build superset query: AND-of-OR over typical searchable columns
+      const cols = ['inci_name','korean_name','chinese_name','cas_no','scientific_name','function_en','function_kr','einecs_no','old_korean_name','origin_abs','remarks','created_by_name','updated_by_name'];
+      const quotePattern = (w: string) => `"*${String(w).replace(/\"/g, '\\"')}*"`;
+      const makeGroup = (w: string) => cols.map(c => `${c}.ilike.${quotePattern(w)}`).join(',');
+      const logic = `and(${words.map(w => `or(${makeGroup(w)})`).join(',')})`;
+      const MAX_FETCH = 20000;
+      const { data: superset } = await this.ensureClient()
+        .from('ingredients')
+        .select('*')
+        .or(logic)
+        .order('inci_name', { ascending: true })
+        .limit(MAX_FETCH) as any;
+      const rows: any[] = Array.isArray(superset) ? superset : [];
+      const buildText = (row: Record<string, any>) => Object.values(row)
+        .filter(v => typeof v === 'string' || typeof v === 'number')
+        .map(v => String(v))
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+      const filtered = rows.filter(r => {
+        const hay = buildText(r);
+        return words.every(w => hay.includes(w.toLowerCase()));
+      });
+      const start = (page - 1) * pageSize; const end = start + pageSize;
+      return { data: filtered.slice(start, end), count: filtered.length } as any;
+    }
+
+    // No keyword: use default paginated list
 
     try {
       const { data, error } = await this.ensureClient().rpc('ingredients_search', {
@@ -183,7 +217,8 @@ export class SupabaseService {
     const { page, pageSize, words, op } = params;
     // Build OR superset query
     const cols = ['inci_name','korean_name','chinese_name','cas_no','scientific_name','function_en','function_kr','einecs_no','old_korean_name','origin_abs','remarks','created_by_name','updated_by_name'];
-    const makeGroup = (w: string) => cols.map(c => `${c}.ilike.*${w}*`).join(',');
+    const quotePattern = (w: string) => `"*${String(w).replace(/\"/g, '\\"')}*"`;
+    const makeGroup = (w: string) => cols.map(c => `${c}.ilike.${quotePattern(w)}`).join(',');
     const logic = op === 'OR'
       ? `or(${words.map(w => makeGroup(w)).join(',')})`
       : `or(${words.map(w => makeGroup(w)).join(',')})`;
@@ -467,7 +502,7 @@ export class SupabaseService {
     const from = (page - 1) * pageSize; const to = from + pageSize - 1;
     const kw = (params?.keyword || '').trim();
     // Split by whitespace, ignore empty tokens, limit to 5 keywords
-    const words = kw ? kw.split(/\s+/).map(s => s.trim()).filter(Boolean).slice(0, 5) : [];
+    const words = kw ? kw.split(/\s+/).map(s => s.trim()).filter(Boolean).slice(0, 10) : [];
 
     // If no keywords, fall back to normal paginated list
     if (words.length === 0) {
