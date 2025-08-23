@@ -101,7 +101,7 @@ export class ProductFormComponent implements OnInit {
   id = signal<string | null>(null);
   model: any = {};
   meta: any = null;
-  compositions: Array<{ id?: string; product_id?: string; ingredient_id: string; percent?: number | null; note?: string | null; }> = [];
+  compositions: Array<{ id?: string; product_id?: string; ingredient_id: string; percent?: number | null; note?: string | null; inci_name?: string; korean_name?: string }> = [];
   notice = signal<string | null>(null);
   private saveTimer: any = null;
   ingredientSuggest: Array<Array<{ id: string; inci_name: string; korean_name?: string }>> = [];
