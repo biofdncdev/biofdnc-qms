@@ -64,8 +64,8 @@ import { SupabaseService } from '../../services/supabase.service';
         <tbody>
           <tr *ngFor="let c of compositions; let i = index">
             <td class="col-inci">
-              <input [ngModel]="c.inci_name" (ngModelChange)="onInciChange(i, $event)" (input)="onInciInput(i, $event)" placeholder="INCI Name" list="inci-list-{{i}}" />
-              <datalist id="inci-list-{{i}}">
+              <input [ngModel]="c.inci_name" (ngModelChange)="onInciChange(i, $event)" (input)="onInciInput(i, $event)" placeholder="INCI Name" [attr.list]="'inci-list-' + i" />
+              <datalist [id]="'inci-list-' + i">
                 <option *ngFor="let s of ingredientSuggest[i]" [value]="s.inci_name"></option>
               </datalist>
             </td>
