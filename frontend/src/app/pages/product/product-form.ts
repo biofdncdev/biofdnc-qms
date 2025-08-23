@@ -45,9 +45,9 @@ import { SupabaseService } from '../../services/supabase.service';
           </div>
           <div class="product-picker">
             <label class="picker-label">품목 선택</label>
-            <input class="picker-input" [(ngModel)]="productQuery" (input)="debouncedProductSearch()" placeholder="품번/품명 검색" />
+            <input class="picker-input" [(ngModel)]="productQuery" (input)="debouncedProductSearch()" (keydown.arrowDown)="moveProductPointer(1)" (keydown.arrowUp)="moveProductPointer(-1)" (keydown.enter)="onProductEnter($event)" (keydown.escape)="onProductEsc($event)" placeholder="품번/품명 검색" />
             <ul class="picker-list" *ngIf="productResults.length">
-              <li *ngFor="let p of productResults" (click)="pickProduct(p)">{{ p.product_code }} · {{ p.name_kr }} · {{ p.spec || p.specification || '-' }}</li>
+              <li *ngFor="let p of productResults; let i = index" [class.selected]="i===productPointer" (click)="pickProduct(p)">{{ p.product_code }} · {{ p.name_kr }} · {{ p.spec || p.specification || '-' }}</li>
             </ul>
           </div>
         </section>
@@ -206,6 +206,7 @@ import { SupabaseService } from '../../services/supabase.service';
     .product-picker .picker-input{ width:100%; box-sizing:border-box; border:1px solid #e5e7eb; border-radius:8px; padding:6px 8px; font-size:12px; }
     .product-picker .picker-list{ list-style:none; margin:6px 0 0; padding:0; max-height:180px; overflow:auto; border:1px solid #eef2f7; border-radius:8px; }
     .product-picker .picker-list li{ padding:6px 8px; cursor:pointer; }
+    .product-picker .picker-list li.selected{ background:#eef6ff; }
     .product-picker .picker-list li:hover{ background:#f3f4f6; }
   `]
 })
@@ -237,6 +238,7 @@ export class ProductFormComponent implements OnInit {
   // Product picker
   productQuery = '';
   productResults: Array<{ id: string; product_code: string; name_kr?: string; spec?: string; specification?: string }> = [];
+  productPointer = 0;
   modalTop = 0;
   modalLeft = Math.round(window.innerWidth/2 - 460); // 920px 모달 가정, 중앙 정렬 좌표로 시작
   dragging = false; private dragOffsetX = 0; private dragOffsetY = 0;
@@ -442,9 +444,10 @@ export class ProductFormComponent implements OnInit {
   }
   async runProductSearch(){
     const q = (this.productQuery||'').trim();
-    if (!q){ this.productResults = []; return; }
+    if (!q){ this.productResults = []; this.productPointer = 0; return; }
     const { data } = await this.supabase.quickSearchProducts(q);
     this.productResults = data || [];
+    this.productPointer = 0;
   }
   async pickProduct(p: any){
     // load selected product
@@ -453,6 +456,11 @@ export class ProductFormComponent implements OnInit {
       if (data){ this.model = data; this.id.set(p.id); this.saved = true; this.productResults = []; this.productQuery = `${p.product_code} · ${p.name_kr||''}`; }
     }catch{}
   }
+
+  // Keyboard helpers for product picker
+  moveProductPointer(delta:number){ const max = this.productResults.length; if (!max) return; this.productPointer = Math.max(0, Math.min(max-1, this.productPointer + delta)); }
+  onProductEnter(ev:any){ if (ev?.preventDefault) ev.preventDefault(); const row = this.productResults[this.productPointer]; if (row) this.pickProduct(row); }
+  onProductEsc(ev:any){ if (ev?.preventDefault) ev.preventDefault(); this.productQuery = ''; this.productResults = []; this.productPointer = 0; }
 
   async saveCompositions(){
     if (!this.id()) { alert('품목이 선택되지 않았습니다. 좌측에서 품목을 검색하여 선택해 주세요.'); this.saved = false; return; }
