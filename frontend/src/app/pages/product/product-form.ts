@@ -43,7 +43,7 @@ import { SupabaseService } from '../../services/supabase.service';
           </div>
           <div class="product-picker">
             <label class="picker-label">품목 선택</label>
-            <input class="picker-input" [(ngModel)]="productQuery" (keydown.arrowDown)="moveProductPointer(1)" (keydown.arrowUp)="moveProductPointer(-1)" (keydown.enter)="onProductSearchEnter($event)" (keydown.escape)="onProductEsc($event)" placeholder="품번/품명/영문명/CAS/사양/검색어 검색 (공백=AND)" />
+            <input class="picker-input" [(ngModel)]="productQuery" (keydown.arrowDown)="moveProductPointer(1)" (keydown.arrowUp)="moveProductPointer(-1)" (keydown.enter)="onProductEnterOrSearch($event)" (keydown.escape)="onProductEsc($event)" placeholder="품번/품명/영문명/CAS/사양/검색어 검색 (공백=AND)" />
             <ul class="picker-list" *ngIf="productResults.length">
               <li *ngFor="let p of productResults; let i = index" [class.selected]="i===productPointer" (click)="pickProduct(p)">{{ p.product_code }} · {{ p.name_kr }} · {{ p.spec || p.specification || '-' }}</li>
             </ul>
@@ -277,29 +277,7 @@ export class ProductFormComponent implements OnInit {
     const id = this.route.snapshot.queryParamMap.get('id');
     if (id) {
       this.id.set(id);
-      const { data } = await this.supabase.getProduct(id);
-      // role check for admin-only actions
-      try{ const u = await this.supabase.getCurrentUser(); if (u){ const prof = await this.supabase.getUserProfile(u.id); this.isAdmin = (prof?.data?.role === 'admin'); } }catch{ this.isAdmin = false; }
-      this.model = data || {};
-      this.meta = {
-        created_at: data?.created_at,
-        created_by: data?.created_by,
-        created_by_name: data?.created_by_name,
-        updated_at: data?.updated_at,
-        updated_by: data?.updated_by,
-        updated_by_name: data?.updated_by_name,
-      };
-      const { data: comps } = await this.supabase.listProductCompositions(id) as any;
-      // map for new UI fields
-      this.compositions = (comps || []).map((c:any)=>({
-        ...c,
-        inci_name: (c.ingredient && c.ingredient.inci_name) || '',
-        korean_name: (c.ingredient && c.ingredient.korean_name) || '',
-        cas_no: (c.ingredient && c.ingredient.cas_no) || '',
-      }));
-      this.ingredientSuggest = this.compositions.map(()=>[]);
-      // Load persisted verification state
-      this.loadVerifyState();
+      await this.loadProductState(id);
     }
   }
   addComposition(){ this.compositions.push({ ingredient_id: '', percent: null, note: '' }); }
@@ -556,7 +534,7 @@ export class ProductFormComponent implements OnInit {
     // load selected product
     try{
       const { data } = await this.supabase.getProduct(p.id);
-      if (data){ this.model = data; this.id.set(p.id); this.saved = true; this.productResults = []; this.productQuery = `${p.product_code} · ${p.name_kr||''}`; }
+      if (data){ this.model = data; this.id.set(p.id); this.saved = true; this.productResults = []; this.productQuery = `${p.product_code} · ${p.name_kr||''}`; await this.loadProductState(p.id); }
     }catch{}
   }
 
@@ -564,25 +542,42 @@ export class ProductFormComponent implements OnInit {
   moveProductPointer(delta:number){ const max = this.productResults.length; if (!max) return; this.productPointer = Math.max(0, Math.min(max-1, this.productPointer + delta)); }
   onProductEnter(ev:any){ if (ev?.preventDefault) ev.preventDefault(); const row = this.productResults[this.productPointer]; if (row) this.pickProduct(row); }
   onProductSearchEnter(ev:any){ if (ev?.preventDefault) ev.preventDefault(); this.runProductSearch(); }
+  onProductEnterOrSearch(ev:any){
+    if (ev?.preventDefault) ev.preventDefault();
+    if (this.productPointer >= 0 && this.productResults[this.productPointer]){ this.pickProduct(this.productResults[this.productPointer]); return; }
+    this.runProductSearch();
+  }
   onProductEsc(ev:any){ if (ev?.preventDefault) ev.preventDefault(); this.productQuery = ''; this.productResults = []; this.productPointer = 0; }
 
   async saveCompositions(){
     if (!this.id()) { alert('품목이 선택되지 않았습니다. 좌측에서 품목을 검색하여 선택해 주세요.'); this.saved = false; return; }
     try{
-      // 1) Build latest percent per ingredient and identify existing rows by ingredient_id
+      const pid = this.id()!;
+      // 1) Snapshot of DB rows
+      const { data: dbComps } = await this.supabase.listProductCompositions(pid) as any;
+      const dbList: Array<{ id: string; ingredient_id: string }> = (dbComps||[]).map((x:any)=> ({ id: x.id, ingredient_id: x.ingredient_id }));
+      // 2) Build latest percent per ingredient from current UI
       const latestPercent: Record<string, number> = {};
-      const existingByIngredient: Record<string, string> = {}; // ingredient_id -> composition id
+      const existingByIngredient: Record<string, string> = {}; // ingredient_id -> composition id (from UI row)
       for (const c of this.compositions){
         if (c.ingredient_id){ latestPercent[c.ingredient_id] = Number(c.percent)||0; }
         if (c.id && c.ingredient_id){ existingByIngredient[c.ingredient_id] = c.id as any; }
       }
-      // 2) Apply updates to existing rows first
+      // 3) Delete rows that are not in UI anymore, and delete duplicate DB rows per ingredient beyond the one bound to UI
+      const allowedIdByIngredient: Record<string, string|undefined> = { ...existingByIngredient };
+      for (const row of dbList){
+        const inUI = latestPercent[row.ingredient_id] !== undefined;
+        const allowedId = allowedIdByIngredient[row.ingredient_id];
+        if (!inUI || (allowedId && row.id !== allowedId)){
+          await this.supabase.deleteProductComposition(row.id);
+        }
+      }
+      // 4) Apply updates to existing rows that remain
       for (const [ingredientId, compId] of Object.entries(existingByIngredient)){
         const pct = latestPercent[ingredientId] ?? 0;
         await this.supabase.updateProductComposition(compId, { percent: pct });
       }
-      // 3) Insert only for ingredients that don't already exist
-      const pid = this.id()!;
+      // 5) Insert new ingredients that don't exist yet in DB
       for (const [ingredientId, pct] of Object.entries(latestPercent)){
         if (!existingByIngredient[ingredientId]){
           await this.supabase.addProductComposition({ product_id: pid, ingredient_id: ingredientId, percent: pct });
@@ -603,7 +598,36 @@ export class ProductFormComponent implements OnInit {
       try{ await this.supabase.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
       // 저장 이후 확인 버튼을 다시 활성화
       this.lastVerifiedAt = null;
+      this.notice.set('조성성분이 저장되었습니다.'); setTimeout(()=> this.notice.set(null), 1800);
     }catch{ this.saved = false; }
+  }
+
+  private async loadProductState(pid: string){
+    const { data } = await this.supabase.getProduct(pid);
+    // role check for admin-only actions
+    try{ const u = await this.supabase.getCurrentUser(); if (u){ const prof = await this.supabase.getUserProfile(u.id); this.isAdmin = (prof?.data?.role === 'admin'); } }catch{ this.isAdmin = false; }
+    this.model = data || {};
+    this.meta = {
+      created_at: data?.created_at,
+      created_by: data?.created_by,
+      created_by_name: data?.created_by_name,
+      updated_at: data?.updated_at,
+      updated_by: data?.updated_by,
+      updated_by_name: data?.updated_by_name,
+    } as any;
+    const { data: comps } = await this.supabase.listProductCompositions(pid) as any;
+    this.compositions = (comps || []).map((c:any)=>({
+      ...c,
+      inci_name: (c.ingredient && c.ingredient.inci_name) || '',
+      korean_name: (c.ingredient && c.ingredient.korean_name) || '',
+      cas_no: (c.ingredient && c.ingredient.cas_no) || '',
+    }));
+    this.ingredientSuggest = this.compositions.map(()=>[]);
+    try{
+      const logs = await this.supabase.getProductVerifyLogs(pid);
+      this.verifyLogs = Array.isArray(logs) ? logs : [];
+      this.lastVerifiedAt = null;
+    }catch{ this.verifyLogs = []; this.lastVerifiedAt = null; }
   }
 
   // 확인 로그 처리
