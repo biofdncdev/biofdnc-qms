@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, ElementRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -344,6 +344,10 @@ export class IngredientListComponent implements OnInit {
     }
   }
   onDragEnd(){ if (this.autoScrollInterval){ clearInterval(this.autoScrollInterval); this.autoScrollInterval = null; } }
+
+  // Close column menu on ESC
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscCloseMenu(ev: any){ if (this.showColMenu){ this.showColMenu = false; ev.preventDefault?.(); } }
 
   getColStyle(col: string){
     const w = this.colWidths[col];
