@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { Router } from '@angular/router';
+import { TabService } from '../../services/tab.service';
 import { SupabaseService } from '../../services/supabase.service';
 import { DragDropModule, CdkDragDrop, moveItemInArray, CdkDragMove } from '@angular/cdk/drag-drop';
 
@@ -166,6 +167,7 @@ export class ProductListComponent implements OnInit {
   ];
   // 저장 키 버전을 올려 이전 사용자 설정과 분리 (새 기본 표시 열을 강제 적용)
   private readonly storageKey = 'product.columns.v2';
+  private readonly stateKey = 'product.list.state.v1';
   private firstInit = false;
   private colLabelMap = new Map<string,string>();
   private readonly fallbackLabels: Record<string,string> = {
@@ -263,7 +265,7 @@ export class ProductListComponent implements OnInit {
   @ViewChild('menuList') menuListRef!: ElementRef<HTMLDivElement>;
   private menuAutoScrollInterval: any = null;
 
-  constructor(private supabase: SupabaseService, private router: Router) {}
+  constructor(private supabase: SupabaseService, private router: Router, private tabBus: TabService) {}
   ngOnInit(){
     const saved = this.loadSavedLayout();
     this.columns = saved.order.length ? saved.order.slice() : this.baseColumns.slice();
@@ -271,6 +273,9 @@ export class ProductListComponent implements OnInit {
     this.hiddenCols = new Set(saved.hidden || []);
     // 첫 초기화 여부: 사용자가 저장한 레이아웃이 없는 경우
     this.firstInit = (saved.order.length === 0 && (!saved.hidden || saved.hidden.length === 0));
+    // Restore search/page state if present
+    const st = this.loadState();
+    if (st){ this.keyword = st.keyword ?? this.keyword; this.page = st.page ?? this.page; this.pageSize = st.pageSize ?? this.pageSize; this._pendingScroll = st.scroll || null; }
     this.load();
     this.loadColumnLabels();
   }
@@ -298,17 +303,37 @@ export class ProductListComponent implements OnInit {
     this.total = count || 0;
     this.pages = Math.max(1, Math.ceil(this.total / this.pageSize));
     this.loading = false;
+    // Apply pending scroll after render
+    setTimeout(()=>{
+      if (this._pendingScroll){
+        const wrap = this.tableWrapRef?.nativeElement; if (wrap){ wrap.scrollLeft = this._pendingScroll.left||0; wrap.scrollTop = this._pendingScroll.top||0; }
+        this._pendingScroll = null;
+      }
+    }, 0);
+    this.saveState();
   }
-  go(p:number){ this.page = Math.min(Math.max(1,p), this.pages); this.load(); } onPageSize(ps:number){ this.pageSize = Number(ps)||15; this.page=1; this.load(); } reset(){ this.keyword=''; this.keywordOp='AND'; this.page=1; this.pageSize=15; this.load(); }
+  go(p:number){ this.page = Math.min(Math.max(1,p), this.pages); this.saveState(); this.load(); }
+  onPageSize(ps:number){ this.pageSize = Number(ps)||15; this.page=1; this.saveState(); this.load(); }
+  reset(){ this.keyword=''; this.keywordOp='AND'; this.page=1; this.pageSize=15; this.saveState(); this.load(); }
   onKeywordChange(value:string){
     this.keyword = value || '';
     this.page = 1;
     if (/\s$/.test(this.keyword)) { return; }
+    this.saveState();
     this.debouncedLoad();
   }
-  onEscClear(){ this.keyword=''; this.page=1; this.load(); }
-  toggleSelect(id:string){ this.selectedId = this.selectedId===id? null: id; } openEdit(id?:string){ const t = id||this.selectedId; if(!t) return; this.router.navigate(['/app/product/form'], { queryParams: { id: t } }); }
-  onAdd(){ this.router.navigate(['/app/product/form']); }
+  onEscClear(){ this.keyword=''; this.page=1; this.saveState(); this.load(); }
+  toggleSelect(id:string){ this.selectedId = this.selectedId===id? null: id; }
+  openEdit(id?:string){
+    const t = id||this.selectedId; if(!t) return;
+    this.saveState();
+    const navUrl = `/app/product/form?id=${encodeURIComponent(t)}`;
+    this.tabBus.requestOpen('품목등록', '/app/product/form', navUrl);
+  }
+  onAdd(){
+    this.saveState();
+    this.tabBus.requestOpen('품목등록', '/app/product/form', '/app/product/form');
+  }
   onWheel(ev: WheelEvent){ if (ev.shiftKey) { const wrap = ev.currentTarget as HTMLElement; wrap.scrollLeft += (ev.deltaY || ev.deltaX); ev.preventDefault(); } }
 
   // Auto-scroll table container while dragging a header near edges
@@ -413,6 +438,16 @@ export class ProductListComponent implements OnInit {
   private saveLayout(){ const payload={ order:this.columns, widths:this.colWidths, hidden:Array.from(this.hiddenCols)}; try{ localStorage.setItem(this.storageKey, JSON.stringify(payload)); }catch{} }
   private loadSavedLayout(){ try{ const raw=localStorage.getItem(this.storageKey); if(!raw) return { order:[],widths:{},hidden:[] }; const d=JSON.parse(raw); return { order:Array.isArray(d.order)? d.order:[], widths:d.widths||{}, hidden:Array.isArray(d.hidden)? d.hidden:[] }; }catch{ return { order:[],widths:{},hidden:[] }; }
   }
+  // Persist search state across navigation within the session
+  private _pendingScroll: { left:number; top:number } | null = null;
+  private saveState(){
+    try{
+      const wrap = this.tableWrapRef?.nativeElement;
+      const state = { keyword: this.keyword, page: this.page, pageSize: this.pageSize, scroll: { left: wrap?.scrollLeft||0, top: wrap?.scrollTop||0 } };
+      sessionStorage.setItem(this.stateKey, JSON.stringify(state));
+    }catch{}
+  }
+  private loadState(){ try{ const raw=sessionStorage.getItem(this.stateKey); if(!raw) return null; return JSON.parse(raw); }catch{ return null; } }
   // Debounce for live typing
   private debounceTimer:any=null; private debouncedLoad(delayMs:number=300){ if(this.debounceTimer) clearTimeout(this.debounceTimer); this.debounceTimer=setTimeout(()=>this.load(), delayMs); }
 
