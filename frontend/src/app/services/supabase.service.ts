@@ -654,6 +654,55 @@ export class SupabaseService {
     return Array.isArray(data) ? data : [];
   }
 
+  // Document templates (Composition)
+  private compositionTemplatePath = 'composition/template.xlsx';
+  async uploadCompositionTemplate(file: File){
+    const client = this.ensureClient();
+    const { data, error } = await client.storage.from('doc_templates').upload(this.compositionTemplatePath, file, { upsert: true, contentType: file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    if (error) throw error;
+    // Prefer signed URL in case bucket is not public
+    try{
+      const { data: signed } = await client.storage.from('doc_templates').createSignedUrl(this.compositionTemplatePath, 3600);
+      return { path: data.path, url: signed?.signedUrl || client.storage.from('doc_templates').getPublicUrl(this.compositionTemplatePath).data.publicUrl };
+    }catch{
+      const { data: pub } = client.storage.from('doc_templates').getPublicUrl(this.compositionTemplatePath);
+      return { path: this.compositionTemplatePath, url: pub.publicUrl };
+    }
+  }
+  async getCompositionTemplate(){
+    const client = this.ensureClient();
+    try{
+      // Check existence by listing the folder
+      const { data: list } = await client.storage.from('doc_templates').list('composition', { search: 'template.xlsx', limit: 1 });
+      const exists = Array.isArray(list) && list.some(o => (o as any).name === 'template.xlsx');
+      if (!exists) return { exists: false } as any;
+      const { data: signed } = await client.storage.from('doc_templates').createSignedUrl(this.compositionTemplatePath, 3600);
+      return { exists: true, url: signed?.signedUrl || client.storage.from('doc_templates').getPublicUrl(this.compositionTemplatePath).data.publicUrl } as any;
+    }catch{
+      return { exists: false } as any;
+    }
+  }
+  async deleteCompositionTemplate(){
+    const client = this.ensureClient();
+    await client.storage.from('doc_templates').remove([this.compositionTemplatePath]);
+    return { ok: true } as any;
+  }
+
+  // Product document exports (generated Excel/PDF files)
+  async uploadProductExport(blob: Blob, path: string){
+    const client = this.ensureClient();
+    const contentType = (blob as any).type || 'application/octet-stream';
+    const { data, error } = await client.storage.from('product_exports').upload(path, blob, { upsert: true, contentType });
+    if (error) throw error;
+    try{
+      const { data: signed } = await client.storage.from('product_exports').createSignedUrl(path, 3600);
+      return { path: data.path, url: signed?.signedUrl || client.storage.from('product_exports').getPublicUrl(path).data.publicUrl } as any;
+    }catch{
+      const { data: pub } = client.storage.from('product_exports').getPublicUrl(path);
+      return { path: path, url: pub.publicUrl } as any;
+    }
+  }
+
   // Excel sync implementation with diffing and error reporting
   async syncProductsByExcel(payload: { sheet: any[]; headerMap?: Record<string,string> }){
     const rows = payload?.sheet || [];

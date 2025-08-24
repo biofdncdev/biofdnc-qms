@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase.service';
 import { TabService } from '../../services/tab.service';
+// 템플릿의 서식 보존을 위해 exceljs를 동적 import로 사용합니다.
 
 type Row = {
   customer?: string;
@@ -31,7 +32,7 @@ type Row = {
       <div class="spacer"></div>
       <button class="mini edit-btn" (click)="addRow()">행 추가</button>
       <button class="mini edit-btn" (click)="onReset()">초기화</button>
-      <button class="mini warn" (click)="pdfExport()">PDF저장</button>
+      <button class="mini warn" (click)="pdfExport()">PDF 출력</button>
       <button class="mini success" (click)="excelExport()">EXCEL저장</button>
     </header>
 
@@ -50,16 +51,15 @@ type Row = {
             <th class="col-narrow">Composition</th>
             <th class="dim col-narrow">MSDS</th>
             <th class="dim col-narrow">Process</th>
-            <th class="dim col-narrow">Brochure</th>
             <th class="dim col-narrow">RMI</th>
             <th class="col-narrow center">삭제</th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let r of rows; let i = index">
-            <td><textarea #cell rows="1" [(ngModel)]="r.customer" (input)="autoGrow($event)" (keydown.enter)="onEnterRight($event,i,0)" spellcheck="false" autocomplete="off" autocapitalize="none" autocorrect="off"></textarea></td>
-            <td><textarea rows="1" [(ngModel)]="r.delivery_customer" (input)="autoGrow($event)" (keydown.enter)="onEnterRight($event,i,1)" spellcheck="false" autocomplete="off" autocapitalize="none" autocorrect="off"></textarea></td>
-            <td><textarea rows="1" [(ngModel)]="r.product_code" (input)="autoGrow($event)" (blur)="onProductCodeBlur(i)" (keydown.enter)="onEnterOpenSearch($event,i,2)" (dblclick)="openSearch(i,2)" spellcheck="false" autocomplete="off" autocapitalize="none" autocorrect="off"></textarea></td>
+            <td class="wplus20"><textarea #cell rows="1" [(ngModel)]="r.customer" (input)="autoGrow($event)" (keydown.enter)="onEnterRight($event,i,0)" spellcheck="false" autocomplete="off" autocapitalize="none" autocorrect="off"></textarea></td>
+            <td class="wplus20"><textarea rows="1" [(ngModel)]="r.delivery_customer" (input)="autoGrow($event)" (keydown.enter)="onEnterRight($event,i,1)" spellcheck="false" autocomplete="off" autocapitalize="none" autocorrect="off"></textarea></td>
+            <td class="wplus10"><textarea rows="1" [(ngModel)]="r.product_code" (input)="autoGrow($event)" (blur)="onProductCodeBlur(i)" (keydown.enter)="onEnterOpenSearch($event,i,2)" (dblclick)="openSearch(i,2)" spellcheck="false" autocomplete="off" autocapitalize="none" autocorrect="off"></textarea></td>
             <td><textarea rows="1" [(ngModel)]="r.name_kr" (input)="autoGrow($event)" (keydown.enter)="onEnterOpenSearch($event,i,3)" (dblclick)="openSearch(i,3)" spellcheck="false" autocomplete="off" autocapitalize="none" autocorrect="off"></textarea></td>
             <td><textarea rows="1" [(ngModel)]="r.name_en" (input)="autoGrow($event)" (keydown.enter)="onEnterOpenSearch($event,i,4)" (dblclick)="openSearch(i,4)" spellcheck="false" autocomplete="off" autocapitalize="none" autocorrect="off"></textarea></td>
             <td class="center col-narrow"><button class="mini status" [class.ok]="r.verified" [class.no]="!r.verified">{{ r.verified ? 'v' : 'x' }}</button></td>
@@ -68,7 +68,6 @@ type Row = {
             <td class="center col-narrow"><input type="checkbox" [(ngModel)]="r.composition" /></td>
             <td class="center dim col-narrow"><input type="checkbox" disabled [(ngModel)]="r.msds" /></td>
             <td class="center dim col-narrow"><input type="checkbox" disabled [(ngModel)]="r.process" /></td>
-            <td class="center dim col-narrow"><input type="checkbox" disabled [(ngModel)]="r.brochure" /></td>
             <td class="center dim col-narrow"><input type="checkbox" disabled [(ngModel)]="r.rmi" /></td>
             <td class="center col-narrow"><button class="mini danger" (click)="removeRow(i)">삭제</button></td>
           </tr>
@@ -122,10 +121,16 @@ type Row = {
     table{ width:100%; border-collapse:collapse; table-layout:fixed; }
     th, td{ border-bottom:1px solid #e5e7eb; padding:6px 8px; font-size:12px; vertical-align:top; }
     textarea{ width:100%; box-sizing:border-box; padding:4px 6px; border:1px solid #e5e7eb; border-radius:6px; font-size:12px; resize:none; overflow:hidden; font-family: inherit; line-height:1.5; white-space:normal; word-break:break-word; }
+    td.wplus10{ overflow:visible; }
+    td.wplus10 > textarea{ width: calc(100% + 10px); }
+    td.wplus20{ overflow:visible; }
+    td.wplus20 > textarea{ width: calc(100% + 20px); }
     input[type='text']{ font-family: inherit; }
     th{ background:#f8fafc; text-align:left; }
     td.center{ text-align:center; }
     th.center{ text-align:center; }
+    /* Composition 헤더 가운데 정렬 (현재 9번째) */
+    thead th:nth-child(9){ text-align:center; }
     .dim{ color:#9ca3af; }
     input[type='text']{ width:100%; box-sizing:border-box; padding:4px 6px; border:1px solid #e5e7eb; border-radius:6px; font-size:12px; }
     /* 모달 */
@@ -142,7 +147,7 @@ type Row = {
     .results .row{ cursor:pointer; font-weight:400; font-size:13px; border-top:1px solid #e5e7eb; }
     .results .row.selected{ background:#eef6ff; }
     .results .empty{ padding:10px; text-align:center; color:#9ca3af; }
-    .mini{ height:24px; padding:0 8px; border-radius:6px; border:1px solid #d1d5db; background:#fff; font-size:12px; cursor:pointer; }
+    .mini{ height:24px; padding:0 8px; border-radius:6px; border:1px solid #d1d5db; background:#fff; font-size:12px; cursor:pointer; white-space:nowrap; }
     .mini.ok{ background:#e0f2fe; border-color:#93c5fd; color:#0c4a6e; }
     .mini.no{ background:#fee2e2; border-color:#fecaca; color:#7f1d1d; }
     .mini.danger{ background:#fff; border-color:#fecaca; color:#b91c1c; }
@@ -150,8 +155,51 @@ type Row = {
     .mini.success{ background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
     .edit-btn{ color:#111827; border-color:#d1d5db; background:#fff; }
     /* Responsive widths: narrow columns shrink a bit, name/en widen */
-    .col-narrow{ width: 60px; text-align:center; }
+    .col-narrow{ width: 55px; text-align:center; }
     .col-wide{ width: 200px; }
+    /* Slight spacing between the first three fields */
+    tbody td:nth-child(1) textarea,
+    tbody td:nth-child(2) textarea,
+    tbody td:nth-child(3) textarea{ margin-right: 4px; }
+    /* 거래처, 납품거래처 최대 150px, 품번 최대 100px. 화면이 작아질수록 자동 축소 */
+    thead th:nth-child(1), tbody td:nth-child(1){ width: 120px; }
+    thead th:nth-child(2), tbody td:nth-child(2){ width: 120px; }
+    thead th:nth-child(3), tbody td:nth-child(3){ width: 70px; }
+    tbody td:nth-child(1) textarea,
+    tbody td:nth-child(2) textarea{ max-width: 120px; width: 100%; }
+    tbody td:nth-child(3) textarea{ max-width: 70px; width: 100%; }
+    /* 조성비확인 컬럼 폭 +3px (해당 컬럼은 6번째) */
+    thead th:nth-child(6), tbody td:nth-child(6){ width: 58px; }
+    /* 품명(4번째), 영문명(5번째) 입력 폭 -10px */
+    tbody td:nth-child(4) textarea,
+    tbody td:nth-child(5) textarea{ width: 100%; }
+    /* 사이드메뉴가 열려 화면 가용폭이 줄어드는 중간 구간 대응 */
+    @media (max-width: 1400px){
+      thead th:nth-child(1), tbody td:nth-child(1){ width: 80px; }
+      thead th:nth-child(2), tbody td:nth-child(2){ width: 80px; }
+      thead th:nth-child(3), tbody td:nth-child(3){ width: 60px; }
+      thead th:nth-child(7), tbody td:nth-child(7){ width: 60px; }
+    }
+    @media (max-width: 1200px){
+      thead th:nth-child(1), tbody td:nth-child(1){ width: 70px; }
+      thead th:nth-child(2), tbody td:nth-child(2){ width: 70px; }
+      thead th:nth-child(3), tbody td:nth-child(3){ width: 50px; }
+    }
+    @media (max-width: 1024px){
+      thead th:nth-child(1), tbody td:nth-child(1){ width: 60px; }
+      thead th:nth-child(2), tbody td:nth-child(2){ width: 60px; }
+      thead th:nth-child(3), tbody td:nth-child(3){ width: 40px; }
+      /* 품목수정(7번째 컬럼) 버튼 폭을 넉넉히 유지 */
+      thead th:nth-child(7), tbody td:nth-child(7){ width: 60px; }
+    }
+    @media (max-width: 860px){
+      thead th:nth-child(1), tbody td:nth-child(1){ width: 50px; }
+      thead th:nth-child(2), tbody td:nth-child(2){ width: 50px; }
+      thead th:nth-child(3), tbody td:nth-child(3){ width: 35px; }
+      thead th:nth-child(7), tbody td:nth-child(7){ width: 60px; }
+    }
+    /* 품목수정 헤더 줄바꿈 방지 */
+    thead th:nth-child(7){ white-space: nowrap; }
   `]
 })
 export class ProductDocsComponent implements OnInit {
@@ -350,63 +398,110 @@ export class ProductDocsComponent implements OnInit {
     }, 0);
   }
 
-  pdfExport(){
-    // Print-friendly window; user can save as PDF via system dialog
-    const table = document.querySelector('.table-wrap') as HTMLElement | null;
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Product 기본서류</title>
-      <style>
-        body{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Helvetica Neue', Arial, sans-serif; padding:16px; }
-        h2{ margin:0 0 8px; }
-        table{ width:100%; border-collapse:collapse; table-layout:fixed; }
-        th, td{ border:1px solid #e5e7eb; padding:6px 8px; font-size:12px; vertical-align:top; }
-        th{ background:#f8fafc; text-align:left; }
-        td.center, th.center{ text-align:center; }
-        .dim{ color:#6b7280; }
-      </style></head><body>
-      <h2>Product <span style="color:#6b7280;font-weight:600;">기본서류</span></h2>
-      ${table ? table.innerHTML : ''}
-      </body></html>`;
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    setTimeout(()=>{ try{ win.focus(); win.print(); }catch{} }, 300);
+  async pdfExport(){
+    // Composition 체크된 행들의 기존 XLSX를 서버 함수로 PDF 변환 저장
+    const targets = this.rows.filter(r=> r.composition && r.product_id);
+    if (!targets.length){ alert('Composition이 체크된 품목이 없습니다.'); return; }
+    for (const r of targets){
+      try{
+        const name = `${this.todayStr()} ${r.product_code||''} ${r.name_kr||''} Composition ${r.customer||''} ${r.delivery_customer||''}.xlsx`;
+        const xlsxPath = `composition/${encodeURIComponent(r.product_code||'code')}/${encodeURIComponent(name)}`;
+        // 서버 함수 호출로 PDF 변환 후 저장
+        const res = await fetch('/functions/v1/xlsx-to-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bucket: 'product_exports', path: xlsxPath }) });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || 'convert failed');
+        const a = document.createElement('a'); a.href = json.url; a.download = json.path.split('/').pop(); a.target = '_blank'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      }catch(e:any){ alert('PDF 변환 실패: ' + (e?.message||e)); }
+    }
   }
 
   private toCsvCell(v:any){ if (v===undefined || v===null) return '""'; const s = String(v).replace(/"/g,'""'); return `"${s}"`; }
-  excelExport(){
-    const headers = ['거래처','납품거래처','품번','품명','영문명','조성비확인','SPEC','Composition','MSDS','Process','Brochure','RMI'];
-    const lines: string[] = [];
-    lines.push(headers.map(h=>this.toCsvCell(h)).join(','));
-    for (const r of this.rows){
-      const row = [
-        r.customer||'',
-        r.delivery_customer||'',
-        r.product_code||'',
-        r.name_kr||'',
-        r.name_en||'',
-        (r.verified? 'v' : 'x'),
-        '', // SPEC disabled
-        r.composition? 'Y':'',
-        r.msds? 'Y':'',
-        r.process? 'Y':'',
-        r.brochure? 'Y':'',
-        r.rmi? 'Y':''
-      ];
-      lines.push(row.map(v=>this.toCsvCell(v)).join(','));
+  async excelExport(){
+    const targets = this.rows.filter(r=> r.composition && r.product_id);
+    if (!targets.length){ alert('Composition이 체크된 품목이 없습니다.'); return; }
+    for (const r of targets){
+      try{
+        const { data } = await this.supabase.listProductCompositions(r.product_id as any) as any;
+        const list = (data||[]).map((c:any)=>({
+          inci: (c.ingredient && c.ingredient.inci_name) || '',
+          kor: (c.ingredient && c.ingredient.korean_name) || '',
+          cas: (c.ingredient && c.ingredient.cas_no) || '',
+          pct: Number(c.percent)||0,
+        }));
+        // 1) 템플릿 XLSX 다운로드
+        const tpl = await this.supabase.getCompositionTemplate() as any;
+        if (!tpl?.url){ alert('서류양식의 Composition 템플릿이 없습니다.'); return; }
+        const resp = await fetch(tpl.url);
+        const buf = await resp.arrayBuffer();
+        // 2) exceljs로 로드(브라우저 호환). exceljs는 이미지 렌더링은 제한적이지만 셀/서식 유지 가능.
+        const ExcelJS = await import('exceljs');
+        const workbook = new (ExcelJS as any).Workbook();
+        await workbook.xlsx.load(buf);
+        const sheet = workbook.worksheets[0];
+        const startRow = 6;
+        for (let i=0;i<list.length;i++){
+          const row = startRow + i;
+          sheet.getCell(`B${row}`).value = list[i].inci;
+          sheet.getCell(`F${row}`).value = list[i].kor;
+          sheet.getCell(`I${row}`).value = Number.isFinite(list[i].pct)? list[i].pct : 0;
+        }
+        const out = await workbook.xlsx.writeBuffer();
+        const name = `${this.todayStr()} ${r.product_code||''} ${r.name_kr||''} Composition ${r.customer||''} ${r.delivery_customer||''}.xlsx`;
+        const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        // Upload to Supabase Storage and then offer the URL for download
+        try{
+          const path = `composition/${encodeURIComponent(r.product_code||'code')}/${encodeURIComponent(name)}`;
+          const uploaded = await this.supabase.uploadProductExport(blob, path);
+          const a = document.createElement('a'); a.href = (uploaded as any).url; a.download = name; a.target = '_blank'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }catch{
+          // Fallback to direct download if storage upload fails
+          const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        }
+      }catch{}
     }
-    const csv = lines.join('\r\n');
-    const bom = '\uFEFF';
-    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'product-docs.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  }
+
+  private todayStr(){ const d=new Date(); const pad=(n:number)=> String(n).padStart(2,'0'); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+  private x(v:string){ return (v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  private buildCompositionExcelXml(meta: { product_code: string; name_kr: string; customer: string; delivery: string; date: string }, rows: Array<{ inci: string; kor: string; cas: string; pct: number }>): string{
+    const header = `<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`;
+    const sheetStart = `<Worksheet ss:Name="Composition"><Table>`;
+    const metaRows = [
+      `<Row><Cell ss:MergeAcross="3"><Data ss:Type="String">Composition 서류양식</Data></Cell></Row>`,
+      `<Row><Cell><Data ss:Type="String">Date</Data></Cell><Cell ss:MergeAcross="3"><Data ss:Type="String">${this.x(meta.date)}</Data></Cell></Row>`,
+      `<Row><Cell><Data ss:Type="String">Product</Data></Cell><Cell ss:MergeAcross="3"><Data ss:Type="String">${this.x(meta.product_code)} ${this.x(meta.name_kr)}</Data></Cell></Row>`,
+      `<Row><Cell><Data ss:Type="String">거래처</Data></Cell><Cell ss:MergeAcross="3"><Data ss:Type="String">${this.x(meta.customer)}</Data></Cell></Row>`,
+      `<Row><Cell><Data ss:Type="String">납품거래처</Data></Cell><Cell ss:MergeAcross="3"><Data ss:Type="String">${this.x(meta.delivery)}</Data></Cell></Row>`,
+      `<Row/>`
+    ].join('');
+    const head = `<Row>\n  <Cell><Data ss:Type="String">INCI Name</Data></Cell>\n  <Cell><Data ss:Type="String">한글성분명</Data></Cell>\n  <Cell><Data ss:Type="String">CAS No.</Data></Cell>\n  <Cell><Data ss:Type="String">%W/W</Data></Cell>\n</Row>`;
+    const body = rows.map(r=>`<Row>\n  <Cell><Data ss:Type="String">${this.x(r.inci)}</Data></Cell>\n  <Cell><Data ss:Type="String">${this.x(r.kor)}</Data></Cell>\n  <Cell><Data ss:Type="String">${this.x(r.cas)}</Data></Cell>\n  <Cell><Data ss:Type="Number">${r.pct}</Data></Cell>\n</Row>`).join('');
+    const sheetEnd = `</Table></Worksheet>`;
+    const end = `</Workbook>`;
+    return header + sheetStart + metaRows + head + body + sheetEnd + end;
+  }
+
+  // Excel 2003 XML with specific placement: INCI -> B6, Korean name -> F6, %W/W -> I6
+  private buildCompositionExcelXmlPlaced(meta: { product_code: string; name_kr: string; customer: string; delivery: string; date: string }, rows: Array<{ inci: string; kor: string; cas: string; pct: number }>): string{
+    const header = `<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`;
+    const sheetStart = `<Worksheet ss:Name="Composition"><Table>`;
+    const intro = [`
+      <Row><Cell ss:MergeAcross="8"><Data ss:Type="String">${this.x(meta.product_code)} ${this.x(meta.name_kr)} · ${this.x(meta.customer)} / ${this.x(meta.delivery)} · ${this.x(meta.date)}</Data></Cell></Row>
+      <Row/><Row/><Row/><Row/>
+    `].join('');
+    let body = '';
+    let idx = 6; // start row
+    for (const r of rows){
+      body += `<Row ss:Index="${idx}">`+
+        `<Cell ss:Index="2"><Data ss:Type="String">${this.x(r.inci)}</Data></Cell>`+
+        `<Cell ss:Index="6"><Data ss:Type="String">${this.x(r.kor)}</Data></Cell>`+
+        `<Cell ss:Index="9"><Data ss:Type="Number">${Number.isFinite(r.pct)? r.pct : 0}</Data></Cell>`+
+        `</Row>`;
+      idx++;
+    }
+    const sheetEnd = `</Table></Worksheet>`;
+    const end = `</Workbook>`;
+    return header + sheetStart + intro + body + sheetEnd + end;
   }
 
   autoGrow(ev: Event){
