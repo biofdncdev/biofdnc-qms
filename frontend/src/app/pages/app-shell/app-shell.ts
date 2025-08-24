@@ -166,9 +166,8 @@ export class AppShellComponent {
       if (menu.path) this.router.navigate([menu.path]);
       return;
     }
-    // no submenu → navigate and close drawer
+    // no submenu → navigate but keep user's drawer state (do not auto-close)
     if (menu.path) this.router.navigate([menu.path]);
-    this.leftOpen = false;
   }
 
   onSubClick(item: { label?: string; path?: string; onClick?: () => void; selected?: boolean }) {

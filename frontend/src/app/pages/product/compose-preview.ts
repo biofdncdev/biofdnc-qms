@@ -8,43 +8,45 @@ import { SupabaseService } from '../../services/supabase.service';
   imports: [CommonModule],
   template: `
   <div class="sheet" id="sheet">
-    <header class="head">
-      <div class="line1">
-        <div class="motto">Life Science for Happiness</div>
-        <div class="brand">BIO-FD&C</div>
-      </div>
-      <h1>CERTIFICATE OF COMPOSITION</h1>
-    </header>
-    <section class="product">
-      <div class="label">Product Name</div>
-      <div class="value">{{ name || code || '-' }}</div>
-    </section>
-    <section class="table">
-      <table>
-        <thead>
-          <tr>
-            <th class="col-no">No.</th>
-            <th>INCI Name</th>
-            <th>한글성분명</th>
-            <th class="col-pct">조성비(%)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let r of lines; let idx = index">
-            <td class="col-no">{{ idx + 1 }}</td>
-            <td>{{ r.inci }}</td>
-            <td>{{ r.kor }}</td>
-            <td class="col-pct">{{ formatPct(r.pct) }}</td>
-          </tr>
-        </tbody>
-        <tfoot>
-          <tr>
-            <td colspan="3" class="total-label">Total</td>
-            <td class="col-pct">{{ formatPct(totalPct) }}</td>
-          </tr>
-        </tfoot>
-      </table>
-    </section>
+    <div class="content">
+      <header class="head">
+        <div class="line1">
+          <div class="motto">Life Science for Happiness</div>
+          <div class="brand">BIO-FD&C</div>
+        </div>
+        <h1>CERTIFICATE OF COMPOSITION</h1>
+      </header>
+      <section class="product">
+        <div class="label">Product Name</div>
+        <div class="value">{{ name || code || '-' }}</div>
+      </section>
+      <section class="table">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-no">No.</th>
+              <th>INCI Name</th>
+              <th>한글성분명</th>
+              <th class="col-pct">조성비(%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of lines; let idx = index">
+              <td class="col-no">{{ idx + 1 }}</td>
+              <td>{{ r.inci }}</td>
+              <td>{{ r.kor }}</td>
+              <td class="col-pct">{{ formatPct(r.pct) }}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" class="total-label">Total</td>
+              <td class="col-pct">{{ formatPct(totalPct) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </section>
+    </div>
     <section class="sign">
       <div class="approved">Approved by :</div>
       <div class="signbox"></div>
@@ -65,6 +67,7 @@ import { SupabaseService } from '../../services/supabase.service';
     .btn{ height:32px; padding:0 12px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer; }
     /* A4 portrait with Word-like margins using mm for print-parity */
     .sheet{ width: 210mm; min-height: 297mm; margin: 0 auto; background:#fff; padding: 25mm; box-shadow: 0 10px 24px rgba(0,0,0,.08); display:flex; flex-direction:column; box-sizing: border-box; }
+    .content{ flex:1; display:block; }
     .head{ display:block; }
     .head .line1{ display:flex; justify-content:space-between; align-items:center; font-size:11pt; color:#111827; }
     .head .brand{ font-weight:700; }
@@ -112,7 +115,57 @@ export class ComposePreviewComponent implements OnInit {
   }
 
   windowPrint(){
-    window.print();
+    const sheet = document.getElementById('sheet');
+    if (!sheet){ window.print(); return; }
+    const html = this.buildPrintHtml(sheet.outerHTML);
+    // Prefer hidden iframe to avoid popup blockers and render reliably
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc){
+      const w = window.open('', '_blank');
+      if (!w){ return; }
+      w.document.open(); w.document.write(html); w.document.close();
+      setTimeout(()=>{ try{ w.focus(); w.print(); } catch{} }, 50);
+      return;
+    }
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(()=>{ try{ iframe.contentWindow?.focus(); iframe.contentWindow?.print(); } finally { setTimeout(()=> iframe.remove(), 200); } }, 60);
+  }
+
+  private buildPrintHtml(inner: string){
+    // Minimal, print-only document with Word-like margins and no app chrome
+    const css = `
+      @page { size: A4 portrait; margin: 25mm; }
+      html, body { padding: 0; margin: 0; background: #fff; }
+      .sheet { width: 210mm; min-height: 297mm; margin: 0 auto; box-shadow: none; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .head{ display:block; }
+      .head .line1{ display:flex; justify-content:space-between; align-items:center; font-size:11pt; color:#111827; }
+      .head h1{ margin: 12mm 0 8mm; text-align:center; font-size:20pt; font-weight:800; letter-spacing:0.3px; }
+      .product{ border:0.4mm dotted #9ca3af; border-radius:2mm; padding: 6mm; text-align:center; margin: 6mm 0 8mm; }
+      .product .label{ color:#6b7280; font-weight:700; font-size:11pt; }
+      .product .value{ font-size:13pt; font-weight:800; margin-top:2mm; }
+      .table table{ width:100%; border-collapse:collapse; }
+      .table th, .table td{ border:0.35mm dotted #9ca3af; padding: 3.5mm 3mm; font-size:10.5pt; line-height:1.35; }
+      .table thead th{ background:#fafafa; font-weight:700; }
+      .table .col-no{ width: 12mm; text-align:center; }
+      .table .col-pct{ width: 24mm; text-align:right; }
+      tfoot .total-label{ text-align:center; font-weight:700; }
+      .sign{ margin-top: 14mm; text-align:center; }
+      .sign .approved{ display:inline-block; margin-right:10px; }
+      .sign .signbox{ display:inline-block; width:60mm; height:22mm; border-bottom:0.3mm solid #d1d5db; vertical-align:bottom; }
+      .sign .corp{ margin-top: 6mm; font-weight:700; }
+      .foot{ display:flex; justify-content:space-between; color:#6b7280; font-size:9.5pt; padding-top: 8mm; }
+    `;
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Composition</title>
+      <style>${css}</style></head><body>${inner}</body></html>`;
   }
 
   async loadCompositions(productId: string){
