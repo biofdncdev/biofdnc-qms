@@ -30,14 +30,14 @@ type Row = {
     <header class="top">
       <h2>Product <span class="sub">기본서류</span></h2>
       <div class="spacer"></div>
+    </header>
+    <section class="toolbar">
+      <div class="spacer"></div>
       <button class="mini edit-btn" (click)="addRow()">행 추가</button>
       <button class="mini edit-btn" (click)="onReset()">초기화</button>
-      <button class="mini warn" (click)="pdfExport()">PDF 출력</button>
-      <button class="mini" (click)="openHtmlPreview()">HTML 미리보기</button>
-      <button class="mini" (click)="openHtmlPdf()">HTML → PDF 저장</button>
-      <button class="mini success" (click)="savePdfDirect()">PDF 저장(한 번에)</button>
+      <button class="mini warn" (click)="openHtmlPdf()">PDF 저장(HTML)</button>
       <button class="mini success" (click)="excelExport()">EXCEL저장</button>
-    </header>
+    </section>
 
     <section class="table-wrap">
       <table class="grid">
@@ -113,13 +113,16 @@ type Row = {
   `,
   styles: [`
     .page{ padding:12px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Helvetica Neue', Arial, sans-serif; }
-    .top{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+    .top{ display:flex; align-items:center; gap:10px; margin-bottom:4px; }
     .top h2{ margin:0; font-size:24px; font-weight:800; }
     .top .sub{ font-size:16px; font-weight:700; color:#6b7280; margin-left:6px; }
     .spacer{ flex:1; }
     .btn{ height:30px; padding:0 12px; border-radius:8px; border:1px solid #d1d5db; background:#fff; cursor:pointer; }
+    /* Move right-side buttons down by 50px without shifting the title */
+    .top .mini{ margin-top: 0; }
     .btn.primary{ border-color:#111827; background:#111827; color:#fff; }
     .btn.ghost{ background:#fff; color:#111827; }
+    .toolbar{ display:flex; justify-content:flex-end; align-items:center; gap:8px; margin: 8px 0 10px; }
     .table-wrap{ border:1px solid #e5e7eb; border-radius:10px; overflow:auto; }
     table{ width:100%; border-collapse:collapse; table-layout:fixed; }
     th, td{ border-bottom:1px solid #e5e7eb; padding:6px 8px; font-size:12px; vertical-align:top; }
@@ -171,8 +174,9 @@ type Row = {
     tbody td:nth-child(1) textarea,
     tbody td:nth-child(2) textarea{ max-width: 120px; width: 100%; }
     tbody td:nth-child(3) textarea{ max-width: 70px; width: 100%; }
-    /* 조성비확인 컬럼 폭 +3px (해당 컬럼은 6번째) */
-    thead th:nth-child(6), tbody td:nth-child(6){ width: 58px; }
+    /* 조성비확인(6번째)을 품목수정(7번째)과 더 가깝게 */
+    thead th:nth-child(6), tbody td:nth-child(6){ width: 50px; }
+    thead th:nth-child(7), tbody td:nth-child(7){ width: 64px; }
     /* 품명(4번째), 영문명(5번째) 입력 폭 -10px */
     tbody td:nth-child(4) textarea,
     tbody td:nth-child(5) textarea{ width: 100%; }
@@ -411,9 +415,49 @@ export class ProductDocsComponent implements OnInit {
 
   openHtmlPdf(){
     const target = this.rows.find(r=> r.composition && r.product_id);
-    if (!target){ alert('Composition 체크된 품목이 없습니다.'); return; }
-    const url = `/app/product/compose-preview?product_id=${encodeURIComponent(target.product_id as any)}&code=${encodeURIComponent(target.product_code||'')}&name=${encodeURIComponent(target.name_kr||'')}&auto=1`;
+    if (!target){ alert('Composition이 체크된 품목이 없습니다.'); return; }
+    const url = `/app/product/compose-preview?product_id=${encodeURIComponent(target.product_id as any)}&code=${encodeURIComponent(target.product_code||'')}&name=${encodeURIComponent(target.name_kr||'')}&customer=${encodeURIComponent(target.customer||'')}&delivery=${encodeURIComponent(target.delivery_customer||'')}&auto=1`;
     window.open(url, '_blank');
+  }
+
+  async savePdfFromHtml(){
+    const target = this.rows.find(r=> r.composition && r.product_id);
+    if (!target){ alert('Composition이 체크된 품목이 없습니다.'); return; }
+    try{
+      const url = `/app/product/compose-preview?product_id=${encodeURIComponent(target.product_id as any)}&code=${encodeURIComponent(target.product_code||'')}&name=${encodeURIComponent(target.name_kr||'')}&embed=1`;
+      const wrapper = document.createElement('div');
+      wrapper.style.position='fixed'; wrapper.style.left='-200vw'; wrapper.style.top='0';
+      wrapper.style.width='210mm'; wrapper.style.height='297mm'; wrapper.style.background='#fff';
+      const iframe = document.createElement('iframe');
+      iframe.src = url; iframe.style.width='210mm'; iframe.style.height='297mm'; iframe.style.border='0';
+      wrapper.appendChild(iframe); document.body.appendChild(wrapper);
+
+      // Wait for iframe load
+      await new Promise(res=> iframe.onload = ()=> res(null));
+      const idoc = iframe.contentDocument as Document | null;
+      if (!idoc) throw new Error('preview not ready');
+      // Wait for fonts and layout stabilization
+      try { await (idoc as any).fonts?.ready; } catch {}
+      // Poll for #sheet up to 6s
+      let sheet: HTMLElement | null = null; const start = Date.now();
+      while(!sheet && Date.now() - start < 6000){
+        sheet = idoc.getElementById('sheet');
+        if (!sheet) await new Promise(r=> setTimeout(r, 100));
+      }
+      if (!sheet) throw new Error('preview not ready');
+      // Give the browser a couple of frames to paint
+      await new Promise(r=> setTimeout(r, 120));
+
+      const { jsPDF } = await import('jspdf');
+      const html2canvas = (await import('html2canvas')).default as any;
+      const canvas = await html2canvas(sheet, { scale: 4, useCORS: true, backgroundColor: '#ffffff' });
+      const img = canvas.toDataURL('image/png');
+      const doc = new (jsPDF as any)({ orientation:'p', unit:'mm', format:'a4' });
+      doc.addImage(img, 'PNG', 0, 0, 210, 297);
+      const name = `${this.todayStr()} ${target.product_code||''} ${target.name_kr||''} Composition ${target.customer||''} ${target.delivery_customer||''}.pdf`;
+      doc.save(name);
+      document.body.removeChild(wrapper);
+    }catch(e:any){ alert('PDF 생성 실패: ' + (e?.message||e)); }
   }
 
   async savePdfDirect(){
@@ -686,6 +730,63 @@ export class ProductDocsComponent implements OnInit {
   private storageKey = 'product.docs.state.v1';
   private saveState(){ try{ localStorage.setItem(this.storageKey, JSON.stringify(this.rows)); }catch{} }
   private loadState(): Row[] | null { try{ const raw=localStorage.getItem(this.storageKey); if(!raw) return null; const arr = JSON.parse(raw); return Array.isArray(arr)? arr : null; }catch{ return null; } }
+
+  async savePdfPrintJs(){
+    const target = this.rows.find(r=> r.composition && r.product_id);
+    if (!target){ alert('Composition이 체크된 품목이 없습니다.'); return; }
+    const ensurePrintJs = async () => {
+      if ((window as any).printJS) return (window as any).printJS;
+      await new Promise<void>((resolve, reject)=>{
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/print-js@1.6.0/dist/print.min.js';
+        s.onload = ()=> resolve(); s.onerror = ()=> reject(new Error('print.js load error'));
+        document.head.appendChild(s);
+      });
+      return (window as any).printJS;
+    };
+    try{
+      const printJS = await ensurePrintJs();
+      const url = `/app/product/compose-preview?product_id=${encodeURIComponent(target.product_id as any)}&code=${encodeURIComponent(target.product_code||'')}&name=${encodeURIComponent(target.name_kr||'')}&embed=1`;
+      const wrapper = document.createElement('div'); wrapper.style.position='fixed'; wrapper.style.left='-200vw'; wrapper.style.top='0';
+      const iframe = document.createElement('iframe'); iframe.src = url; iframe.style.width='210mm'; iframe.style.height='297mm'; iframe.style.border='0';
+      wrapper.appendChild(iframe); document.body.appendChild(wrapper);
+      await new Promise(res=> iframe.onload = ()=> setTimeout(res, 150));
+      // poll for #sheet up to 3s
+      let sheet: HTMLElement | null = null; const started = Date.now();
+      while(!sheet && Date.now()-started < 3000){
+        sheet = iframe.contentDocument?.getElementById('sheet') as HTMLElement | null;
+        if (!sheet) await new Promise(r=> setTimeout(r, 100));
+      }
+      if (!sheet) throw new Error('preview not ready');
+      const css = `@page { size: A4 portrait; margin: 25mm; }
+      html, body { margin:0; padding:0; background:#fff; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body, .sheet { font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Apple SD Gothic Neo', 'Malgun Gothic', Arial, sans-serif; }
+      .sheet{ width:210mm; height:297mm; margin:0 auto; padding:25mm; box-sizing:border-box; }
+      .head{ display:block; }
+      .head .line1{ display:flex; justify-content:space-between; align-items:center; font-size:11pt; color:#111827; }
+      .head h1{ margin:30mm 0 18mm; text-align:center; font-size:20pt; font-weight:800; letter-spacing:0.3px; }
+      .product{ border:0.4mm dotted #9ca3af; border-radius:2mm; padding:6mm; text-align:center; margin:12mm 0 12mm; }
+      .product .label{ color:#6b7280; font-weight:700; font-size:11pt; }
+      .product .value{ font-size:13pt; font-weight:800; margin-top:2mm; }
+      .table{ margin-top:6mm; }
+      .table table{ width:100%; border-collapse:collapse; }
+      .table th, .table td{ border:0.35mm dotted #9ca3af; padding:3.5mm 3mm; font-size:10.5pt; line-height:1.35; }
+      .table thead th{ background:#fafafa; font-weight:700; }
+      .table .col-no{ width:12mm; text-align:center; }
+      .table .col-pct{ width:24mm; text-align:right; }
+      tfoot .total-label{ text-align:center; font-weight:700; }
+      .sign{ margin-top:14mm; text-align:center; }
+      .sign .approved{ display:inline-block; margin-right:10px; }
+      .sign .signbox{ display:inline-block; width:60mm; height:22mm; border-bottom:0.3mm solid #d1d5db; vertical-align:bottom; }
+      .sign .corp{ margin-top:6mm; font-weight:700; }
+      .foot{ display:flex; justify-content:space-between; color:#6b7280; font-size:9.5pt; padding-top:8mm; }`;
+      const html = `<!doctype html><html><head><meta charset=\"utf-8\"><style>${css}</style></head><body>${sheet.outerHTML}</body></html>`;
+      printJS({ printable: html, type: 'raw-html', documentTitle: `${this.todayStr()} ${target.product_code||''} ${target.name_kr||''} Composition`, showModal: false, style: '' });
+      // Cleanup shortly after dispatch
+      setTimeout(()=>{ try{ document.body.removeChild(wrapper); }catch{} }, 1000);
+    }catch(e:any){ alert('Print.js 인쇄 실패: ' + (e?.message||e)); }
+  }
 }
 
 

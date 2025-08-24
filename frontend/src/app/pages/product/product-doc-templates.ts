@@ -68,7 +68,7 @@ import { SupabaseService } from '../../services/supabase.service';
               </ul>
             </div>
 
-            <div class="preview-title">HTML 미리보기 (샘플)</div>
+            <div class="preview-title">PDF 미리보기 (HTML) (양식)</div>
             <div class="preview-wrap">
               <app-compose-preview></app-compose-preview>
             </div>

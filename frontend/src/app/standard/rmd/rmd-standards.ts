@@ -49,6 +49,7 @@ export const RMD_STANDARDS: RegulationCategory[] = [
       { id: 'BF-RMD-PM-12', title: '창고 관리 규정' },
       { id: 'BF-RMD-PM-13', title: '제조 공정검사 및 관리 규정' },
       { id: 'BF-RMD-PM-14', title: '라벨 관리 규정' },
+      
     ],
   },
   {
