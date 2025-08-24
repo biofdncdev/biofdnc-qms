@@ -29,9 +29,10 @@ type Row = {
     <header class="top">
       <h2>Product <span class="sub">기본서류</span></h2>
       <div class="spacer"></div>
-      <button class="btn" (click)="addRow()">행 추가</button>
-      <button class="btn" (click)="onReset()">초기화</button>
-      <button class="btn primary" (click)="onSave()">출력</button>
+      <button class="mini edit-btn" (click)="addRow()">행 추가</button>
+      <button class="mini edit-btn" (click)="onReset()">초기화</button>
+      <button class="mini warn" (click)="pdfExport()">PDF저장</button>
+      <button class="mini success" (click)="excelExport()">EXCEL저장</button>
     </header>
 
     <section class="table-wrap">
@@ -145,6 +146,8 @@ type Row = {
     .mini.ok{ background:#e0f2fe; border-color:#93c5fd; color:#0c4a6e; }
     .mini.no{ background:#fee2e2; border-color:#fecaca; color:#7f1d1d; }
     .mini.danger{ background:#fff; border-color:#fecaca; color:#b91c1c; }
+    .mini.warn{ background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
+    .mini.success{ background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
     .edit-btn{ color:#111827; border-color:#d1d5db; background:#fff; }
     /* Responsive widths: narrow columns shrink a bit, name/en widen */
     .col-narrow{ width: 60px; text-align:center; }
@@ -339,13 +342,71 @@ export class ProductDocsComponent implements OnInit {
     this.rows.splice(i,1);
     if (this.rows.length === 0) this.rows.push({});
     this.saveState();
-    // focus a sensible next cell
     setTimeout(()=>{
       const table = document.querySelector('table.grid') as HTMLTableElement | null;
       const row = table?.querySelectorAll('tbody tr')[Math.min(i, this.rows.length-1)] as HTMLTableRowElement | undefined;
       const first = row?.querySelector('textarea') as HTMLTextAreaElement | undefined;
       first?.focus();
     }, 0);
+  }
+
+  pdfExport(){
+    // Print-friendly window; user can save as PDF via system dialog
+    const table = document.querySelector('.table-wrap') as HTMLElement | null;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Product 기본서류</title>
+      <style>
+        body{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Helvetica Neue', Arial, sans-serif; padding:16px; }
+        h2{ margin:0 0 8px; }
+        table{ width:100%; border-collapse:collapse; table-layout:fixed; }
+        th, td{ border:1px solid #e5e7eb; padding:6px 8px; font-size:12px; vertical-align:top; }
+        th{ background:#f8fafc; text-align:left; }
+        td.center, th.center{ text-align:center; }
+        .dim{ color:#6b7280; }
+      </style></head><body>
+      <h2>Product <span style="color:#6b7280;font-weight:600;">기본서류</span></h2>
+      ${table ? table.innerHTML : ''}
+      </body></html>`;
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    setTimeout(()=>{ try{ win.focus(); win.print(); }catch{} }, 300);
+  }
+
+  private toCsvCell(v:any){ if (v===undefined || v===null) return '""'; const s = String(v).replace(/"/g,'""'); return `"${s}"`; }
+  excelExport(){
+    const headers = ['거래처','납품거래처','품번','품명','영문명','조성비확인','SPEC','Composition','MSDS','Process','Brochure','RMI'];
+    const lines: string[] = [];
+    lines.push(headers.map(h=>this.toCsvCell(h)).join(','));
+    for (const r of this.rows){
+      const row = [
+        r.customer||'',
+        r.delivery_customer||'',
+        r.product_code||'',
+        r.name_kr||'',
+        r.name_en||'',
+        (r.verified? 'v' : 'x'),
+        '', // SPEC disabled
+        r.composition? 'Y':'',
+        r.msds? 'Y':'',
+        r.process? 'Y':'',
+        r.brochure? 'Y':'',
+        r.rmi? 'Y':''
+      ];
+      lines.push(row.map(v=>this.toCsvCell(v)).join(','));
+    }
+    const csv = lines.join('\r\n');
+    const bom = '\uFEFF';
+    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'product-docs.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   autoGrow(ev: Event){
