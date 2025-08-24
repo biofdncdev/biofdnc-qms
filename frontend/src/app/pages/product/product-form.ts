@@ -139,8 +139,8 @@ import { SupabaseService } from '../../services/supabase.service';
   `,
   styles: [`
     .page-head{ display:flex; align-items:center; justify-content:flex-start; margin-bottom:6px; }
-    .page-head h2{ margin:0; font-size:20px; font-weight:800; }
-    .page-head .sub{ font-size:14px; font-weight:700; margin-left:6px; color:#6b7280; }
+    .page-head h2{ margin:0; font-size:24px; font-weight:800; }
+    .page-head .sub{ font-size:16px; font-weight:700; margin-left:6px; color:#6b7280; }
     .tabs{ display:flex; gap:6px; border-bottom:1px solid #e5e7eb; margin:16px 0 8px; }
     .tab{ height:30px; padding:0 12px; border:1px solid #e5e7eb; border-bottom:none; border-top-left-radius:8px; border-top-right-radius:8px; background:#f9fafb; cursor:pointer; font-size:12px; }
     .tab.active{ background:#fff; border-color:#d1d5db; font-weight:700; }
@@ -501,7 +501,7 @@ export class ProductFormComponent implements OnInit {
   removeRow(row:any){ this.compositions = this.compositions.filter(r => r !== row); if (this.selectedComp===row) this.selectedComp=null; }
   removeSelected(){ if (!this.selectedComp) return; this.compositions = this.compositions.filter(r => r !== this.selectedComp); this.selectedComp = null; }
   onPercentChange(){ this.saved = false; }
-  navigatePercent(ev: KeyboardEvent, rowIndex: number, delta: number){
+  navigatePercent(ev: Event, rowIndex: number, delta: number){
     if (ev?.preventDefault) ev.preventDefault();
     const inputs = Array.from(document.querySelectorAll('td.col-pct input[type="number"]')) as HTMLInputElement[];
     // inputs are in row order; find index of current input and move by delta

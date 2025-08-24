@@ -27,11 +27,17 @@
   <section class="content" [class.drawer-open]="leftOpen" [class.compact]="drawerCompact">
     <header class="topbar">
       <div class="brand">BIO-FD&C QMS</div>
-      <div class="tabbar" *ngIf="tabs.length">
-        <div class="tab" *ngFor="let t of tabs; index as i" [class.active]="i===activeTabIndex" [class.dragover]="i===dragOverIndex"
+      <div class="tabbar" *ngIf="tabs.length" #tabbarRef>
+        <div class="tab" *ngFor="let t of tabs | slice:0:visibleCount; index as i" [class.active]="i===activeTabIndex" [class.dragover]="i===dragOverIndex"
              draggable="true" (dragstart)="onTabDragStart($event,i)" (dragover)="onTabDragOver($event,i)" (dragleave)="onTabDragLeave()" (drop)="onTabDrop($event,i)">
           <button class="tab-btn" (click)="activateTab(i)">{{ t.title }}</button>
           <button class="tab-close" (click)="closeTab(i)">×</button>
+        </div>
+        <div class="overflow" *ngIf="tabs.length > visibleCount">
+          <button class="overflow-btn" (click)="toggleOverflow()" title="More tabs">⋯</button>
+          <div class="overflow-menu" *ngIf="overflowOpen">
+            <a class="overflow-item" *ngFor="let t of tabs | slice:visibleCount" (click)="activateTabByPath(t.path)">{{ t.title }}</a>
+          </div>
         </div>
       </div>
     </header>

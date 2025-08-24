@@ -42,6 +42,9 @@ export class AppShellComponent {
   // Simple in-app tab bar for quick nav
   tabs: Array<{ title: string; path: string }>=[];
   activeTabIndex = 0;
+  // Tab overflow handling
+  visibleCount = 8;
+  overflowOpen = false;
   dragIndex: number | null = null;
   dragOverIndex: number | null = null;
   menus: Array<{ key: string; icon: string; label: string; path?: string; badge?: number; submenu?: Array<{ label: string; path?: string }> }> = [];
@@ -223,6 +226,7 @@ export class AppShellComponent {
     }
     // Support absolute path with query by using navigateByUrl
     this.router.navigateByUrl(path);
+    this.updateVisibleCount();
   }
 
   private openOrNavigateTab(title: string, tabPath: string, navUrl: string){
@@ -234,6 +238,7 @@ export class AppShellComponent {
       this.activeTabIndex = idx;
     }
     this.router.navigateByUrl(navUrl);
+    this.updateVisibleCount();
   }
   closeTab(i: number){
     const closingActive = i === this.activeTabIndex;
@@ -244,6 +249,7 @@ export class AppShellComponent {
       this.activeTabIndex = ni;
       this.router.navigate([this.tabs[ni].path]);
     }
+    this.updateVisibleCount();
   }
   activateTab(i: number){
     this.activeTabIndex = i;
@@ -274,5 +280,17 @@ export class AppShellComponent {
     const [moved] = this.tabs.splice(from, 1);
     this.tabs.splice(index, 0, moved);
     this.activeTabIndex = index;
+  }
+
+  // Overflow helpers
+  updateVisibleCount(){
+    // Heuristic: show up to 8 tabs; if more, keep the latest active within visible slice
+    const MAX = 8;
+    this.visibleCount = Math.min(MAX, this.tabs.length);
+  }
+  toggleOverflow(){ this.overflowOpen = !this.overflowOpen; }
+  activateTabByPath(path: string){
+    const idx = this.tabs.findIndex(t=>t.path===path);
+    if (idx>=0){ this.activateTab(idx); this.overflowOpen=false; }
   }
 }

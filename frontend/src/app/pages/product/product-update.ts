@@ -13,7 +13,7 @@ type SyncError = { product_code: string; column?: string; message: string };
   template: `
   <div class="page">
     <header class="top">
-      <h2>제품목록 업데이트</h2>
+      <h2>Product <span class="sub">업데이트</span></h2>
     </header>
 
     <section class="uploader">
@@ -67,6 +67,8 @@ type SyncError = { product_code: string; column?: string; message: string };
   styles: [`
     .page{ padding:12px 16px; }
     .top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+    .top h2{ margin:0; font-size:24px; font-weight:800; }
+    .top h2 .sub{ font-size:16px; font-weight:700; color:#6b7280; margin-left:8px; }
     .btn{ height:32px; padding:0 12px; border-radius:8px; border:1px solid #d1d5db; background:#111827; color:#fff; cursor:pointer; }
     .btn.ghost{ background:#fff; color:#111827; }
     .status .grid{ display:grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap:8px; }

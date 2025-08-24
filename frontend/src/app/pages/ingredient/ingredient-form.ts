@@ -10,62 +10,85 @@ import { SupabaseService } from '../../services/supabase.service';
   imports: [CommonModule, FormsModule],
   template: `
   <div class="form-page">
-    <header class="form-header">
+    <div class="page-head">
       <h2>Ingredient <span class="sub">성분등록</span></h2>
-      <div class="actions">
-        <button class="btn primary" (click)="save()">저장</button>
-        <button class="btn ghost" (click)="cancel()">취소</button>
-      </div>
-    </header>
-
-    <div class="notice" *ngIf="notice()">{{ notice() }}</div>
+      <div class="spacer"></div>
+      <button class="btn primary" (click)="save()">저장</button>
+      <button class="btn ghost" (click)="cancel()">취소</button>
+    </div>
 
     <section class="form-body">
       <div class="grid">
-        <label>INCI</label>
-        <input [(ngModel)]="model.inci_name" />
+        <label>INCI Name</label>
+        <textarea rows="2" class="hl-blue" [(ngModel)]="model.inci_name"></textarea>
         <label>국문명</label>
-        <input [(ngModel)]="model.korean_name" />
+        <textarea rows="2" class="hl-blue" [(ngModel)]="model.korean_name"></textarea>
         <label>중국명</label>
-        <input [(ngModel)]="model.chinese_name" />
+        <textarea rows="2" [(ngModel)]="model.chinese_name"></textarea>
         <label>CAS No</label>
         <input [(ngModel)]="model.cas_no" />
         <label>기능(EN)</label>
-        <textarea rows="3" [(ngModel)]="model.function_en"></textarea>
+        <textarea rows="3" class="wide" [(ngModel)]="model.function_en"></textarea>
         <label>기능(KR)</label>
-        <textarea rows="3" [(ngModel)]="model.function_kr"></textarea>
+        <textarea rows="3" class="wide" [(ngModel)]="model.function_kr"></textarea>
         <label>Scientific Name</label>
-        <input [(ngModel)]="model.scientific_name" />
+        <textarea rows="2" [(ngModel)]="model.scientific_name"></textarea>
         <label>EINECS No</label>
         <input [(ngModel)]="model.einecs_no" />
         <label>이전국문명</label>
-        <input [(ngModel)]="model.old_korean_name" />
+        <textarea rows="2" [(ngModel)]="model.old_korean_name"></textarea>
         <label>원산/ABS</label>
         <textarea rows="2" [(ngModel)]="model.origin_abs"></textarea>
         <label>비고</label>
-        <textarea rows="3" [(ngModel)]="model.remarks"></textarea>
+        <textarea rows="3" class="wide" [(ngModel)]="model.remarks"></textarea>
       </div>
       <div class="meta" *ngIf="meta">
         <div>처음 생성: {{ meta.created_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.created_by_name || meta.created_by_email || meta.created_by || '-' }}</div>
         <div>마지막 수정: {{ meta.updated_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.updated_by_name || meta.updated_by_email || meta.updated_by || '-' }}</div>
       </div>
     </section>
+
+    <section class="ing-picker">
+      <label class="picker-label">성분 검색</label>
+      <input class="picker-input" [(ngModel)]="ingQuery" (keydown.arrowDown)="moveIngPointer(1)" (keydown.arrowUp)="moveIngPointer(-1)" (keydown.enter)="onIngEnterOrSearch($event)" (keydown.escape)="onIngEsc($event)" placeholder="INCI/국문명/CAS 검색 (공백=AND)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
+      <ul class="picker-list" *ngIf="ingResults.length">
+        <li *ngFor="let r of ingResults; let i = index" [class.selected]="i===ingPointer" (click)="pickIngredient(r)">
+          {{ r.inci_name }} · {{ r.korean_name || '' }}<span *ngIf="r.old_korean_name"> ({{ r.old_korean_name }})</span> · {{ r.cas_no || '-' }}
+        </li>
+      </ul>
+    </section>
+
+    <div class="notice" *ngIf="notice()">{{ notice() }}</div>
   </div>
   `,
   styles: [`
-  .form-page{ padding:12px 16px; }
-  .form-header{ display:flex; align-items:center; justify-content:space-between; position:sticky; top:12px; background:#fff; z-index:5; padding:8px 0; }
-  .form-header h2{ margin:0; font-size:20px; font-weight:800; }
-  .form-header .sub{ font-size:14px; font-weight:700; margin-left:6px; color:#6b7280; }
-  .actions{ display:flex; gap:8px; }
-  .btn{ height:30px; padding:0 12px; border-radius:8px; border:1px solid #d1d5db; background:#fff; cursor:pointer; }
+  .form-page{ padding:10px 12px; }
+  .page-head{ display:flex; align-items:center; gap:8px; }
+  .page-head .sub{ font-size:14px; font-weight:700; margin-left:6px; color:#6b7280; }
+  .page-head h2{ margin:0; font-size:20px; font-weight:800; }
+  .page-head .spacer{ flex:1; }
+  .btn{ height:28px; padding:0 10px; border-radius:8px; border:1px solid #d1d5db; background:#fff; cursor:pointer; font-size:12px; }
   .btn.primary{ background:#111827; color:#fff; border-color:#111827; }
   .btn.ghost{ background:#fff; color:#111827; }
   .notice{ margin:8px 0 0; padding:8px 10px; border:1px solid #bbf7d0; background:#ecfdf5; color:#065f46; border-radius:10px; font-size:12px; }
-  .form-body{ border:1px solid #eef2f7; border-radius:12px; padding:12px; }
-  .grid{ display:grid; grid-template-columns:120px 1fr; gap:10px 14px; align-items:center; }
-  input, textarea{ width:100%; border:1px solid #e5e7eb; border-radius:8px; padding:6px 8px; font-size:13px; }
+  .form-body{ border:1px solid #eef2f7; border-radius:12px; padding:12px; margin-top:10px; overflow:hidden; }
+  /* Two columns per row: label+input, label+input */
+  .grid{ display:grid; grid-template-columns:120px minmax(0,1fr) 120px minmax(0,1fr); gap:10px 14px; align-items:center; }
+  .grid label{ font-size:11px; color:#111827; text-align:right; }
+  input, textarea{ width:100%; border:1px solid #e5e7eb; border-radius:8px; padding:5px 7px; font-size:12px; color:#111827; box-sizing:border-box; }
+  textarea{ white-space:normal; word-break:break-word; resize:vertical; overflow:auto; min-height:28px; }
+  /* Only textareas with .wide span remaining columns */
+  .grid textarea.wide{ grid-column: 2 / span 3; }
+  /* Highlight for INCI Name and 국문명 */
+  .hl-blue{ background:#eef6ff; border-color:#c7d2fe; }
   .meta{ margin-top:12px; padding:8px 10px; border-top:1px dashed #e5e7eb; color:#6b7280; font-size:12px; }
+  .ing-picker{ margin-top:14px; }
+  .ing-picker .picker-label{ display:block; font-size:11px; color:#6b7280; margin-bottom:4px; }
+  .ing-picker .picker-input{ width:100%; box-sizing:border-box; border:1px solid #e5e7eb; border-radius:8px; padding:5px 7px; font-size:11px; }
+  .ing-picker .picker-list{ list-style:none; margin:6px 0 0; padding:0; max-height:160px; overflow:auto; border:1px solid #eef2f7; border-radius:8px; background:#fff; }
+  .ing-picker .picker-list li{ padding:4px 6px; cursor:pointer; font-size:11px; white-space:normal; word-break:break-word; }
+  .ing-picker .picker-list li.selected{ background:#eef6ff; }
+  .ing-picker .picker-list li:hover{ background:#f3f4f6; }
   `]
 })
 export class IngredientFormComponent implements OnInit {
@@ -74,6 +97,10 @@ export class IngredientFormComponent implements OnInit {
   meta: any = null;
   notice = signal<string | null>(null);
   private backParams: { q?: string; op?: 'AND'|'OR'; page?: number; size?: number } | null = null;
+  // Bottom search states
+  ingQuery: string = '';
+  ingResults: Array<{ id: string; inci_name: string; korean_name?: string; old_korean_name?: string; cas_no?: string }> = [];
+  ingPointer = -1;
   constructor(private route: ActivatedRoute, private router: Router, private supabase: SupabaseService) {}
   async ngOnInit(){
     // Remember list query params to preserve search state on back/cancel
@@ -104,6 +131,11 @@ export class IngredientFormComponent implements OnInit {
       };
       // Fallback: if names are missing, resolve emails from users table
       await this.resolveActorEmails();
+    }
+    // Preload search results when query exists from URL
+    if ((this.backParams?.q || '').trim()) {
+      this.ingQuery = (this.backParams?.q || '').trim();
+      this.runIngQuickSearch();
     }
   }
   async save(){
@@ -165,6 +197,47 @@ export class IngredientFormComponent implements OnInit {
         else if (profile?.name) { this.meta.updated_by_name = profile.name; }
       }
     } catch {}
+  }
+
+  // Bottom search bar behaviors (like product picker)
+  debouncedIngTimer: any = null;
+  debouncedIngSearch(){ if (this.debouncedIngTimer) clearTimeout(this.debouncedIngTimer); this.debouncedIngTimer = setTimeout(()=> this.runIngQuickSearch(), 250); }
+  async runIngQuickSearch(){
+    const q = (this.ingQuery||'').trim();
+    if (!q){ this.ingResults = []; this.ingPointer = -1; return; }
+    const { data } = await this.supabase.listIngredients({ page: 1, pageSize: 20, keyword: q, keywordOp: 'AND' }) as any;
+    const rows = Array.isArray(data) ? data : [];
+    this.ingResults = rows.map((r:any)=> ({ id: r.id, inci_name: r.inci_name, korean_name: r.korean_name, old_korean_name: r.old_korean_name, cas_no: r.cas_no }));
+    this.ingPointer = this.ingResults.length ? 0 : -1;
+  }
+  moveIngPointer(delta:number){ const max=this.ingResults.length; if (!max) return; if (this.ingPointer<0){ this.ingPointer = delta>0?0:max-1; return; } this.ingPointer = Math.max(0, Math.min(max-1, this.ingPointer + delta)); }
+  onIngEnter(ev: Event){ if ((ev as any)?.preventDefault) (ev as any).preventDefault(); if (this.ingPointer>=0){ const row=this.ingResults[this.ingPointer]; if (row) this.pickIngredient(row); } }
+  onIngSearchEnter(ev: Event){ if ((ev as any)?.preventDefault) (ev as any).preventDefault(); this.runIngQuickSearch(); }
+  onIngEnterOrSearch(ev: Event){ if ((ev as any)?.preventDefault) (ev as any).preventDefault(); if (this.ingPointer>=0 && this.ingResults[this.ingPointer]){ this.pickIngredient(this.ingResults[this.ingPointer]); return; } this.runIngQuickSearch(); }
+  onIngEsc(ev: Event){ if ((ev as any)?.preventDefault) (ev as any).preventDefault(); this.ingQuery=''; this.ingResults=[]; this.ingPointer=-1; }
+  async pickIngredient(row: { id: string }){
+    try{
+      const { data } = await this.supabase.getIngredient(row.id);
+      if (data){
+        this.model = data;
+        this.id.set(row.id);
+        this.meta = {
+          created_at: data.created_at,
+          created_by: data.created_by,
+          created_by_name: data.created_by_name,
+          updated_at: data.updated_at,
+          updated_by: data.updated_by,
+          updated_by_name: data.updated_by_name,
+        } as any;
+        await this.resolveActorEmails();
+        // Fill input with picked summary to indicate selection
+        this.ingQuery = `${data.inci_name || ''} ${data.korean_name ? '· '+data.korean_name : ''}`.trim();
+        this.ingResults = [];
+        this.ingPointer = -1;
+        // Reflect selected id in URL
+        try { this.router.navigate([], { relativeTo: this.route, queryParams: { id: this.id() }, replaceUrl: true }); } catch {}
+      }
+    }catch{}
   }
 }
 
