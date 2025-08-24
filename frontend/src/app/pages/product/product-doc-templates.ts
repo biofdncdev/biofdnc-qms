@@ -1,11 +1,12 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ComposePreviewComponent } from './compose-preview';
 import { SupabaseService } from '../../services/supabase.service';
 
 @Component({
   selector: 'app-product-doc-templates',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ComposePreviewComponent],
   template: `
   <div class="page">
     <header class="top">
@@ -66,6 +67,11 @@ import { SupabaseService } from '../../services/supabase.service';
                 <li *ngFor="let l of logs">{{ l.time }} · {{ l.user || 'unknown' }}</li>
               </ul>
             </div>
+
+            <div class="preview-title">HTML 미리보기 (샘플)</div>
+            <div class="preview-wrap">
+              <app-compose-preview></app-compose-preview>
+            </div>
           </div>
           <div *ngSwitchDefault class="card dim">
             <p>좌측에서 항목을 선택해 주세요. (Composition만 활성화됨)</p>
@@ -113,6 +119,9 @@ import { SupabaseService } from '../../services/supabase.service';
     .log-title{ font-weight:700; font-size:12px; color:#374151; margin-bottom:4px; }
     .logs ul{ list-style:none; margin:0; padding:0; }
     .logs li{ font-size:12px; color:#6b7280; padding:2px 0; }
+    .preview-title{ margin-top:12px; font-weight:700; font-size:12px; color:#374151; }
+    .preview-wrap{ margin-top:8px; border:1px solid #e5e7eb; border-radius:10px; padding:10px; background:#f9fafb; overflow:auto; }
+    .preview-wrap .no-print{ display:none !important; }
     @media (max-width: 820px){ .split{ grid-template-columns:1fr; } }
   `]
 })

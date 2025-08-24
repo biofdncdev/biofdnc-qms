@@ -33,6 +33,7 @@ type Row = {
       <button class="mini edit-btn" (click)="addRow()">행 추가</button>
       <button class="mini edit-btn" (click)="onReset()">초기화</button>
       <button class="mini warn" (click)="pdfExport()">PDF 출력</button>
+      <button class="mini" (click)="openHtmlPreview()">HTML 미리보기</button>
       <button class="mini success" (click)="excelExport()">EXCEL저장</button>
     </header>
 
@@ -396,6 +397,14 @@ export class ProductDocsComponent implements OnInit {
       const first = row?.querySelector('textarea') as HTMLTextAreaElement | undefined;
       first?.focus();
     }, 0);
+  }
+
+  openHtmlPreview(){
+    // Find first checked composition row with product_id
+    const target = this.rows.find(r=> r.composition && r.product_id);
+    if (!target){ alert('Composition 체크된 품목이 없습니다.'); return; }
+    const url = `/app/product/compose-preview?product_id=${encodeURIComponent(target.product_id as any)}&code=${encodeURIComponent(target.product_code||'')}&name=${encodeURIComponent(target.name_kr||'')}`;
+    window.open(url, '_blank');
   }
 
   async pdfExport(){
