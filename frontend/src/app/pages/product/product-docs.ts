@@ -34,6 +34,8 @@ type Row = {
       <button class="mini edit-btn" (click)="onReset()">초기화</button>
       <button class="mini warn" (click)="pdfExport()">PDF 출력</button>
       <button class="mini" (click)="openHtmlPreview()">HTML 미리보기</button>
+      <button class="mini" (click)="openHtmlPdf()">HTML → PDF 저장</button>
+      <button class="mini success" (click)="savePdfDirect()">PDF 저장(한 번에)</button>
       <button class="mini success" (click)="excelExport()">EXCEL저장</button>
     </header>
 
@@ -405,6 +407,120 @@ export class ProductDocsComponent implements OnInit {
     if (!target){ alert('Composition 체크된 품목이 없습니다.'); return; }
     const url = `/app/product/compose-preview?product_id=${encodeURIComponent(target.product_id as any)}&code=${encodeURIComponent(target.product_code||'')}&name=${encodeURIComponent(target.name_kr||'')}`;
     window.open(url, '_blank');
+  }
+
+  openHtmlPdf(){
+    const target = this.rows.find(r=> r.composition && r.product_id);
+    if (!target){ alert('Composition 체크된 품목이 없습니다.'); return; }
+    const url = `/app/product/compose-preview?product_id=${encodeURIComponent(target.product_id as any)}&code=${encodeURIComponent(target.product_code||'')}&name=${encodeURIComponent(target.name_kr||'')}&auto=1`;
+    window.open(url, '_blank');
+  }
+
+  async savePdfDirect(){
+    const target = this.rows.find(r=> r.composition && r.product_id);
+    if (!target){ alert('Composition 체크된 품목이 없습니다.'); return; }
+    try{
+      const { data } = await this.supabase.listProductCompositions(target.product_id as any) as any;
+      const list: Array<{ inci: string; kor: string; pct: number }> = (data||[]).map((c:any)=>({
+        inci: (c?.ingredient?.inci_name)||'',
+        kor: (c?.ingredient?.korean_name)||'',
+        pct: Number(c?.percent)||0,
+      }));
+      // Draw to high-res canvas to preserve Korean text (system fonts)
+      const scale = 2; // 2x for clarity
+      const pagePxW = Math.round(794 * scale); // A4 96dpi baseline
+      const pagePxH = Math.round(1123 * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = pagePxW; canvas.height = pagePxH;
+      const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('canvas not supported');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,pagePxW,pagePxH);
+      const mm = (v:number)=> v * (pagePxW / 210);
+      const margin = 25; const pageW = 210; const width = pageW - margin*2;
+      // Header: small motto/brand at top in original size
+      ctx.fillStyle = '#111827';
+      ctx.font = `${Math.round(mm(3))}px 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif`;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText('Life Science for Happiness', mm(margin), mm(15));
+      ctx.fillText('BIO-FD&C', pagePxW - mm(margin) - mm(20), mm(15));
+      ctx.font = `bold ${Math.round(mm(6))}px 'Noto Sans KR', 'Malgun Gothic', sans-serif`;
+      const title = 'CERTIFICATE OF COMPOSITION';
+      const titleTop = 70; // push further down (~70mm)
+      ctx.fillText(title, (pagePxW/2) - ctx.measureText(title).width/2, mm(titleTop));
+      // Product box (26.5mm below title)
+      const boxY = titleTop + 26.5; const boxH = 16;
+      ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = Math.max(1, mm(0.35));
+      const bx = mm(margin); const bw = mm(width);
+      ctx.strokeRect(bx, mm(boxY), bw, mm(boxH));
+      ctx.font = `bold ${Math.round(mm(3.6))}px 'Noto Sans KR', 'Malgun Gothic', sans-serif`;
+      const plab = 'Product Name';
+      ctx.fillText(plab, (pagePxW/2) - ctx.measureText(plab).width/2, mm(boxY+5));
+      ctx.font = `bold ${Math.round(mm(4.6))}px 'Noto Sans KR', 'Malgun Gothic', sans-serif`;
+      const pname = `${target.name_kr || ''}`.trim() || `${target.product_code||''}`;
+      ctx.fillText(pname, (pagePxW/2) - ctx.measureText(pname).width/2, mm(boxY+11));
+      // Table grid
+      const colNo = 12, colInci = 70, colKor = 60, colPct = width - colNo - colInci - colKor;
+      let y = boxY + boxH + 12;
+      const headerH = 8; const rowH = 8;
+      ctx.font = `bold ${Math.round(mm(3.6))}px 'Noto Sans KR', 'Malgun Gothic', sans-serif`;
+      // header cells
+      const x1 = mm(margin), x2 = mm(margin+colNo), x3 = mm(margin+colNo+colInci), x4 = mm(margin+colNo+colInci+colKor), x5 = mm(margin+width);
+      const hy = mm(y), hh = mm(headerH);
+      ctx.strokeRect(x1, hy, x2-x1, hh);
+      ctx.strokeRect(x2, hy, x3-x2, hh);
+      ctx.strokeRect(x3, hy, x4-x3, hh);
+      ctx.strokeRect(x4, hy, x5-x4, hh);
+      const centerText = (text:string, cx:number, cy:number)=>{ ctx.fillText(text, cx - ctx.measureText(text).width/2, cy); };
+      centerText('No.', x1 + (x2-x1)/2, hy + mm(5.5));
+      centerText('INCI Name', x2 + (x3-x2)/2, hy + mm(5.5));
+      centerText('한글성분명', x3 + (x4-x3)/2, hy + mm(5.5));
+      centerText('조성비(%)', x4 + (x5-x4)/2, hy + mm(5.5));
+      // body rows
+      ctx.font = `${Math.round(mm(3.6))}px 'Noto Sans KR', 'Malgun Gothic', sans-serif`;
+      let total = 0;
+      for (let i=0;i<list.length;i++){
+        const top = mm(y + headerH + i*rowH);
+        ctx.strokeRect(x1, top, x2-x1, mm(rowH));
+        ctx.strokeRect(x2, top, x3-x2, mm(rowH));
+        ctx.strokeRect(x3, top, x4-x3, mm(rowH));
+        ctx.strokeRect(x4, top, x5-x4, mm(rowH));
+        centerText(String(i+1), x1 + (x2-x1)/2, top + mm(5.5));
+        ctx.fillText(String(list[i].inci||''), x2 + mm(2), top + mm(5.5));
+        ctx.fillText(String(list[i].kor||''), x3 + mm(2), top + mm(5.5));
+        const pct = Number.isFinite(list[i].pct)? Math.round(list[i].pct) : 0;
+        const pctText = String(pct);
+        ctx.fillText(pctText, x5 - mm(2) - ctx.measureText(pctText).width, top + mm(5.5));
+        total += pct;
+      }
+      const lastY = y + headerH + list.length * rowH;
+      ctx.font = `bold ${Math.round(mm(3.6))}px 'Noto Sans KR', 'Malgun Gothic', sans-serif`;
+      ctx.strokeRect(x1, mm(lastY), x4-x1, mm(rowH));
+      ctx.strokeRect(x4, mm(lastY), x5-x4, mm(rowH));
+      centerText('Total', x1 + (x4-x1)/2, mm(lastY + 5.5));
+      const totalText = String(total);
+      ctx.fillText(totalText, x5 - mm(2) - ctx.measureText(totalText).width, mm(lastY + 5.5));
+      // Footer contents
+      const footY = 297 - 25 - 26;
+      ctx.font = `${Math.round(mm(3.6))}px 'Noto Sans KR', 'Malgun Gothic', sans-serif`;
+      ctx.fillText('Approved by :', mm(margin), mm(footY));
+      ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = Math.max(1, mm(0.3));
+      ctx.beginPath(); ctx.moveTo(mm(margin + 26), mm(footY + 0.8)); ctx.lineTo(mm(margin + 90), mm(footY + 0.8)); ctx.stroke();
+      ctx.font = `bold ${Math.round(mm(3.6))}px 'Noto Sans KR', 'Malgun Gothic', sans-serif`;
+      const corp = '(주)바이오에프디엔씨';
+      ctx.fillText(corp, (pagePxW/2) - ctx.measureText(corp).width/2, mm(footY + 10));
+      ctx.font = `${Math.round(mm(3))}px 'Noto Sans KR', 'Malgun Gothic', sans-serif`;
+      ctx.fillText('21990 Smart Valley A-509,510,511, Songdomirae-ro 30, Yeonsu-Gu, Incheon, Korea', mm(margin), mm(297 - 25 - 8));
+      ctx.fillText('T. 82 32) 811-2027  F. 82 32) 822-2027  dsshin@biofdnc.com', mm(margin), mm(297 - 25 - 4));
+      const p1 = 'page1';
+      ctx.fillText(p1, pagePxW - mm(margin) - ctx.measureText(p1).width, mm(297 - 25 - 4));
+
+      // Convert to PDF
+      const dataUrl = canvas.toDataURL('image/png');
+      const { jsPDF } = await import('jspdf');
+      const doc = new (jsPDF as any)({ orientation: 'p', unit: 'mm', format: 'a4' });
+      doc.addImage(dataUrl, 'PNG', 0, 0, 210, 297);
+      const name = `${this.todayStr()} ${target.product_code||''} ${target.name_kr||''} Composition ${target.customer||''} ${target.delivery_customer||''}.pdf`;
+      doc.save(name);
+    }catch(e:any){ alert('PDF 생성 실패: ' + (e?.message||e)); }
   }
 
   async pdfExport(){

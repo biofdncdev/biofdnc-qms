@@ -62,7 +62,7 @@ import { SupabaseService } from '../../services/supabase.service';
   </div>
   `,
   styles: [`
-    :host{ display:block; padding: 12px; background:#f3f4f6; }
+    :host{ display:block; padding: 12px; background:#f3f4f6; font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Apple SD Gothic Neo', 'Malgun Gothic', Arial, sans-serif; }
     .no-print{ position:fixed; right:12px; top:12px; }
     .btn{ height:32px; padding:0 12px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer; }
     /* A4 portrait with Word-like margins using mm for print-parity */
@@ -72,9 +72,9 @@ import { SupabaseService } from '../../services/supabase.service';
     .head .line1{ display:flex; justify-content:space-between; align-items:center; font-size:11pt; color:#111827; }
     .head .brand{ font-weight:700; }
     /* Title positioned for comfortable reading: ~10–12mm below top content */
-    .head h1{ margin: 12mm 0 8mm; text-align:center; font-size:20pt; font-weight:800; letter-spacing:0.3px; }
-    /* Product box placed below title with breathing room */
-    .product{ border:0.4mm dotted #9ca3af; border-radius:2mm; padding: 6mm; text-align:center; margin: 6mm 0 8mm; }
+    .head h1{ margin: 70mm 0 26.5mm; text-align:center; font-size:20pt; font-weight:800; letter-spacing:0.3px; }
+    /* Product box placed 100px (~26.5mm) below title */
+    .product{ border:0.4mm dotted #9ca3af; border-radius:2mm; padding: 6mm; text-align:center; margin: 0 0 8mm; }
     .product .label{ color:#6b7280; font-weight:700; font-size:11pt; }
     .product .value{ font-size:13pt; font-weight:800; margin-top:2mm; }
     /* Table spacing tuned for readability; header slightly stronger */
@@ -112,6 +112,10 @@ export class ComposePreviewComponent implements OnInit {
     this.name = url.searchParams.get('name');
     const productId = url.searchParams.get('product_id');
     if (productId) this.loadCompositions(productId);
+    const auto = url.searchParams.get('auto') || url.searchParams.get('pdf');
+    if (auto === '1' || auto === 'true'){
+      setTimeout(()=> this.windowPrint(), 200);
+    }
   }
 
   windowPrint(){
