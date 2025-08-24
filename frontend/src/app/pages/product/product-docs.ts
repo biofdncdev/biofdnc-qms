@@ -29,8 +29,9 @@ type Row = {
     <header class="top">
       <h2>Product <span class="sub">기본서류</span></h2>
       <div class="spacer"></div>
+      <button class="btn" (click)="addRow()">행 추가</button>
       <button class="btn" (click)="onReset()">초기화</button>
-      <button class="btn primary" (click)="onSave()">저장</button>
+      <button class="btn primary" (click)="onSave()">출력</button>
     </header>
 
     <section class="table-wrap">
@@ -50,6 +51,7 @@ type Row = {
             <th class="dim col-narrow">Process</th>
             <th class="dim col-narrow">Brochure</th>
             <th class="dim col-narrow">RMI</th>
+            <th class="col-narrow center">삭제</th>
           </tr>
         </thead>
         <tbody>
@@ -67,6 +69,7 @@ type Row = {
             <td class="center dim col-narrow"><input type="checkbox" disabled [(ngModel)]="r.process" /></td>
             <td class="center dim col-narrow"><input type="checkbox" disabled [(ngModel)]="r.brochure" /></td>
             <td class="center dim col-narrow"><input type="checkbox" disabled [(ngModel)]="r.rmi" /></td>
+            <td class="center col-narrow"><button class="mini danger" (click)="removeRow(i)">삭제</button></td>
           </tr>
         </tbody>
       </table>
@@ -141,6 +144,7 @@ type Row = {
     .mini{ height:24px; padding:0 8px; border-radius:6px; border:1px solid #d1d5db; background:#fff; font-size:12px; cursor:pointer; }
     .mini.ok{ background:#e0f2fe; border-color:#93c5fd; color:#0c4a6e; }
     .mini.no{ background:#fee2e2; border-color:#fecaca; color:#7f1d1d; }
+    .mini.danger{ background:#fff; border-color:#fecaca; color:#b91c1c; }
     .edit-btn{ color:#111827; border-color:#d1d5db; background:#fff; }
     /* Responsive widths: narrow columns shrink a bit, name/en widen */
     .col-narrow{ width: 60px; text-align:center; }
@@ -156,7 +160,7 @@ export class ProductDocsComponent implements OnInit {
   searchRowIndex = 0;
   searchColIndex = 0;
   searchQuery = '';
-  searchResults: Array<{ product_code: string; name_kr?: string; name_en?: string; spec?: string; specification?: string; keywords_alias?: string; special_notes?: string }> = [];
+  searchResults: Array<{ product_code: string; name_kr?: string; name_en?: string; spec?: string; specification?: string; keywords_alias?: string; special_notes?: string; id?: string }> = [];
   searchPointer = 0;
   // modal position & drag
   modalTop = 140; // default 100px below original
@@ -221,6 +225,7 @@ export class ProductDocsComponent implements OnInit {
         specification: r.specification,
         keywords_alias: r.keywords_alias,
         special_notes: r.special_notes,
+        id: r.id,
       })) : [];
     }catch{ this.searchResults = []; }
     // Do NOT auto-focus the first row; keep focus in the input so users can refine queries immediately
@@ -319,6 +324,30 @@ export class ProductDocsComponent implements OnInit {
   onSave(){ this.saveState(); alert('저장되었습니다.'); }
   onReset(){ this.rows = [{}, {}, {}, {}]; this.saveState(); }
 
+  addRow(){
+    this.rows.push({});
+    this.saveState();
+    setTimeout(()=>{
+      const table = document.querySelector('table.grid') as HTMLTableElement | null;
+      const lastRow = table?.querySelectorAll('tbody tr')[this.rows.length-1] as HTMLTableRowElement | undefined;
+      const first = lastRow?.querySelector('textarea') as HTMLTextAreaElement | undefined;
+      first?.focus();
+    }, 0);
+  }
+
+  removeRow(i:number){
+    this.rows.splice(i,1);
+    if (this.rows.length === 0) this.rows.push({});
+    this.saveState();
+    // focus a sensible next cell
+    setTimeout(()=>{
+      const table = document.querySelector('table.grid') as HTMLTableElement | null;
+      const row = table?.querySelectorAll('tbody tr')[Math.min(i, this.rows.length-1)] as HTMLTableRowElement | undefined;
+      const first = row?.querySelector('textarea') as HTMLTextAreaElement | undefined;
+      first?.focus();
+    }, 0);
+  }
+
   autoGrow(ev: Event){
     const ta = ev.target as HTMLTextAreaElement;
     if (!ta) return;
@@ -358,7 +387,20 @@ export class ProductDocsComponent implements OnInit {
   }
 
   toggleVerified(i:number){ this.rows[i].verified = !this.rows[i].verified; this.saveState(); }
-  openEdit(i:number){ const r=this.rows[i]; if (!r?.product_id) return; const url = `/app/product/form?id=${encodeURIComponent(r.product_id)}`; this.tabBus.requestOpen('품목등록', '/app/product/form', url); }
+  async openEdit(i:number){
+    const r=this.rows[i];
+    if (!r) return;
+    if (!r.product_id && r.product_code){
+      try{
+        const { data } = await this.supabase.quickSearchProducts(r.product_code);
+        const exact = (data||[]).find((p:any)=> String(p.product_code).toLowerCase() === String(r.product_code).toLowerCase());
+        if (exact){ r.product_id = exact.id; this.saveState(); }
+      }catch{}
+    }
+    if (!r.product_id) return;
+    const url = `/app/product/form?id=${encodeURIComponent(r.product_id)}`;
+    this.tabBus.requestOpen('품목등록', '/app/product/form', url);
+  }
 
   private storageKey = 'product.docs.state.v1';
   private saveState(){ try{ localStorage.setItem(this.storageKey, JSON.stringify(this.rows)); }catch{} }
