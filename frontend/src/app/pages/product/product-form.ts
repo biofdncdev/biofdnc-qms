@@ -16,8 +16,8 @@ import { SupabaseService } from '../../services/supabase.service';
 
     <!-- 탭: 조성성분/RMI -->
     <nav class="tabs">
-      <button class="tab" [class.active]="activeTab==='composition'" (click)="activeTab='composition'">조성성분</button>
-      <button class="tab" [class.active]="activeTab==='extra'" (click)="activeTab='extra'">RMI</button>
+      <button class="tab" [class.active]="activeTab==='composition'" (click)="setTab('composition')">조성성분</button>
+      <button class="tab" [class.active]="activeTab==='extra'" (click)="setTab('extra')">RMI</button>
     </nav>
 
 
@@ -123,7 +123,8 @@ import { SupabaseService } from '../../services/supabase.service';
         </div>
         <!-- 확인자 영역 -->
         <div class="verifier">
-          <button class="btn" [disabled]="verifyDisabled()" (click)="confirmComposition()">조성성분 확인</button>
+          <button class="btn verify-btn" [class.need]="!isVerified()" [class.done]="isVerified()" [disabled]="false" (click)="onVerifyClick()">조성성분 확인</button>
+          <span *ngIf="!isVerified()" class="verify-note">확인이 필요합니다</span>
           <div class="logs">
             <div class="log-item" *ngFor="let l of verifyLogs; let i = index">
               {{ i+1 }}차 확인: {{ l.user }} · {{ l.time }}
@@ -234,12 +235,17 @@ import { SupabaseService } from '../../services/supabase.service';
     .verifier .log-item{ position:relative; padding-right:14px; }
     .verifier .log-x{ margin-left:6px; border:none; background:transparent; color:#9ca3af; cursor:pointer; font-size:12px; line-height:1; padding:0 2px; }
     .verifier .log-x:hover{ color:#ef4444; }
+    .verify-btn.need{ background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
+    .verify-btn.done{ background:#e0f2fe; border-color:#93c5fd; color:#0c4a6e; }
+    .verify-note{ font-size:11px; color:#9a3412; }
   `]
 })
 export class ProductFormComponent implements OnInit {
   id = signal<string | null>(null);
   model: any = {};
   meta: any = null;
+  // Per-user persistence keying
+  private uid: string | null = null;
   // Tabs
   activeTab: 'general' | 'extra' | 'impurity' | 'composition' | 'files' = 'composition';
   compositions: Array<{ id?: string; product_id?: string; ingredient_id: string; percent?: number | null; note?: string | null; inci_name?: string; korean_name?: string; chinese_name?: string; cas_no?: string }> = [];
@@ -274,19 +280,51 @@ export class ProductFormComponent implements OnInit {
   constructor(private route: ActivatedRoute, private router: Router, private supabase: SupabaseService) {}
   isAdmin = false;
   async ngOnInit(){
+    // capture current user for per-user persistence
+    try{ const u = await this.supabase.getCurrentUser(); this.uid = u?.id || null; }catch{ this.uid = null; }
     const id = this.route.snapshot.queryParamMap.get('id');
     if (id) {
       this.id.set(id);
       await this.loadProductState(id);
+      this.storeLastProductId(id);
+    } else {
+      // 쿼리파라미터가 없으면 마지막으로 편집하던 품목을 복원
+      const lastId = this.readPerUser('product.form.lastId');
+      if (lastId){
+        this.id.set(lastId);
+        try{
+          const raw = this.readPerUser(`product.form.state.${lastId}`);
+          if (raw){
+            const s = JSON.parse(raw);
+            if (s?.model) this.model = { ...this.model, ...s.model };
+            if (Array.isArray(s?.compositions)) this.compositions = s.compositions;
+            // verify logs snapshot
+            if (Array.isArray(s?.verifyLogs)) this.verifyLogs = s.verifyLogs;
+          } else {
+            await this.loadProductState(lastId);
+          }
+        }catch{}
+      }
+    }
+    // Restore last visited tab
+    const savedTab = localStorage.getItem('product.form.activeTab');
+    if (savedTab === 'composition' || savedTab === 'extra') this.activeTab = savedTab as any;
+    // If no saved tab, attempt to read from current open tab title (keeps continuity from app-shell)
+    // Restore unsaved UI state (remarks/compositions) snapshot for continuity
+    const stateKey = this.stateKey();
+    if (stateKey){
+      try{ const raw = this.readPerUser(stateKey); if(raw){ const s=JSON.parse(raw); if(s?.id===this.id()){ if(Array.isArray(s.compositions)) this.compositions = s.compositions; if (s.model) this.model = { ...this.model, ...s.model }; if (Array.isArray(s.verifyLogs)) this.verifyLogs = s.verifyLogs; } } }catch{}
     }
   }
+  setTab(tab: 'composition' | 'extra'){ this.activeTab = tab; localStorage.setItem('product.form.activeTab', tab); }
   addComposition(){ this.compositions.push({ ingredient_id: '', percent: null, note: '' }); }
   addCompositionAndFocus(){ this.addComposition(); setTimeout(()=>{ const last = document.querySelector('input[type="number"]') as HTMLInputElement|null; last?.focus(); }, 0); }
-  async removeComposition(row: any){ if (row?.id){ await this.supabase.deleteProductComposition(row.id); } this.compositions = this.compositions.filter(r => r !== row); }
+  async removeComposition(row: any){ if (row?.id){ await this.supabase.deleteProductComposition(row.id); } this.compositions = this.compositions.filter(r => r !== row); this.saveStateSnapshot(); }
   // Auto-save only remarks when changed
   onRemarksChange(_: any){
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => this.saveRemarks(), 600);
+    this.saveStateSnapshot();
   }
   private async saveRemarks(){
     if (!this.id()) return; // existing product only
@@ -365,7 +403,7 @@ export class ProductFormComponent implements OnInit {
       const inputs = Array.from(document.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
       const last = inputs[inputs.length-1]; last?.focus();
     }, 0);
-    this.saved = false;
+    this.saved = false; this.saveStateSnapshot();
   }
 
   // Composition table handlers
@@ -487,6 +525,7 @@ export class ProductFormComponent implements OnInit {
     }, 0);
     this.runPickerSearch();
     this.saved = false;
+    this.saveStateSnapshot();
   }
   movePickerPointer(delta:number){
     const max = this.pickerRows.length; if (!max) return; this.pickerPointerMoved = true;
@@ -498,9 +537,9 @@ export class ProductFormComponent implements OnInit {
     this.pickerPointer = Math.max(0, Math.min(max-1, this.pickerPointer + delta));
   }
   onPickerEnter(ev: any){ if (ev?.preventDefault) ev.preventDefault(); if (this.pickerPointer < 0) return; const row = this.pickerRows[this.pickerPointer]; if (row) this.addPicked(row); }
-  removeRow(row:any){ this.compositions = this.compositions.filter(r => r !== row); if (this.selectedComp===row) this.selectedComp=null; }
-  removeSelected(){ if (!this.selectedComp) return; this.compositions = this.compositions.filter(r => r !== this.selectedComp); this.selectedComp = null; }
-  onPercentChange(){ this.saved = false; }
+  removeRow(row:any){ this.compositions = this.compositions.filter(r => r !== row); if (this.selectedComp===row) this.selectedComp=null; this.saveStateSnapshot(); }
+  removeSelected(){ if (!this.selectedComp) return; this.compositions = this.compositions.filter(r => r !== this.selectedComp); this.selectedComp = null; this.saveStateSnapshot(); }
+  onPercentChange(){ this.saved = false; this.saveStateSnapshot(); }
   navigatePercent(ev: Event, rowIndex: number, delta: number){
     if (ev?.preventDefault) ev.preventDefault();
     const inputs = Array.from(document.querySelectorAll('td.col-pct input[type="number"]')) as HTMLInputElement[];
@@ -534,7 +573,7 @@ export class ProductFormComponent implements OnInit {
     // load selected product
     try{
       const { data } = await this.supabase.getProduct(p.id);
-      if (data){ this.model = data; this.id.set(p.id); this.saved = true; this.productResults = []; this.productQuery = `${p.product_code} · ${p.name_kr||''}`; await this.loadProductState(p.id); }
+      if (data){ this.model = data; this.id.set(p.id); this.storeLastProductId(p.id); this.saved = true; this.productResults = []; this.productQuery = `${p.product_code} · ${p.name_kr||''}`; await this.loadProductState(p.id); this.saveStateSnapshot(); }
     }catch{}
   }
 
@@ -594,6 +633,7 @@ export class ProductFormComponent implements OnInit {
       mapped.sort((a:any,b:any)=> (Number(b.percent)||0) - (Number(a.percent)||0));
       this.compositions = mapped as any;
       this.saved = true;
+      this.saveStateSnapshot();
       // After successful save, persist verification logs to DB as-is
       try{ await this.supabase.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
       // 저장 이후 확인 버튼을 다시 활성화
@@ -628,12 +668,15 @@ export class ProductFormComponent implements OnInit {
       this.verifyLogs = Array.isArray(logs) ? logs : [];
       this.lastVerifiedAt = null;
     }catch{ this.verifyLogs = []; this.lastVerifiedAt = null; }
+    this.saveStateSnapshot();
   }
 
   // 확인 로그 처리
   verifyLogs: Array<{ user: string; time: string }> = [];
   private lastVerifiedAt: string | null = null;
-  verifyDisabled(){ return this.lastVerifiedAt !== null; }
+  isVerified(){ return (this.verifyLogs && this.verifyLogs.length > 0); }
+  onVerifyClick(){ if (!this.isVerified()) this.confirmComposition(); }
+  verifyDisabled(){ return false; }
   async confirmComposition(){
     try{
       const user = await this.supabase.getCurrentUser();
@@ -645,6 +688,7 @@ export class ProductFormComponent implements OnInit {
       this.lastVerifiedAt = time;
       this.saveVerifyState();
       const pid = this.id(); if (pid) try{ await this.supabase.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
+      this.saveStateSnapshot();
     }catch{}
   }
   removeVerify(index:number){
@@ -665,12 +709,18 @@ export class ProductFormComponent implements OnInit {
       const pid = this.id();
       if (pid){
         const dbLogs = await this.supabase.getProductVerifyLogs(pid);
-        if (Array.isArray(dbLogs) && dbLogs.length){ this.verifyLogs = dbLogs; this.lastVerifiedAt = null; return; }
+        if (Array.isArray(dbLogs) && dbLogs.length){ this.verifyLogs = dbLogs; this.lastVerifiedAt = this.verifyLogs[this.verifyLogs.length-1]?.time || null; return; }
       }
       const raw=localStorage.getItem(key); if(!raw) return; const s=JSON.parse(raw); this.verifyLogs = Array.isArray(s?.logs)? s.logs: []; this.lastVerifiedAt = s?.lastVerifiedAt || null;
     }catch{}
   }
   private saveVerifyState(){ try{ const key=this.verifyKey(); if(!key) return; const payload = { logs: this.verifyLogs, lastVerifiedAt: this.lastVerifiedAt }; localStorage.setItem(key, JSON.stringify(payload)); }catch{} }
+  private stateKey(){ const pid = this.id(); return pid ? `product.form.state.${pid}` : null; }
+  private saveStateSnapshot(){ try{ const key=this.stateKey(); if(!key) return; const snapshot = { id: this.id(), model: this.model, compositions: this.compositions, verifyLogs: this.verifyLogs }; this.writePerUser(key, JSON.stringify(snapshot)); }catch{} }
+  private storeLastProductId(id:string){ try{ this.writePerUser('product.form.lastId', id); }catch{} }
+  private perUserKey(k:string){ return this.uid ? `${this.uid}:${k}` : `anon:${k}`; }
+  private writePerUser(k:string, v:string){ localStorage.setItem(this.perUserKey(k), v); }
+  private readPerUser(k:string){ return localStorage.getItem(this.perUserKey(k)); }
 }
 
 

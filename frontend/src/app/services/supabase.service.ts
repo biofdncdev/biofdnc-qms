@@ -556,22 +556,17 @@ export class SupabaseService {
     const kw = (keyword||'').trim();
     if (!kw) return { data: [] as any[] } as any;
     const words = kw.split(/\s+/).map(s=>s.trim()).filter(Boolean);
-    const cols = ['product_code','name_kr','name_en','cas_no','spec','specification','keywords_alias'];
-    // Build OR superset across all words and columns
+    const cols = ['product_code','name_kr','name_en','cas_no','spec','specification','keywords_alias','special_notes'];
+    // Server-side AND-of-OR: every token must match at least one of the searchable columns
     const makeGroup = (w:string)=> cols.map(c=> `${c}.ilike.*${w}*`).join(',');
-    const logic = `or(${words.map(w=> makeGroup(w)).join(',')})`;
+    const andLogic = `and(${words.map(w=> `or(${makeGroup(w)})`).join(',')})`;
     const { data } = await this.ensureClient()
       .from('products')
-      .select('id, product_code, name_kr, name_en, cas_no, spec, specification, keywords_alias')
-      .or(logic)
-      .limit(200) as any;
+      .select('id, product_code, name_kr, name_en, cas_no, spec, specification, keywords_alias, special_notes')
+      .or(andLogic)
+      .limit(500) as any;
     const rows = Array.isArray(data) ? data : [];
-    // Client-side AND filter: all tokens must be included in concatenated searchable string
-    const filtered = rows.filter((r:any)=>{
-      const source = [r.product_code,r.name_kr,r.name_en,r.cas_no,r.spec,r.specification,r.keywords_alias].map((x:any)=> String(x||'')).join(' ').toLowerCase();
-      return words.every(w => source.includes(w.toLowerCase()));
-    });
-    return { data: filtered.slice(0,20) } as any;
+    return { data: rows.slice(0, 200) } as any;
   }
   async getProduct(id: string){ return this.ensureClient().from('products').select('*').eq('id', id).single(); }
   async upsertProduct(row: any){ return this.ensureClient().from('products').upsert(row, { onConflict: 'id' }).select('*').single(); }
