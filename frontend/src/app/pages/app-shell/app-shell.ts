@@ -1,7 +1,7 @@
 import { Component, signal } from '@angular/core';
 // Avoid animations dependency for Netlify build; simple JS/CSS transitions are used
 import { CommonModule } from '@angular/common';
-import { Router, RouterOutlet } from '@angular/router';
+import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
@@ -49,6 +49,8 @@ export class AppShellComponent {
   dragOverIndex: number | null = null;
   menus: Array<{ key: string; icon: string; label: string; path?: string; badge?: number; submenu?: Array<{ label: string; path?: string }> }> = [];
   isAdmin = false;
+  isManager = false;
+  isStaff = false;
   isViewer = false;
   unread = signal<number>(0);
   private notifSubscription: any;
@@ -59,11 +61,13 @@ export class AppShellComponent {
       if (u) {
         const { data } = await this.supabase.getUserProfile(u.id);
         this.isAdmin = data?.role === 'admin';
+        this.isManager = data?.role === 'manager';
+        this.isStaff = data?.role === 'staff';
         this.isViewer = data?.role === 'viewer';
       }
       this.buildMenus();
-      // Load notifications only for admins
-      if (this.isAdmin) {
+      // Load notifications for staff and above (admin/manager/staff)
+      if (this.isAdmin || this.isManager || this.isStaff) {
         this.refreshNotifications();
         this.subscribeNotifications();
       }
@@ -73,6 +77,12 @@ export class AppShellComponent {
     // subscribe to open-tab requests from anywhere
     this.tabBus.open$.subscribe(({ title, tabPath, navUrl }) => {
       this.openOrNavigateTab(title, tabPath, navUrl);
+    });
+    // keep side menu in sync with current route when navigating via tabs or links
+    this.router.events.subscribe(ev => {
+      if (ev instanceof NavigationEnd) {
+        this.syncMenuToCurrentRoute();
+      }
     });
   }
 
@@ -84,8 +94,9 @@ export class AppShellComponent {
 
     if (!this.isViewer) {
       this.menus.push(
-        { key: 'ingredient', icon: 'inventory_2', label: 'Ingredient', submenu: [ { label: '성분조회', path: '/app/ingredient' }, { label: '성분등록', path: '/app/ingredient/form' } ] },
-        { key: 'product', icon: 'category', label: 'Product', submenu: [ { label: '품목조회', path: '/app/product' }, { label: '품목등록', path: '/app/product/form' }, { label: '품목정보 업데이트', path: '/app/product/update' }, { label: '기본서류', path: '/app/product/docs' }, { label: '서류양식', path: '/app/product/doc-templates' } ] },
+        { key: 'ingredient', icon: 'category', label: 'Ingredient', submenu: [ { label: '성분조회', path: '/app/ingredient' }, { label: '성분등록', path: '/app/ingredient/form' } ] },
+        { key: 'product', icon: 'inventory', label: 'Product', submenu: [ { label: '품목조회', path: '/app/product' }, { label: '품목등록', path: '/app/product/form' }, { label: '품목정보 업데이트', path: '/app/product/update' }, { label: '기본서류', path: '/app/product/docs' }, { label: '서류양식', path: '/app/product/doc-templates' } ] },
+        { key: 'material', icon: 'science', label: 'Material', submenu: [ { label: '자재조회', path: '/app/material' } ] },
         {
           key: 'standard', icon: 'gavel', label: 'Standard',
           submenu: [
@@ -103,12 +114,17 @@ export class AppShellComponent {
             { label: 'GIVAUDAN', path: '/app/audit/givaudan' }
           ]
         },
-        { key: 'sale', icon: 'payments', label: 'Sale', submenu: [ { label: 'Rice Bran Water H', path: '/app/sale/rice-bran-water-h' } ] },
       );
+      if (this.isAdmin) {
+        this.menus.push({ key: 'sale', icon: 'payments', label: 'Sale', submenu: [ { label: 'Rice Bran Water H', path: '/app/sale/rice-bran-water-h' } ] });
+      }
     }
+    // Alerts: visible to staff and above (admin/manager/staff)
+    if ((this.isAdmin || this.isManager || this.isStaff) && !this.isViewer) {
+      this.menus.push({ key: 'alerts', icon: 'notifications', label: 'Notification', path: '/app/alerts', badge: this.isAdmin ? this.unread() : undefined });
+    }
+    // User management: admin only
     if (this.isAdmin && !this.isViewer) {
-      // Notification above User
-      this.menus.push({ key: 'alerts', icon: 'notifications', label: 'Notification', path: '/app/alerts', badge: this.unread() });
       this.menus.push({ key: 'user', icon: 'group', label: 'User', submenu: [ { label: '사용자 관리', path: '/app/admin/roles' } ] });
     }
   }
@@ -155,6 +171,12 @@ export class AppShellComponent {
     } else {
       this.selected.set(key);
     }
+  }
+
+  onContentMouseEnter(){
+    // When moving into the page content, restore to current page's menu/submenu
+    const activePath = this.tabs[this.activeTabIndex]?.path || '/app/home';
+    this.syncMenuSelectionByPath(activePath);
   }
 
   onMainClick(menu: { key: string; path?: string; submenu?: Array<{ label: string; path?: string }> }) {
@@ -238,6 +260,7 @@ export class AppShellComponent {
     }
     this.router.navigateByUrl(navUrl);
     this.updateVisibleCount();
+    this.syncMenuToCurrentRoute();
   }
   closeTab(i: number){
     const closingActive = i === this.activeTabIndex;
@@ -250,9 +273,19 @@ export class AppShellComponent {
     }
     this.updateVisibleCount();
   }
+  closeAllTabs(){
+    if (!this.tabs.length) return;
+    this.tabs = [];
+    // Navigate to home after clearing
+    this.activeTabIndex = 0;
+    this.router.navigate(['/app/home']);
+    this.updateVisibleCount();
+    this.overflowOpen = false;
+  }
   activateTab(i: number){
     this.activeTabIndex = i;
     this.router.navigate([this.tabs[i].path]);
+    this.syncMenuToCurrentRoute();
   }
 
   // drag & drop tabs
@@ -291,5 +324,37 @@ export class AppShellComponent {
   activateTabByPath(path: string){
     const idx = this.tabs.findIndex(t=>t.path===path);
     if (idx>=0){ this.activateTab(idx); this.overflowOpen=false; }
+  }
+
+  private getKeyForPath(path: string): string | null {
+    const match = this.menus.find(m => (m.path && path.startsWith(m.path)) || (m.submenu || []).some(s => path.startsWith(s.path || '')));
+    return match?.key || null;
+  }
+  private syncMenuToCurrentRoute(){
+    try{
+      const path = this.router.url || this.tabs[this.activeTabIndex]?.path || '/app/home';
+      this.syncMenuSelectionByPath(path);
+    }catch{}
+  }
+
+  private syncMenuSelectionByPath(path: string){
+    const key = this.getKeyForPath(path) || this.selected();
+    const menu = this.menus.find(m => m.key === key);
+    this.selected.set(key);
+    if (menu?.submenu && menu.submenu.length){
+      // compute best match (longest prefix) among submenu paths
+      let bestIdx = -1; let bestLen = -1;
+      const items = menu.submenu.map((it, idx) => {
+        const p = it.path || '';
+        const match = p && path.startsWith(p);
+        if (match && p.length > bestLen){ bestLen = p.length; bestIdx = idx; }
+        return { ...it, selected: false } as any;
+      });
+      if (bestIdx >= 0) (items[bestIdx] as any).selected = true;
+      this.sectionMenu = items;
+      this.leftOpen = true;
+    } else {
+      this.sectionMenu = [];
+    }
   }
 }

@@ -416,6 +416,7 @@ export class ProductDocsComponent implements OnInit {
   openHtmlPdf(){
     const target = this.rows.find(r=> r.composition && r.product_id);
     if (!target){ alert('Composition이 체크된 품목이 없습니다.'); return; }
+    if (!target.verified){ alert('조성비 확인이 필요합니다.'); return; }
     const url = `/app/product/compose-preview?product_id=${encodeURIComponent(target.product_id as any)}&code=${encodeURIComponent(target.product_code||'')}&name=${encodeURIComponent(target.name_kr||'')}&customer=${encodeURIComponent(target.customer||'')}&delivery=${encodeURIComponent(target.delivery_customer||'')}&auto=1`;
     window.open(url, '_blank');
   }
@@ -423,6 +424,7 @@ export class ProductDocsComponent implements OnInit {
   async savePdfFromHtml(){
     const target = this.rows.find(r=> r.composition && r.product_id);
     if (!target){ alert('Composition이 체크된 품목이 없습니다.'); return; }
+    if (!target.verified){ alert('조성비 확인이 필요합니다.'); return; }
     try{
       const url = `/app/product/compose-preview?product_id=${encodeURIComponent(target.product_id as any)}&code=${encodeURIComponent(target.product_code||'')}&name=${encodeURIComponent(target.name_kr||'')}&embed=1`;
       const wrapper = document.createElement('div');
@@ -463,6 +465,7 @@ export class ProductDocsComponent implements OnInit {
   async savePdfDirect(){
     const target = this.rows.find(r=> r.composition && r.product_id);
     if (!target){ alert('Composition 체크된 품목이 없습니다.'); return; }
+    if (!target.verified){ alert('조성비 확인이 필요합니다.'); return; }
     try{
       const { data } = await this.supabase.listProductCompositions(target.product_id as any) as any;
       const list: Array<{ inci: string; kor: string; pct: number }> = (data||[]).map((c:any)=>({
@@ -571,6 +574,12 @@ export class ProductDocsComponent implements OnInit {
     // Composition 체크된 행들의 기존 XLSX를 서버 함수로 PDF 변환 저장
     const targets = this.rows.filter(r=> r.composition && r.product_id);
     if (!targets.length){ alert('Composition이 체크된 품목이 없습니다.'); return; }
+    const unverified = targets.filter(t=> !t.verified);
+    if (unverified.length){
+      const list = unverified.map(u=> u.product_code || u.name_kr || '-').join(', ');
+      alert(`조성비 확인이 필요합니다. 확인되지 않은 품목: ${list}`);
+      return;
+    }
     for (const r of targets){
       try{
         const name = `${this.todayStr()} ${r.product_code||''} ${r.name_kr||''} Composition ${r.customer||''} ${r.delivery_customer||''}.xlsx`;
@@ -588,6 +597,12 @@ export class ProductDocsComponent implements OnInit {
   async excelExport(){
     const targets = this.rows.filter(r=> r.composition && r.product_id);
     if (!targets.length){ alert('Composition이 체크된 품목이 없습니다.'); return; }
+    const unverified = targets.filter(t=> !t.verified);
+    if (unverified.length){
+      const list = unverified.map(u=> u.product_code || u.name_kr || '-').join(', ');
+      alert(`조성비 확인이 필요합니다. 확인되지 않은 품목: ${list}`);
+      return;
+    }
     for (const r of targets){
       try{
         const { data } = await this.supabase.listProductCompositions(r.product_id as any) as any;

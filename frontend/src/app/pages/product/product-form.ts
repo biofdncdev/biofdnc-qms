@@ -675,8 +675,21 @@ export class ProductFormComponent implements OnInit {
   verifyLogs: Array<{ user: string; time: string }> = [];
   private lastVerifiedAt: string | null = null;
   isVerified(){ return (this.verifyLogs && this.verifyLogs.length > 0); }
-  onVerifyClick(){ if (!this.isVerified()) this.confirmComposition(); }
+  onVerifyClick(){
+    const err = this.validateBeforeVerify();
+    if (err){ alert(err); return; }
+    if (!this.isVerified()) this.confirmComposition();
+  }
   verifyDisabled(){ return false; }
+  private validateBeforeVerify(): string | null {
+    if (!Array.isArray(this.compositions) || this.compositions.length === 0){
+      return '성분을 입력해 주세요.';
+    }
+    if (!this.percentIsHundred()){
+      return `조성비 함량 합계가 100%가 아닙니다. (현재: ${this.percentSum()}%)`;
+    }
+    return null;
+  }
   async confirmComposition(){
     try{
       const user = await this.supabase.getCurrentUser();

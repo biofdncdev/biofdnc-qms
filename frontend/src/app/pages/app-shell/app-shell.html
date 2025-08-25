@@ -24,10 +24,11 @@
     </div>
   </aside>
 
-  <section class="content" [class.drawer-open]="leftOpen" [class.compact]="drawerCompact">
+  <section class="content" [class.drawer-open]="leftOpen" [class.compact]="drawerCompact" (mouseenter)="onContentMouseEnter()">
     <header class="topbar">
       <div class="brand">BIO-FD&C QMS</div>
       <div class="tabbar" *ngIf="tabs.length" #tabbarRef>
+        <button class="close-all" title="모든 탭 닫기" (click)="closeAllTabs()">× 모두닫기</button>
         <div class="tab" *ngFor="let t of tabs | slice:0:visibleCount; index as i" [class.active]="i===activeTabIndex" [class.dragover]="i===dragOverIndex"
              draggable="true" (dragstart)="onTabDragStart($event,i)" (dragover)="onTabDragOver($event,i)" (dragleave)="onTabDragLeave()" (drop)="onTabDrop($event,i)">
           <button class="tab-btn" (click)="activateTab(i)">{{ t.title }}</button>

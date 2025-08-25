@@ -36,6 +36,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/home/home').then(m => m.HomeComponent),
       },
       {
+        path: 'material',
+        loadComponent: () => import('./pages/material/material-list').then(m => m.MaterialListComponent),
+      },
+      {
         path: 'alerts',
         loadComponent: () => import('./pages/alerts/alerts').then(m => m.AlertsComponent),
       },

@@ -1,13 +1,34 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, Directive, ElementRef, HostListener, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SupabaseService } from '../../services/supabase.service';
 
+@Directive({
+  selector: 'textarea[autoGrow]',
+  standalone: true
+})
+export class AutoGrowDirective implements AfterViewInit {
+  constructor(private elementRef: ElementRef<HTMLTextAreaElement>) {}
+  ngAfterViewInit() { this.adjustHeight(); this.applyBaseStyles(); }
+  @HostListener('input') onInput(){ this.adjustHeight(); }
+  private applyBaseStyles(){
+    const el = this.elementRef.nativeElement;
+    el.style.overflow = 'hidden';
+    el.style.resize = 'none';
+  }
+  private adjustHeight(){
+    const el = this.elementRef.nativeElement;
+    // Reset then grow to fit current content
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }
+}
+
 @Component({
   selector: 'app-ingredient-form',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, AutoGrowDirective],
   template: `
   <div class="form-page">
     <div class="page-head">
@@ -20,27 +41,27 @@ import { SupabaseService } from '../../services/supabase.service';
     <section class="form-body">
       <div class="grid">
         <label>INCI Name</label>
-        <textarea rows="2" class="hl-blue" [(ngModel)]="model.inci_name"></textarea>
+        <textarea rows="1" autoGrow class="hl-blue" [(ngModel)]="model.inci_name"></textarea>
         <label>국문명</label>
-        <textarea rows="2" class="hl-blue" [(ngModel)]="model.korean_name"></textarea>
+        <textarea rows="1" autoGrow class="hl-blue" [(ngModel)]="model.korean_name"></textarea>
         <label>중국명</label>
-        <textarea rows="2" [(ngModel)]="model.chinese_name"></textarea>
+        <textarea rows="1" autoGrow [(ngModel)]="model.chinese_name"></textarea>
         <label>CAS No</label>
         <input [(ngModel)]="model.cas_no" />
         <label>기능(EN)</label>
-        <textarea rows="3" class="wide" [(ngModel)]="model.function_en"></textarea>
+        <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.function_en"></textarea>
         <label>기능(KR)</label>
-        <textarea rows="3" class="wide" [(ngModel)]="model.function_kr"></textarea>
+        <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.function_kr"></textarea>
         <label>Scientific Name</label>
-        <textarea rows="2" [(ngModel)]="model.scientific_name"></textarea>
+        <textarea rows="1" autoGrow [(ngModel)]="model.scientific_name"></textarea>
         <label>EINECS No</label>
         <input [(ngModel)]="model.einecs_no" />
         <label>이전국문명</label>
-        <textarea rows="2" [(ngModel)]="model.old_korean_name"></textarea>
+        <textarea rows="1" autoGrow [(ngModel)]="model.old_korean_name"></textarea>
         <label>원산/ABS</label>
-        <textarea rows="2" [(ngModel)]="model.origin_abs"></textarea>
+        <textarea rows="1" autoGrow [(ngModel)]="model.origin_abs"></textarea>
         <label>비고</label>
-        <textarea rows="3" class="wide" [(ngModel)]="model.remarks"></textarea>
+        <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.remarks" spellcheck="false"></textarea>
       </div>
       <div class="meta" *ngIf="meta">
         <div>처음 생성: {{ meta.created_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.created_by_name || meta.created_by_email || meta.created_by || '-' }}</div>
@@ -76,7 +97,7 @@ import { SupabaseService } from '../../services/supabase.service';
   .grid{ display:grid; grid-template-columns:120px minmax(0,1fr) 120px minmax(0,1fr); gap:10px 14px; align-items:center; }
   .grid label{ font-size:11px; color:#111827; text-align:right; }
   input, textarea{ width:100%; border:1px solid #e5e7eb; border-radius:8px; padding:5px 7px; font-size:12px; color:#111827; box-sizing:border-box; }
-  textarea{ white-space:normal; word-break:break-word; resize:vertical; overflow:auto; min-height:28px; }
+  textarea{ white-space:normal; word-break:break-word; resize:none; overflow:hidden; min-height:28px; }
   /* Only textareas with .wide span remaining columns */
   .grid textarea.wide{ grid-column: 2 / span 3; }
   /* Highlight for INCI Name and 국문명 */
