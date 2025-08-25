@@ -775,27 +775,27 @@ export class SupabaseService {
         obj[dbcol] = v;
         colsInUpload.add(dbcol);
       }
-      // Determine a key: prefer internal/material number/name
-      const key = obj.material_internal_code || obj.material_number || obj.material_name || '-';
-      if (key === '-') { errors.push({ key: '-', message: '키 컬럼(자재내부코드/자재번호/자재명)이 없습니다.' }); continue; }
+      // Unique key is ERP '자재번호' only
+      const key = obj.material_number || (r as any)['자재번호'] || '';
+      if (!key) { errors.push({ key: '-', message: '자재번호가 없습니다.' }); continue; }
+      obj.material_number = key;
       normalized.push({ key, row: obj });
     }
     if (!normalized.length) return { ok: true, total: rows.length, updated: 0, skipped: rows.length, inserted: 0, errors } as any;
 
     // Fetch existing rows to decide upsert vs update
     const keys = normalized.map(n => n.key);
-    // Try matching by any of the key columns
-    const { data: existingList } = await this.ensureClient().from('materials').select('*').or(keys.map(k => `material_internal_code.eq.${k},material_number.eq.${k},material_name.eq.${k}`).join(',')) as any;
+    const { data: existingList } = await this.ensureClient().from('materials').select('*').in('material_number', keys) as any;
     const candidates: any[] = Array.isArray(existingList) ? existingList : [];
     // Map existing rows by potential keys
     const mapByKey: Record<string, any> = {};
     for (const ex of candidates){
-      const k1 = ex.material_internal_code || ex.material_number || ex.material_name; if (k1) mapByKey[k1] = ex;
+      const k1 = ex.material_number; if (k1) mapByKey[k1] = ex;
     }
 
     let updated = 0, skipped = 0, inserted = 0;
     const toUpsert: any[] = [];
-    const REQUIRED = new Set<string>(['material_name']);
+    const REQUIRED = new Set<string>(['material_number','material_name']);
     for (const n of normalized){
       const existing = mapByKey[n.key];
       if (!existing){
@@ -805,7 +805,7 @@ export class SupabaseService {
         continue;
       }
       // Compare only uploaded columns; skip if all same
-      let changed = false; const diff: any = { id: existing.id };
+      let changed = false; const diff: any = { material_number: existing.material_number };
       for (const col of colsInUpload){
         const newVal = (n.row as any)[col]; if (newVal === undefined) continue;
         const oldVal = (existing as any)[col];
@@ -816,7 +816,18 @@ export class SupabaseService {
       if (changed){ toUpsert.push(diff); updated++; } else { skipped++; }
     }
 
-    if (toUpsert.length){ await this.ensureClient().from('materials').upsert(toUpsert, { onConflict: 'id', ignoreDuplicates: false, defaultToNull: false }); }
+    if (toUpsert.length){
+      const client = this.ensureClient();
+      const { error } = await client.from('materials').upsert(toUpsert, { onConflict: 'material_number', ignoreDuplicates: false, defaultToNull: false });
+      if (error){
+        const B = 200;
+        for (let i=0;i<toUpsert.length;i+=B){
+          const part = toUpsert.slice(i,i+B);
+          const { error: e2 } = await client.from('materials').upsert(part, { onConflict: 'material_number', ignoreDuplicates: false, defaultToNull: false });
+          if (e2){ errors.push({ key: part[0]?.material_internal_code || part[0]?.material_number || part[0]?.material_name || '-', message: e2.message || String(e2) }); }
+        }
+      }
+    }
     return { ok: true, total: rows.length, updated, skipped, inserted, errors } as any;
   }
 

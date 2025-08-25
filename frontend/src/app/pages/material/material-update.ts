@@ -25,11 +25,12 @@ type SyncError = { key: string; column?: string; message: string };
         </div>
       </div>
       <div class="controls">
-        <button class="btn" [disabled]="!pendingRows().length || busy()" (click)="run()">업데이트</button>
+        <button class="btn" (click)="onUpdateClick()">업데이트</button>
         <button class="btn ghost" [disabled]="!busy()" (click)="cancel()">취소</button>
         <button class="btn ghost" [disabled]="busy()" (click)="clear(fileInput)">지우기</button>
         <div class="spinner" *ngIf="busy()"></div>
       </div>
+      <div *ngIf="!busy() && pendingRows().length" style="color:#374151; font-size:12px;">감지된 행: {{ pendingRows().length }}건</div>
       <div class="progress-wrap" *ngIf="stats().total">
         <div class="progress"><div class="bar" [style.width.%]="progress()*100"></div></div>
         <div class="progress-text">{{ processed() }} / {{ stats().total }} ({{ (progress()*100) | number:'1.0-0' }}%)</div>
@@ -88,11 +89,21 @@ export class MaterialUpdateComponent implements OnInit {
   pendingRows = signal<any[]>([]); busy = signal(false); private cancelRequested=false; ran=signal(false); errors=signal<SyncError[]>([]);
   stats = signal({ total:0, updated:0, skipped:0, inserted:0 }); processed=signal(0); dragOver=signal(false); fileName=signal('');
   private erpHeaderSet = new Set<string>();
-  private keyColumns = ['자재번호','자재내부코드','자재명'];
+  // ERP에서 유일키는 '자재번호' 하나만 사용
+  private keyColumns = ['자재번호'];
 
   constructor(private supabase: SupabaseService) {}
   async ngOnInit(){
     try{ const maps = await this.supabase.getMaterialColumnMap(); for(const m of maps){ if(m?.sheet_label_kr) this.erpHeaderSet.add(String(m.sheet_label_kr)); } }catch{}
+  }
+
+  onUpdateClick(){
+    try{
+      console.log('[MaterialUpdate] update button clicked', { rows: this.pendingRows().length, busy: this.busy() });
+    }catch{}
+    if (this.busy()) return;
+    if (!this.pendingRows().length){ alert('업데이트할 데이터가 없습니다. 파일을 선택해 주세요.'); return; }
+    this.run();
   }
 
   async onFile(ev: Event){ const input=ev.target as HTMLInputElement; const file=input.files && input.files[0]; if(!file) return; await this.loadFile(file); }
@@ -109,13 +120,24 @@ export class MaterialUpdateComponent implements OnInit {
 
   private async afterRowsLoaded(rows:any[][]){
     if(!rows || rows.length<2){ this.pendingRows.set([]); return; }
-    // detect header row by ERP label coverage and presence of at least one key column
-    let headerIdx=-1; let best=-1;
+    // Prefer fixed pattern: header at 2nd row (index 1) like Product update
+    let headerIdx=-1; let best=-1; let bestKeyHits=-1;
+    try{
+      const fixed = (rows[1]||[]).map(v=>(v??'').toString().trim()).filter(Boolean);
+      // 1행 병합 타이틀이 있는 양식: 2행을 헤더로 간주(열이 여러 개 존재)
+      if (fixed.length >= 3) headerIdx = 1;
+    }catch{}
     const scanLimit=Math.min(rows.length,50);
-    for(let i=0;i<scanLimit;i++){
+    for(let i=0;i<scanLimit && headerIdx<0;i++){
       const cells=(rows[i]||[]).map(v=>(v??'').toString().trim()).filter(Boolean);
       if(!cells.length) continue; const score=cells.reduce((a,c)=>a+(this.erpHeaderSet.has(c)?1:0),0);
-      const hasKey=cells.some(c=>this.keyColumns.includes(c)); if(hasKey && score>=best){ best=score; headerIdx=i; }
+      const keyHits=cells.reduce((a,c)=>a+(this.keyColumns.includes(c)?1:0),0);
+      if(keyHits>0){
+        // Prefer rows with more key columns; tie-breaker by ERP label score; then by earliest index
+        if (keyHits>bestKeyHits || (keyHits===bestKeyHits && score>=best)){
+          bestKeyHits=keyHits; best=score; headerIdx=i;
+        }
+      }
     }
     if(headerIdx<0){
       this.pendingRows.set([]);
@@ -125,7 +147,7 @@ export class MaterialUpdateComponent implements OnInit {
       return;
     }
     const header=(rows[headerIdx]||[]).map(v=>(v??'').toString().trim());
-    const payload:any[]=[];
+    const payload:any[]=[]; console.log('[MaterialUpdate] header at row', headerIdx+1);
     for(let i=headerIdx+1;i<rows.length;i++){
       const r=rows[i]||[]; const obj:any={};
       for(let c=0;c<header.length;c++){ const key=header[c]; if(!key) continue; obj[key]=r[c]; }
@@ -137,7 +159,40 @@ export class MaterialUpdateComponent implements OnInit {
   }
 
   private async readWorkbookRowsFromArrayBuffer(ab:ArrayBuffer){
-    try{ const wb=XLSX.read(new Uint8Array(ab), { type:'array', cellStyles:false, dense:true } as any); const ws=wb.Sheets[wb.SheetNames[0]]; return XLSX.utils.sheet_to_json(ws,{header:1}) as any[][]; }catch{}
+    // 1) normal read
+    try{
+      const wb=XLSX.read(new Uint8Array(ab), { type:'array', cellStyles:false, dense:true } as any);
+      const ws=wb.Sheets[wb.SheetNames[0]]; return XLSX.utils.sheet_to_json(ws,{header:1}) as any[][];
+    }catch{}
+    // 2) sanitize by stripping styles/theme and fixing rels/content-types (some ERP exports fail otherwise)
+    try{
+      const zip = await JSZip.loadAsync(ab as ArrayBuffer);
+      // remove styles and theme
+      zip.remove('xl/styles.xml');
+      zip.remove('xl/theme/theme1.xml');
+      // scrub content types
+      const ctPath = '[Content_Types].xml';
+      const ctFile = zip.file(ctPath);
+      if (ctFile){
+        let ct = await ctFile.async('string');
+        ct = ct.replace(/<Override[^>]*PartName="\/xl\/styles.xml"[^>]*\/>/g, '')
+               .replace(/<Override[^>]*PartName="\/xl\/theme\/theme1.xml"[^>]*\/>/g, '');
+        zip.file(ctPath, ct);
+      }
+      // scrub rels
+      const relPath = 'xl/_rels/workbook.xml.rels';
+      const relFile = zip.file(relPath);
+      if (relFile){
+        let rel = await relFile.async('string');
+        rel = rel.replace(/<Relationship[^>]*Type="[^"]*\/styles"[^>]*\/>/g, '')
+                 .replace(/<Relationship[^>]*Type="[^"]*\/theme"[^>]*\/>/g, '');
+        zip.file(relPath, rel);
+      }
+      const rebuilt = await zip.generateAsync({ type: 'uint8array' });
+      const wb2 = XLSX.read(rebuilt, { type: 'array', cellStyles: false, dense: true } as any);
+      const ws2 = wb2.Sheets[wb2.SheetNames[0]]; return XLSX.utils.sheet_to_json(ws2, { header: 1 }) as any[][];
+    }catch{}
+    // 3) minimal XML parse
     const zip=await JSZip.loadAsync(ab as ArrayBuffer); const list=Object.keys(zip.files); const sheetPath=list.find(p=>p.match(/^xl\/worksheets\/sheet\d+\.xml$/))||list.find(p=>p.startsWith('xl/worksheets/')&&p.endsWith('.xml')); if(!sheetPath) return [];
     const sstPath=list.find(p=>p==='xl/sharedStrings.xml'); const sst:string[]=[]; if(sstPath){ const sstXml=await zip.file(sstPath)!.async('string'); const doc=new DOMParser().parseFromString(sstXml,'application/xml'); const items=Array.from(doc.getElementsByTagName('si')); for(const si of items){ let txt=''; const tNodes=si.getElementsByTagName('t'); for(const t of Array.from(tNodes)) txt+=(t.textContent||''); sst.push(txt); } }
     const xml=await zip.file(sheetPath)!.async('string'); const doc=new DOMParser().parseFromString(xml,'application/xml'); const rows:any[][]=[]; const cells=Array.from(doc.getElementsByTagName('c')); const colToIdx=(col:string)=>{ let n=0; for(const ch of col){ n=n*26+(ch.charCodeAt(0)-64);} return n-1; };
@@ -151,10 +206,13 @@ export class MaterialUpdateComponent implements OnInit {
     this.busy.set(true); this.processed.set(0); this.cancelRequested=false;
     try{
       const rows=this.pendingRows().slice(); const CHUNK=300; const MAX_PAR=3; const chunks:any[][]=[]; for(let i=0;i<rows.length;i+=CHUNK) chunks.push(rows.slice(i,i+CHUNK));
+      console.log('[MaterialUpdate] start sync', { total: rows.length, chunks: chunks.length });
       const agg:any={ total:rows.length, updated:0, skipped:0, inserted:0 }; const errs:SyncError[]=[]; let next=0;
-      const runWorker=async()=>{ while(next<chunks.length && !this.cancelRequested){ const idx=next++; const part=chunks[idx]; try{ const res=await this.supabase.syncMaterialsByExcel({ sheet: part }); agg.updated+=(res.updated||0); agg.skipped+=(res.skipped||0); agg.inserted+=(res.inserted||0); if(Array.isArray(res.errors)) errs.push(...res.errors); }catch(e:any){ errs.push({ key:'-', message:e?.message||String(e) }); } finally { this.processed.set(Math.min(rows.length, this.processed()+part.length)); } } };
+      const runWorker=async()=>{ while(next<chunks.length && !this.cancelRequested){ const idx=next++; const part=chunks[idx]; try{ const res=await this.supabase.syncMaterialsByExcel({ sheet: part }); agg.updated+=(res.updated||0); agg.skipped+=(res.skipped||0); agg.inserted+=(res.inserted||0); if(Array.isArray(res.errors)) errs.push(...res.errors); }catch(e:any){ console.error('[MaterialUpdate] worker error', e); errs.push({ key:'-', message:e?.message||String(e) }); } finally { this.processed.set(Math.min(rows.length, this.processed()+part.length)); } } };
       const workers=Array.from({length:Math.min(MAX_PAR,chunks.length)},()=>runWorker()); await Promise.all(workers);
       this.errors.set(errs); this.stats.set({ total:this.pendingRows().length, updated:agg.updated||0, skipped:agg.skipped||0, inserted:agg.inserted||0 }); this.ran.set(true);
+      const sumMsg = `총 ${agg.updated+agg.skipped+agg.inserted}건 처리 / 업데이트 ${agg.updated} · 신규 ${agg.inserted} · 스킵 ${agg.skipped}${errs.length? ` · 에러 ${errs.length}`:''}`;
+      alert(sumMsg);
     } finally { this.busy.set(false); }
   }
 
