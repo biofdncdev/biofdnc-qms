@@ -41,9 +41,9 @@ export class AutoGrowDirective implements AfterViewInit {
     <section class="form-body">
       <div class="grid">
         <label>INCI Name</label>
-        <textarea rows="1" autoGrow class="hl-blue" [(ngModel)]="model.inci_name"></textarea>
+        <textarea rows="1" autoGrow class="hl-green" [(ngModel)]="model.inci_name"></textarea>
         <label>국문명</label>
-        <textarea rows="1" autoGrow class="hl-blue" [(ngModel)]="model.korean_name"></textarea>
+        <textarea rows="1" autoGrow class="hl-green" [(ngModel)]="model.korean_name"></textarea>
         <label>중국명</label>
         <textarea rows="1" autoGrow [(ngModel)]="model.chinese_name"></textarea>
         <label>CAS No</label>
@@ -101,7 +101,7 @@ export class AutoGrowDirective implements AfterViewInit {
   /* Only textareas with .wide span remaining columns */
   .grid textarea.wide{ grid-column: 2 / span 3; }
   /* Highlight for INCI Name and 국문명 */
-  .hl-blue{ background:#eef6ff; border-color:#c7d2fe; }
+  .hl-green{ background:#ecfdf5; border-color:#bbf7d0; }
   .meta{ margin-top:12px; padding:8px 10px; border-top:1px dashed #e5e7eb; color:#6b7280; font-size:12px; }
   .ing-picker{ margin-top:14px; }
   .ing-picker .picker-label{ display:block; font-size:11px; color:#6b7280; margin-bottom:4px; }

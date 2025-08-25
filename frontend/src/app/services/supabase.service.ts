@@ -572,6 +572,25 @@ export class SupabaseService {
   async upsertProduct(row: any){ return this.ensureClient().from('products').upsert(row, { onConflict: 'id' }).select('*').single(); }
   async deleteProduct(id: string){ return this.ensureClient().from('products').delete().eq('id', id); }
 
+  // BOM map: persist selected material per ingredient
+  async getBomMaterialSelection(product_code: string){
+    const { data } = await this.ensureClient().from('product_bom_material_map').select('*').eq('product_code', product_code) as any;
+    return Array.isArray(data) ? data : [];
+  }
+  async setBomMaterialSelection(row: { product_code: string; ingredient_name: string; selected_material_id?: string | null; selected_material_number?: string | null; note?: string | null; }){
+    return this.ensureClient().from('product_bom_material_map').upsert(row, { onConflict: 'product_code,ingredient_name' }).select('*').single();
+  }
+
+  // Materials by specification exact (case-insensitive)
+  async listMaterialsBySpecificationExact(spec: string){
+    const client = this.ensureClient();
+    // use ilike for case-insensitive exact by wrapping with ^ and $ is not supported; compare lower
+    const { data } = await client.from('materials').select('*').or(`specification.ilike.${spec}`).limit(2000) as any;
+    // Ensure exact (case-insensitive) on client side
+    const s = (spec||'').trim().toLowerCase();
+    return (Array.isArray(data)? data: []).filter(r => (r?.specification||'').toString().trim().toLowerCase() === s);
+  }
+
   // Product verification logs (persisted in products.verify_logs JSONB)
   async getProductVerifyLogs(id: string){
     try{

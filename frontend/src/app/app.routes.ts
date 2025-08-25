@@ -104,6 +104,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/product/compose-preview').then((m: any) => (m as any).ComposePreviewComponent),
       },
       {
+        path: 'product/bom-tree',
+        loadComponent: () => import('./pages/product/product-bom-tree').then(m => m.ProductBomTreeComponent),
+      },
+      {
         path: 'product/form',
         loadComponent: () => import('./pages/product/product-form').then(m => m.ProductFormComponent),
       },
