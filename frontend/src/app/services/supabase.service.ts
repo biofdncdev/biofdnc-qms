@@ -703,6 +703,123 @@ export class SupabaseService {
     }
   }
 
+  // Materials
+  async listMaterials(params: { page?: number; pageSize?: number; keyword?: string; keywordOp?: 'AND' | 'OR' }){
+    const page = Math.max(1, params?.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, params?.pageSize ?? 15));
+    const from = (page - 1) * pageSize; const to = from + pageSize - 1;
+    const kw = (params?.keyword || '').trim();
+    if (!kw){
+      return this.ensureClient().from('materials').select('*', { count: 'exact' }).order('material_name', { ascending: true }).range(from, to) as any;
+    }
+    const words = kw.split(/\s+/).map(s=>s.trim()).filter(Boolean);
+    const cols = ['material_code','material_name','material_name_en','vendor_name','spec','unit','cas_no','inci_name','remarks'];
+    const makeGroup = (w:string)=> cols.map(c=> `${c}.ilike.*${w}*`).join(',');
+    const andLogic = `and(${words.map(w=> `or(${makeGroup(w)})`).join(',')})`;
+    return this.ensureClient().from('materials').select('*', { count: 'exact' }).or(andLogic).order('material_name', { ascending: true }).range(from, to) as any;
+  }
+  async upsertMaterial(row: any){ return this.ensureClient().from('materials').upsert(row, { onConflict: 'id' }).select('*').single(); }
+  async deleteMaterial(id: string){ return this.ensureClient().from('materials').delete().eq('id', id); }
+  async getMaterial(id: string){ return this.ensureClient().from('materials').select('*').eq('id', id).single(); }
+  async getMaterialColumnMap(){
+    const { data } = await this.ensureClient().from('material_column_map').select('*').order('display_order', { ascending: true }) as any;
+    return Array.isArray(data) ? data : [];
+  }
+
+  // Material sync by Excel - mirror of product sync
+  async syncMaterialsByExcel(payload: { sheet: any[]; headerMap?: Record<string,string> }){
+    const rows = payload?.sheet || [];
+    if (!rows.length) return { ok: true, total: 0, updated: 0, skipped: 0, inserted: 0, errors: [] } as any;
+    // Build mapping map: ERP label -> DB column from material_column_map
+    const maps = await this.getMaterialColumnMap();
+    const dbMap: Record<string,string> = {};
+    for (const m of maps){ if (m?.sheet_label_kr && m?.db_column) dbMap[String(m.sheet_label_kr)] = String(m.db_column); }
+    // Built-in fallback mapping so the feature works even before DB seeding
+    const builtin: Record<string,string> = {
+      '자재상태':'material_status', '품목자산분류':'item_asset_class', '자재소분류':'material_sub_class',
+      '등록일':'created_on_erp', '등록자':'created_by_erp', '최종수정일':'modified_on_erp', '최종수정자':'modified_by_erp',
+      'Lot 관리':'is_lot_managed', '자재대분류':'material_large_class', '관리부서':'managing_department',
+      '자재번호':'material_number', '자재내부코드':'material_internal_code', '자재명':'material_name',
+      '규격':'spec', '기준단위':'standard_unit', '내외자구분':'domestic_foreign_class', '중요도':'importance',
+      '관리자':'manager', '제조사':'manufacturer', '자재중분류':'material_middle_class', '영문명':'english_name',
+      '출고구분':'shipping_class', '대표자재':'representative_material', 'BOM등록':'is_bom_registered',
+      '제품별공정소요자재':'material_required_for_process_by_product', 'Serial 관리':'is_serial_managed',
+      '단가등록여부':'is_unit_price_registered', '유통기한구분':'expiration_date_class', '유통기간':'distribution_period',
+      '품목설명':'item_description', '기본구매처':'default_supplier', '수탁거래처':'consignment_supplier',
+      '부가세구분':'vat_class', '판매단가에 부가세포함여부':'is_vat_included_in_sales_price', '첨부파일':'attachment_file',
+      '자재세부분류':'material_detail_class', '검색어(이명(異명))':'search_keyword', '사양':'specification',
+      '자재특이사항':'material_notes', 'CAS NO':'cas_no', 'MOQ':'moq', '포장단위':'packaging_unit',
+      'Manufacturer':'manufacturer', 'Country of Manufacture':'country_of_manufacture',
+      'Source of Origin(Method)':'source_of_origin_method', 'Plant Part':'plant_part', 'Country of Origin':'country_of_origin',
+      '중국원료신고번호(NMPA)':'nmpa_registration_number', '알러젠성분':'allergen_ingredient', 'Furocoumarines':'furocoumarines',
+      '효능':'efficacy', '특허':'patent', '논문':'paper', '임상':'clinical_trial', '사용기한':'use_by_date',
+      '보관장소':'storage_location', '보관방법':'storage_method', '안정성 및 유의사항':'safety_and_precautions',
+      'Note on storage':'note_on_storage', 'Safety & Handling':'safety_and_handling',
+      'NOTICE (COA3 영문)':'notice_coa3_english', 'NOTICE (COA3 국문)':'notice_coa3_korean'
+    };
+    const labelToDb: Record<string,string> = Object.assign({}, dbMap, builtin, payload?.headerMap || {});
+
+    const normalized: Array<{ key: string; row: any }> = [];
+    const errors: Array<{ key:string; column?: string; message:string }> = [];
+    const colsInUpload = new Set<string>();
+    const toDateText = (val:any) => {
+      if (val===undefined || val===null) return null;
+      const s = String(val).trim(); if (!s) return null; return s;
+    };
+    for (const r of rows){
+      const obj: any = {};
+      for (const [erp, value] of Object.entries(r)){
+        const dbcol = labelToDb[erp];
+        if (!dbcol) continue;
+        let v: any = toDateText(value);
+        obj[dbcol] = v;
+        colsInUpload.add(dbcol);
+      }
+      // Determine a key: prefer internal/material number/name
+      const key = obj.material_internal_code || obj.material_number || obj.material_name || '-';
+      if (key === '-') { errors.push({ key: '-', message: '키 컬럼(자재내부코드/자재번호/자재명)이 없습니다.' }); continue; }
+      normalized.push({ key, row: obj });
+    }
+    if (!normalized.length) return { ok: true, total: rows.length, updated: 0, skipped: rows.length, inserted: 0, errors } as any;
+
+    // Fetch existing rows to decide upsert vs update
+    const keys = normalized.map(n => n.key);
+    // Try matching by any of the key columns
+    const { data: existingList } = await this.ensureClient().from('materials').select('*').or(keys.map(k => `material_internal_code.eq.${k},material_number.eq.${k},material_name.eq.${k}`).join(',')) as any;
+    const candidates: any[] = Array.isArray(existingList) ? existingList : [];
+    // Map existing rows by potential keys
+    const mapByKey: Record<string, any> = {};
+    for (const ex of candidates){
+      const k1 = ex.material_internal_code || ex.material_number || ex.material_name; if (k1) mapByKey[k1] = ex;
+    }
+
+    let updated = 0, skipped = 0, inserted = 0;
+    const toUpsert: any[] = [];
+    const REQUIRED = new Set<string>(['material_name']);
+    for (const n of normalized){
+      const existing = mapByKey[n.key];
+      if (!existing){
+        const row = { ...n.row };
+        if (!row.material_name) row.material_name = n.key; // 최소 보장
+        toUpsert.push(row); inserted++;
+        continue;
+      }
+      // Compare only uploaded columns; skip if all same
+      let changed = false; const diff: any = { id: existing.id };
+      for (const col of colsInUpload){
+        const newVal = (n.row as any)[col]; if (newVal === undefined) continue;
+        const oldVal = (existing as any)[col];
+        const oldNorm = (oldVal===undefined || oldVal===null || String(oldVal).trim()==='') ? null : oldVal;
+        const newNorm = (newVal===undefined || newVal===null || (typeof newVal==='string' && newVal.trim()==='')) ? null : newVal;
+        if (JSON.stringify(oldNorm) !== JSON.stringify(newNorm)) { diff[col] = newNorm; changed = true; }
+      }
+      if (changed){ toUpsert.push(diff); updated++; } else { skipped++; }
+    }
+
+    if (toUpsert.length){ await this.ensureClient().from('materials').upsert(toUpsert, { onConflict: 'id', ignoreDuplicates: false, defaultToNull: false }); }
+    return { ok: true, total: rows.length, updated, skipped, inserted, errors } as any;
+  }
+
   // Excel sync implementation with diffing and error reporting
   async syncProductsByExcel(payload: { sheet: any[]; headerMap?: Record<string,string> }){
     const rows = payload?.sheet || [];

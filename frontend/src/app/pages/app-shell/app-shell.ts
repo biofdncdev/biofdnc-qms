@@ -96,7 +96,11 @@ export class AppShellComponent {
       this.menus.push(
         { key: 'ingredient', icon: 'category', label: 'Ingredient', submenu: [ { label: '성분조회', path: '/app/ingredient' }, { label: '성분등록', path: '/app/ingredient/form' } ] },
         { key: 'product', icon: 'inventory', label: 'Product', submenu: [ { label: '품목조회', path: '/app/product' }, { label: '품목등록', path: '/app/product/form' }, { label: '품목정보 업데이트', path: '/app/product/update' }, { label: '기본서류', path: '/app/product/docs' }, { label: '서류양식', path: '/app/product/doc-templates' } ] },
-        { key: 'material', icon: 'science', label: 'Material', submenu: [ { label: '자재조회', path: '/app/material' } ] },
+        { key: 'material', icon: 'eco', label: 'Material', submenu: [
+          { label: '자재조회', path: '/app/material' },
+          { label: '자재등록', path: '/app/material/form' },
+          { label: '자재정보 업데이트', path: '/app/material/update' }
+        ] },
         {
           key: 'standard', icon: 'gavel', label: 'Standard',
           submenu: [
@@ -104,7 +108,7 @@ export class AppShellComponent {
           ]
         },
         {
-          key: 'record', icon: 'history_edu', label: 'Record', submenu: [
+          key: 'record', icon: 'description', label: 'Record', submenu: [
             { label: '원료제조팀 지시·기록서', path: '/app/record/rmd-forms' }
           ]
         },
@@ -174,9 +178,9 @@ export class AppShellComponent {
   }
 
   onContentMouseEnter(){
-    // When moving into the page content, restore to current page's menu/submenu
-    const activePath = this.tabs[this.activeTabIndex]?.path || '/app/home';
-    this.syncMenuSelectionByPath(activePath);
+    // When moving into the page content, restore to the actual current route
+    const path = this.router.url || this.tabs[this.activeTabIndex]?.path || '/app/home';
+    this.syncMenuSelectionByPath(path);
   }
 
   onMainClick(menu: { key: string; path?: string; submenu?: Array<{ label: string; path?: string }> }) {

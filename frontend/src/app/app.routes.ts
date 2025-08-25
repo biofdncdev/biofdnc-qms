@@ -40,6 +40,14 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/material/material-list').then(m => m.MaterialListComponent),
       },
       {
+        path: 'material/form',
+        loadComponent: () => import('./pages/material/material-form').then(m => m.MaterialFormComponent),
+      },
+      {
+        path: 'material/update',
+        loadComponent: () => import('./pages/material/material-update').then(m => m.MaterialUpdateComponent),
+      },
+      {
         path: 'alerts',
         loadComponent: () => import('./pages/alerts/alerts').then(m => m.AlertsComponent),
       },
