@@ -713,7 +713,12 @@ export class SupabaseService {
       return this.ensureClient().from('materials').select('*', { count: 'exact' }).order('material_name', { ascending: true }).range(from, to) as any;
     }
     const words = kw.split(/\s+/).map(s=>s.trim()).filter(Boolean);
-    const cols = ['material_code','material_name','material_name_en','vendor_name','spec','unit','cas_no','inci_name','remarks'];
+    // Use actual columns of public.materials
+    const cols = [
+      'material_number','material_name','english_name','manufacturer',
+      'spec','standard_unit','specification',
+      'cas_no','search_keyword','material_notes','item_description'
+    ];
     const makeGroup = (w:string)=> cols.map(c=> `${c}.ilike.*${w}*`).join(',');
     const andLogic = `and(${words.map(w=> `or(${makeGroup(w)})`).join(',')})`;
     return this.ensureClient().from('materials').select('*', { count: 'exact' }).or(andLogic).order('material_name', { ascending: true }).range(from, to) as any;
