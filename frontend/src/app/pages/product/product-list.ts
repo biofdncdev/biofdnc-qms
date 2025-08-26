@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ViewChild, ElementRef, HostListener } from '@angular/core';
+import { Component, OnInit, AfterViewInit, signal, ViewChild, ElementRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ScrollingModule } from '@angular/cdk/scrolling';
@@ -66,7 +66,7 @@ type ProductRow = { [key:string]: any } & {
     <section class="filters filters-sticky" (keyup.enter)="load()">
       <div class="grid">
         <span class="chip">키워드</span>
-        <input [(ngModel)]="keyword" (ngModelChange)="onKeywordChange($event)" (keydown.escape)="onEscClear()" placeholder="통합 검색 (띄어쓰기로 여러 키워드)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
+        <input #kwInput [(ngModel)]="keyword" (ngModelChange)="onKeywordChange($event)" (keydown.escape)="onEscClear()" (keydown.arrowDown)="onSearchArrowDown($event)" placeholder="통합 검색 (띄어쓰기로 여러 키워드)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
         <span class="chip">연산</span>
         <select disabled>
           <option>AND</option>
@@ -86,7 +86,7 @@ type ProductRow = { [key:string]: any } & {
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let r of rows()" [class.hovered]="hoverId===r.id" [class.selected]="selectedId===r.id"
+            <tr *ngFor="let r of rows()" [attr.tabindex]="-1" [class.hovered]="hoverId===r.id" [class.selected]="selectedId===r.id"
                 (mouseenter)="hoverId=r.id" (mouseleave)="hoverId=null"
                 (click)="toggleSelect(r.id)" (dblclick)="openEdit(r.id)">
               <td *ngFor="let c of visibleColumns()" class="wrap" [ngStyle]="getColStyle(c)">{{ r[c] }}</td>
@@ -142,6 +142,8 @@ type ProductRow = { [key:string]: any } & {
   table.compact th, table.compact td{ padding:6px 8px; line-height:1.2; }
   thead th{ position:sticky; top:0; z-index:3; background:#f8fafc; }
   th, td{ border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9; }
+  tbody tr.selected{ background:#eef6ff; }
+  tbody tr:focus{ outline:2px solid #93c5fd; outline-offset:-2px; }
   td.wrap{ white-space:normal; word-break:break-word; }
   .empty{ text-align:center; color:#94a3b8; }
   th{ position:relative; }
@@ -151,11 +153,12 @@ type ProductRow = { [key:string]: any } & {
   .page-indicator{ min-width:64px; text-align:center; font-weight:800; }
   `]
 })
-export class ProductListComponent implements OnInit {
+export class ProductListComponent implements OnInit, AfterViewInit {
   rows = signal<ProductRow[]>([]);
   loading = false; page = 1; pageSize = 15; total = 0; pages = 1;
   keyword = ''; keywordOp: 'AND' | 'OR' = 'AND';
   @ViewChild('tableWrap') tableWrapRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('kwInput') kwInputRef!: ElementRef<HTMLInputElement>;
   private autoScrollInterval: any = null;
   private dragStartIndex: number | null = null;
   columns: string[] = []; allColumns: string[] = []; extraCols: string[] = [];
@@ -280,6 +283,11 @@ export class ProductListComponent implements OnInit {
     this.loadColumnLabels();
   }
 
+  ngAfterViewInit(){
+    // Focus keyword input when the page opens from the menu
+    setTimeout(()=> this.kwInputRef?.nativeElement?.focus(), 0);
+  }
+
   async load(){
     this.loading = true;
     const { data, count } = await this.supabase.listProducts({ page: this.page, pageSize: this.pageSize, keyword: this.keyword, keywordOp: this.keywordOp }) as any;
@@ -321,6 +329,38 @@ export class ProductListComponent implements OnInit {
     if (/\s$/.test(this.keyword)) { return; }
     this.saveState();
     this.debouncedLoad();
+  }
+  // Keyboard UX: ArrowDown from search focuses results; Enter opens; ESC clears and refocuses input
+  onSearchArrowDown(ev: Event){
+    ev.preventDefault();
+    const wrap = this.tableWrapRef?.nativeElement; if (!wrap) return;
+    wrap.scrollTop = 0;
+    const list = this.rows(); if (list && list.length){ this.selectedId = list[0].id; setTimeout(()=>{
+      // move DOM focus to first row so screen readers and keyboard navigation work
+      const first = wrap.querySelector('tbody tr') as HTMLElement | null; first?.focus();
+    }, 0); }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter'){ this.openEdit(); e.preventDefault(); cleanup(); }
+      else if (e.key === 'Escape'){ this.onEscClear(); setTimeout(()=> this.kwInputRef?.nativeElement?.focus(), 0); e.preventDefault(); cleanup(); }
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+        const rows = this.rows(); if (!rows || !rows.length) return;
+        const idx = Math.max(0, rows.findIndex(r=> r.id===this.selectedId));
+        // If first row and ArrowUp: return focus to search input and keep keyword for continued typing
+        if (e.key === 'ArrowUp' && idx <= 0){
+          e.preventDefault();
+          cleanup();
+          const input = this.kwInputRef?.nativeElement; if (input){ input.focus(); try{ const len = input.value.length; input.setSelectionRange(len, len); }catch{} }
+          this.selectedId = null;
+          return;
+        }
+        const delta = (e.key === 'ArrowDown') ? 1 : -1; const next = Math.max(0, Math.min(rows.length-1, idx + delta));
+        this.selectedId = rows[next].id; e.preventDefault();
+        const trs = Array.from(wrap.querySelectorAll('tbody tr')) as HTMLElement[];
+        const tr = trs[next]; if (tr){ const r = tr.getBoundingClientRect(); const w = wrap.getBoundingClientRect(); if (r.top < w.top) wrap.scrollTop += (r.top - w.top); else if (r.bottom > w.bottom) wrap.scrollTop += (r.bottom - w.bottom); }
+      }
+    };
+    const cleanup = () => { document.removeEventListener('keydown', onKey, true); };
+    document.addEventListener('keydown', onKey, true);
   }
   onEscClear(){ this.keyword=''; this.page=1; this.saveState(); this.load(); }
   toggleSelect(id:string){ this.selectedId = this.selectedId===id? null: id; }

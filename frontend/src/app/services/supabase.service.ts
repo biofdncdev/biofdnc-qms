@@ -614,6 +614,29 @@ export class SupabaseService {
     }
   }
 
+  // Product materials verification logs (persisted in products.materials_verify_logs JSONB if exists)
+  async getProductMaterialsVerifyLogs(id: string){
+    try{
+      const { data, error } = await this.ensureClient().from('products').select('materials_verify_logs').eq('id', id).single();
+      if (error) throw error;
+      const logs = (data && (data as any).materials_verify_logs) || [];
+      return Array.isArray(logs) ? logs : [];
+    }catch(e){
+      console.warn('getProductMaterialsVerifyLogs failed (column may not exist yet); falling back to empty', e);
+      return [] as any[];
+    }
+  }
+  async setProductMaterialsVerifyLogs(id: string, logs: Array<{ user: string; time: string }>){
+    try{
+      const { error } = await this.ensureClient().from('products').update({ materials_verify_logs: logs }).eq('id', id);
+      if (error) throw error;
+      return true;
+    }catch(e){
+      console.warn('setProductMaterialsVerifyLogs failed (column may not exist yet); ignoring', e);
+      return false;
+    }
+  }
+
   // Product compositions
   async listProductCompositions(product_id: string){
     return this.ensureClient().from('product_compositions').select('*, ingredient:ingredients(*)').eq('product_id', product_id).order('created_at', { ascending: true });
@@ -747,6 +770,14 @@ export class SupabaseService {
   async getMaterial(id: string){ return this.ensureClient().from('materials').select('*').eq('id', id).single(); }
   async getMaterialColumnMap(){
     const { data } = await this.ensureClient().from('material_column_map').select('*').order('display_order', { ascending: true }) as any;
+    return Array.isArray(data) ? data : [];
+  }
+
+  // Batch fetch materials by IDs
+  async getMaterialsByIds(ids: string[]){
+    const list = Array.from(new Set((ids||[]).filter(Boolean)));
+    if (!list.length) return [] as any[];
+    const { data } = await this.ensureClient().from('materials').select('*').in('id', list) as any;
     return Array.isArray(data) ? data : [];
   }
 

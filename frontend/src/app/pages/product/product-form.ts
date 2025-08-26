@@ -132,6 +132,93 @@ import { SupabaseService } from '../../services/supabase.service';
             </div>
           </div>
         </div>
+
+        <!-- 투입품목/자재 섹션 -->
+        <div class="mat-wrap">
+          <div class="toolbar">
+            <div class="title">투입품목/자재</div>
+            <div class="spacer"></div>
+            <span class="status" [class.saved]="matSaved" [class.unsaved]="!matSaved">{{ matSaved? '저장됨' : '저장되지 않음' }}</span>
+            <button class="btn" (click)="saveMaterials()">저장</button>
+            <button class="btn primary" (click)="openMatPicker()">자재 추가</button>
+          </div>
+          <div class="table-scroll">
+            <table class="grid">
+              <thead>
+                <tr>
+                  <th class="col-no">No.</th>
+                  <th>자재코드</th>
+                  <th>자재명</th>
+                  <th>규격</th>
+                  <th>사양</th>
+                  <th>검색어</th>
+                  <th>연결 INCI</th>
+                  <th class="col-act"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let m of materials; let i = index">
+                  <td class="col-no">{{ i+1 }}</td>
+                  <td>{{ m.material_number || '' }}</td>
+                  <td>{{ m.material_name || '' }}</td>
+                  <td>{{ m.spec || '' }}</td>
+                  <td>{{ m.specification || '' }}</td>
+                  <td>{{ m.search_keyword || '' }}</td>
+                  <td>
+                    <select [(ngModel)]="m.linked_inci" (ngModelChange)="onMaterialsChanged()">
+                      <option [ngValue]="null">-</option>
+                      <option *ngFor="let c of compositions" [ngValue]="c.inci_name">{{ c.inci_name }}</option>
+                    </select>
+                  </td>
+                  <td class="col-act"><button class="btn mini" (click)="$event.stopPropagation(); removeMaterial(m)">삭제</button></td>
+                </tr>
+                <tr *ngIf="materials.length===0"><td colspan="8" class="empty">자재를 추가해 주세요.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 자재 피커 모달 -->
+          <div class="modal-backdrop" *ngIf="matPickerOpen" (click)="closeMatPicker()"></div>
+          <div class="modal" *ngIf="matPickerOpen" (click)="$event.stopPropagation()" [style.top.px]="modalTop" [style.left.px]="modalLeft" [style.transform]="'none'">
+            <div class="modal-head" (mousedown)="startDrag($event)">
+              <b>자재 선택</b>
+              <div class="spacer"></div>
+            </div>
+            <div class="modal-body">
+              <div class="search-bar">
+                <input [(ngModel)]="matPickerQuery" (keydown.enter)="onMatPickerEnter($event)" placeholder="자재코드/자재명/규격/사양/검색어 검색" />
+              </div>
+              <div class="table-scroll small">
+                <table class="grid">
+                  <thead><tr><th>자재코드</th><th>자재명</th><th>규격</th><th>사양</th><th>검색어</th><th class="col-act"></th></tr></thead>
+                  <tbody>
+                    <tr *ngFor="let r of matPickerRows">
+                      <td>{{ r.material_number }}</td>
+                      <td>{{ r.material_name }}</td>
+                      <td>{{ r.spec || '' }}</td>
+                      <td>{{ r.specification || '' }}</td>
+                      <td>{{ r.search_keyword || '' }}</td>
+                      <td class="col-act"><button class="btn mini filled-light" (click)="addMatPicked(r)">추가</button></td>
+                    </tr>
+                    <tr *ngIf="matPickerRows.length===0"><td colspan="6" class="empty">검색 결과가 없습니다.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- 확인자 영역 (자재) -->
+          <div class="verifier">
+            <button class="btn verify-btn" [class.need]="!isMaterialsVerified()" [class.done]="isMaterialsVerified()" (click)="onMaterialsVerifyClick()">자재 확인</button>
+            <span *ngIf="!isMaterialsVerified()" class="verify-note">확인이 필요합니다</span>
+            <div class="logs">
+              <div class="log-item" *ngFor="let l of materialsVerifyLogs; let i = index">
+                {{ i+1 }}차 확인: {{ l.user }} · {{ l.time }}
+                <button class="log-x" *ngIf="isAdmin" title="확인 취소" (click)="removeMaterialsVerify(i)">×</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -238,6 +325,9 @@ import { SupabaseService } from '../../services/supabase.service';
     .verify-btn.need{ background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
     .verify-btn.done{ background:#e0f2fe; border-color:#93c5fd; color:#0c4a6e; }
     .verify-note{ font-size:11px; color:#9a3412; }
+    /* materials */
+    .mat-wrap{ grid-column: 2; margin-top:100px; }
+    .mat-wrap select{ width:100%; box-sizing:border-box; border:1px solid #e5e7eb; border-radius:8px; padding:4px 6px; font-size:12px; }
   `]
 })
 export class ProductFormComponent implements OnInit {
@@ -277,6 +367,11 @@ export class ProductFormComponent implements OnInit {
   modalLeft = Math.round(window.innerWidth/2 - 460); // 920px 모달 가정, 중앙 정렬 좌표로 시작
   dragging = false; private dragOffsetX = 0; private dragOffsetY = 0;
 
+  // Materials state
+  materials: Array<{ material_id?: string; material_number?: string; material_name?: string; spec?: string; specification?: string; search_keyword?: string; linked_inci?: string | null }> = [];
+  matSaved = true;
+  matPickerOpen = false; matPickerQuery = ''; matPickerRows: any[] = [];
+
   constructor(private route: ActivatedRoute, private router: Router, private supabase: SupabaseService) {}
   isAdmin = false;
   async ngOnInit(){
@@ -300,6 +395,8 @@ export class ProductFormComponent implements OnInit {
             if (Array.isArray(s?.compositions)) this.compositions = s.compositions;
             // verify logs snapshot
             if (Array.isArray(s?.verifyLogs)) this.verifyLogs = s.verifyLogs;
+            if (Array.isArray(s?.materials)) this.materials = s.materials;
+            if (Array.isArray(s?.materialsVerifyLogs)) this.materialsVerifyLogs = s.materialsVerifyLogs;
           } else {
             await this.loadProductState(lastId);
           }
@@ -313,7 +410,7 @@ export class ProductFormComponent implements OnInit {
     // Restore unsaved UI state (remarks/compositions) snapshot for continuity
     const stateKey = this.stateKey();
     if (stateKey){
-      try{ const raw = this.readPerUser(stateKey); if(raw){ const s=JSON.parse(raw); if(s?.id===this.id()){ if(Array.isArray(s.compositions)) this.compositions = s.compositions; if (s.model) this.model = { ...this.model, ...s.model }; if (Array.isArray(s.verifyLogs)) this.verifyLogs = s.verifyLogs; } } }catch{}
+      try{ const raw = this.readPerUser(stateKey); if(raw){ const s=JSON.parse(raw); if(s?.id===this.id()){ if(Array.isArray(s.compositions)) this.compositions = s.compositions; if (s.model) this.model = { ...this.model, ...s.model }; if (Array.isArray(s.verifyLogs)) this.verifyLogs = s.verifyLogs; if (Array.isArray(s.materials)) this.materials = s.materials; if (Array.isArray(s.materialsVerifyLogs)) this.materialsVerifyLogs = s.materialsVerifyLogs; } } }catch{}
     }
   }
   setTab(tab: 'composition' | 'extra'){ this.activeTab = tab; localStorage.setItem('product.form.activeTab', tab); }
@@ -642,6 +739,50 @@ export class ProductFormComponent implements OnInit {
     }catch{ this.saved = false; }
   }
 
+  // Materials picker/search
+  openMatPicker(){ this.matPickerOpen = true; this.matPickerQuery = ''; this.matPickerRows = []; setTimeout(()=>{ const el=document.querySelector('.modal input') as HTMLInputElement|null; el?.focus(); this.updateModalTop(); }, 0); this.runMatPickerSearch(); }
+  closeMatPicker(){ this.matPickerOpen = false; }
+  async runMatPickerSearch(){
+    const q = (this.matPickerQuery||'').trim();
+    const { data } = await this.supabase.listMaterials({ page:1, pageSize: 20, keyword: q||' ', keywordOp: 'AND' } as any) as any;
+    this.matPickerRows = Array.isArray(data) ? data : [];
+  }
+  onMatPickerEnter(ev:any){ if(ev?.preventDefault) ev.preventDefault(); this.runMatPickerSearch(); }
+  addMatPicked(row:any){
+    const exists = this.materials.some(m => (m.material_id && m.material_id===row.id) || (m.material_number && m.material_number===row.material_number));
+    if (!exists){ this.materials.push({ material_id: row.id, material_number: row.material_number, material_name: row.material_name, spec: row.spec, specification: row.specification, search_keyword: row.search_keyword, linked_inci: null }); this.matSaved = false; this.saveStateSnapshot(); }
+  }
+  removeMaterial(row:any){ this.materials = this.materials.filter(r=> r!==row); this.matSaved = false; this.saveStateSnapshot(); }
+  onMaterialsChanged(){ this.matSaved = false; this.saveStateSnapshot(); }
+
+  async saveMaterials(){
+    if (!this.id()) { alert('품목이 선택되지 않았습니다. 좌측에서 품목을 검색하여 선택해 주세요.'); this.matSaved = false; return; }
+    const product_code = this.model?.product_code || null;
+    if (!product_code){ alert('품번이 없습니다. 좌측 품목 정보를 확인해 주세요.'); return; }
+    try{
+      // Existing selections
+      const saved = await this.supabase.getBomMaterialSelection(product_code);
+      const savedMap: Record<string, any> = {}; for (const s of saved){ if (s?.ingredient_name) savedMap[String(s.ingredient_name)] = s; }
+      // New selections by ingredient_name
+      const latest: Record<string, { id?: string|null; number?: string|null }> = {};
+      for (const m of this.materials){ if (m.linked_inci){ latest[m.linked_inci] = { id: m.material_id || null, number: m.material_number || null }; } }
+      // Clear removed mappings
+      const currentInci = new Set(Object.keys(latest));
+      for (const k of Object.keys(savedMap)){
+        if (!currentInci.has(k)){
+          await this.supabase.setBomMaterialSelection({ product_code, ingredient_name: k, selected_material_id: null, selected_material_number: null });
+        }
+      }
+      // Upsert new mappings
+      for (const [inci, v] of Object.entries(latest)){
+        await this.supabase.setBomMaterialSelection({ product_code, ingredient_name: inci, selected_material_id: v.id || null, selected_material_number: v.number || null });
+      }
+      // Persist verify logs as-is
+      try{ await this.supabase.setProductMaterialsVerifyLogs(this.id()!, this.materialsVerifyLogs); }catch{}
+      this.matSaved = true; this.notice.set('자재 매핑이 저장되었습니다.'); setTimeout(()=> this.notice.set(null), 1800); this.saveStateSnapshot();
+    }catch{ this.matSaved = false; }
+  }
+
   private async loadProductState(pid: string){
     const { data } = await this.supabase.getProduct(pid);
     // role check for admin-only actions
@@ -668,6 +809,37 @@ export class ProductFormComponent implements OnInit {
       this.verifyLogs = Array.isArray(logs) ? logs : [];
       this.lastVerifiedAt = null;
     }catch{ this.verifyLogs = []; this.lastVerifiedAt = null; }
+
+    // Load saved material mappings for this product (by product_code)
+    try{
+      const code = (this.model && (this.model as any).product_code) || null;
+      this.materials = [];
+      if (code){
+        const maps = await this.supabase.getBomMaterialSelection(code);
+        const byId: Record<string, any> = {};
+        const ids: string[] = [];
+        for (const m of maps){
+          if (m?.selected_material_id){ ids.push(m.selected_material_id); }
+        }
+        let details: any[] = [];
+        try{ details = await this.supabase.getMaterialsByIds(ids); }catch{ details = []; }
+        const idToDetail: Record<string, any> = {}; for(const d of details){ if(d?.id) idToDetail[d.id]=d; }
+        for (const row of maps){
+          const det = row?.selected_material_id ? idToDetail[row.selected_material_id] : null;
+          const rec = {
+            material_id: row.selected_material_id || det?.id || null,
+            material_number: row.selected_material_number || det?.material_number || null,
+            material_name: row.material_name || det?.material_name || null,
+            spec: det?.spec || null,
+            specification: det?.specification || null,
+            search_keyword: det?.search_keyword || null,
+            linked_inci: row.ingredient_name || null,
+          } as any;
+          this.materials.push(rec);
+        }
+      }
+      try{ const mlogs = await this.supabase.getProductMaterialsVerifyLogs(pid); this.materialsVerifyLogs = Array.isArray(mlogs)? mlogs: []; this.lastMaterialsVerifiedAt = null; }catch{ this.materialsVerifyLogs = []; this.lastMaterialsVerifiedAt = null; }
+    }catch{}
     this.saveStateSnapshot();
   }
 
@@ -713,6 +885,31 @@ export class ProductFormComponent implements OnInit {
     const pid = this.id(); if (pid) try{ this.supabase.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
   }
 
+  // Materials verification logs
+  materialsVerifyLogs: Array<{ user: string; time: string }> = [];
+  private lastMaterialsVerifiedAt: string | null = null;
+  isMaterialsVerified(){ return (this.materialsVerifyLogs && this.materialsVerifyLogs.length > 0); }
+  onMaterialsVerifyClick(){ if (!this.isMaterialsVerified()) this.confirmMaterials(); }
+  async confirmMaterials(){
+    try{
+      const user = await this.supabase.getCurrentUser();
+      const name = user ? (user.email || (user as any).user_metadata?.name || user.id || 'user') : 'anonymous';
+      const now = new Date(); const pad = (n:number)=> String(n).padStart(2,'0');
+      const time = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      this.materialsVerifyLogs = [...this.materialsVerifyLogs, { user: name, time }];
+      this.lastMaterialsVerifiedAt = time;
+      try{ const pid=this.id(); if(pid) await this.supabase.setProductMaterialsVerifyLogs(pid, this.materialsVerifyLogs); }catch{}
+      this.saveStateSnapshot();
+    }catch{}
+  }
+  removeMaterialsVerify(index:number){
+    if (index < 0 || index >= this.materialsVerifyLogs.length) return;
+    this.materialsVerifyLogs = this.materialsVerifyLogs.filter((_,i)=> i !== index);
+    this.lastMaterialsVerifiedAt = this.materialsVerifyLogs.length ? (this.materialsVerifyLogs[this.materialsVerifyLogs.length-1].time) : null;
+    try{ const pid=this.id(); if(pid) this.supabase.setProductMaterialsVerifyLogs(pid, this.materialsVerifyLogs); }catch{}
+    this.saveStateSnapshot();
+  }
+
   // Persist verification state per product (localStorage, survives logout/browser restarts)
   private verifyKey(){ const pid = this.id(); return pid ? `product.verify.${pid}` : null; }
   private async loadVerifyState(){
@@ -729,7 +926,7 @@ export class ProductFormComponent implements OnInit {
   }
   private saveVerifyState(){ try{ const key=this.verifyKey(); if(!key) return; const payload = { logs: this.verifyLogs, lastVerifiedAt: this.lastVerifiedAt }; localStorage.setItem(key, JSON.stringify(payload)); }catch{} }
   private stateKey(){ const pid = this.id(); return pid ? `product.form.state.${pid}` : null; }
-  private saveStateSnapshot(){ try{ const key=this.stateKey(); if(!key) return; const snapshot = { id: this.id(), model: this.model, compositions: this.compositions, verifyLogs: this.verifyLogs }; this.writePerUser(key, JSON.stringify(snapshot)); }catch{} }
+  private saveStateSnapshot(){ try{ const key=this.stateKey(); if(!key) return; const snapshot = { id: this.id(), model: this.model, compositions: this.compositions, verifyLogs: this.verifyLogs, materials: this.materials, materialsVerifyLogs: this.materialsVerifyLogs }; this.writePerUser(key, JSON.stringify(snapshot)); }catch{} }
   private storeLastProductId(id:string){ try{ this.writePerUser('product.form.lastId', id); }catch{} }
   private perUserKey(k:string){ return this.uid ? `${this.uid}:${k}` : `anon:${k}`; }
   private writePerUser(k:string, v:string){ localStorage.setItem(this.perUserKey(k), v); }
