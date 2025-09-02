@@ -3,8 +3,9 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../../services/supabase.service';
 
-interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; doneBy?: string; doneAt?: string; }
+interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; companies?: CompanyTag[]; doneBy?: string; doneAt?: string; }
 interface ResourceItem { id?: string; number?: number; name: string; type?: string; url?: string | null; file_url?: string | null; done?: boolean; }
+type CompanyTag = 'GIVAUDAN' | 'AMOREPACIFIC';
 interface AuditDate { value: string; label: string; }
 
 @Component({
@@ -14,7 +15,7 @@ interface AuditDate { value: string; label: string; }
   template: `
   <div class="audit-page">
     <header class="audit-header">
-      <div class="title">GIVAUDAN Audit</div>
+      <div class="title">Audit</div>
       <div class="controls">
         <label>Audit Date</label>
         <select [ngModel]="selectedDate()" (ngModelChange)="setDate($event)">
@@ -38,6 +39,13 @@ interface AuditDate { value: string; label: string; }
                 <button class="remove" (click)="removeFilterTeam(d)">×</button>
               </span>
             </div>
+            <!-- 업체 필터 -->
+            <label style="margin-left:12px">업체</label>
+            <select class="dept-select" [(ngModel)]="companyFilter" (ngModelChange)="onCompanyFilterChange($event)">
+              <option [ngValue]="'ALL'">전체</option>
+              <option [ngValue]="'GIVAUDAN'">GIVAUDAN</option>
+              <option [ngValue]="'AMOREPACIFIC'">AMOREPACIFIC</option>
+            </select>
           </div>
           <div class="item" *ngFor="let it of visibleItems()" [class.open]="openItemId===it.id" (click)="toggleDetails(it)">
             <div class="id">{{ it.id | number:'2.0-0' }}</div>
@@ -49,6 +57,16 @@ interface AuditDate { value: string; label: string; }
               <select class="status-select" [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" (change)="saveProgress(it)" [ngClass]="statusClass(it.status)" [ngStyle]="statusStyle(it.status)" (click)="$event.stopPropagation()">
                 <option *ngFor="let s of statusOptions" [value]="s.value">{{ s.emoji }} {{ s.label }}</option>
               </select>
+              <!-- 업체 태그 추가 버튼/선택 -->
+              <select class="dept-select" [ngModel]="''" (ngModelChange)="addCompany(it, $event)" title="업체 태그 추가" (click)="$event.stopPropagation()">
+                <option value="" disabled>업체 태그 추가…</option>
+                <option *ngFor="let c of companies" [value]="c" [disabled]="it.companies?.includes(c)">{{ c }}</option>
+              </select>
+              <div class="chips" *ngIf="it.companies?.length">
+                <span class="chip" *ngFor="let c of it.companies" (click)="$event.stopPropagation()">{{ c }}
+                  <button class="remove" (click)="removeCompany(it, c); $event.stopPropagation()">×</button>
+                </span>
+              </div>
               <select class="dept-select" [ngModel]="''" (ngModelChange)="addDept(it, $event)" title="담당 부서 추가" (click)="$event.stopPropagation()">
                 <option value="" disabled>담당 부서 추가…</option>
                 <option *ngFor="let d of departments" [value]="d" [disabled]="it.departments.includes(d)">{{ d }}</option>
@@ -84,41 +102,7 @@ interface AuditDate { value: string; label: string; }
         </div>
       </section>
 
-      <aside class="resources">
-        <ng-container *ngIf="openItemId; else emptySel">
-          <div class="re-head sticky">
-            <h3>{{ pad2(openItemId!) }} 자료 / Resources</h3>
-            <button class="add-btn" (click)="addResourceByAside()">+ 항목 추가</button>
-          </div>
-          <div class="resource-card" *ngFor="let r of resources; let i = index">
-            <div class="card-controls">
-              <button class="icon-btn check" [class.on]="r.done" title="완료" (click)="toggleResourceDone(r)">✓</button>
-              <button class="icon-btn close" title="항목 삭제" (click)="removeResourceConfirm(r)">×</button>
-            </div>
-            <div class="col">
-              <div class="card-row">
-                <textarea class="re-text" rows="1" [(ngModel)]="r.name" (input)="autoResize($event)" (blur)="saveResource(r)" placeholder="" spellcheck="false"></textarea>
-              </div>
-              <div class="dropzone"
-                   (dragover)="$event.preventDefault(); resourceHover[i]=true"
-                   (dragleave)="resourceHover[i]=false"
-                   (drop)="resourceHover[i]=false; handleDrop(r, $event)"
-                   (click)="fileInput.click()"
-                   [class.hover]="resourceHover[i]">
-                <ng-container *ngIf="r['file_url']; else hint">
-                  <a class="file-link" (click)="openLink(r['file_url']); $event.stopPropagation()">{{ getFileName(r) }}</a>
-                </ng-container>
-                <ng-template #hint>파일/이미지 첨부 (드롭 또는 클릭)</ng-template>
-                <input #fileInput type="file" style="display:none" (change)="uploadFor(r, $event)" />
-              </div>
-            </div>
-          </div>
-        </ng-container>
-        <ng-template #emptySel>
-          <h3>대응 자료 / Resources</h3>
-          <p class="hint">좌측에서 점검항목을 선택하면 관련 자료가 표시됩니다.</p>
-        </ng-template>
-      </aside>
+      <!-- 우측 자료 패널 제거 -->
     </div>
 
     <div class="preview-backdrop" *ngIf="previewing" (click)="previewing=false">
@@ -141,9 +125,8 @@ interface AuditDate { value: string; label: string; }
     .controls{ display:flex; align-items:center; gap:8px; }
     .controls select{ padding:8px 10px; border-radius:8px; border:1px solid #e5e7eb; }
 
-    .layout{ display:grid; grid-template-columns: minmax(0,1fr) 320px; gap:16px; align-items:start; }
-    .checklist, .resources { min-width: 0; }
-    @media (max-width: 1100px){ .layout{ grid-template-columns: 1fr; } }
+    .layout{ display:block; }
+    .checklist{ min-width:0; }
 
     .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 160px); overflow:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
     .group h3{ margin:8px 6px 12px; }
@@ -246,6 +229,8 @@ export class AuditGivaudanComponent {
   currentUserId: string | null = null;
   hover: boolean = false;
   resourceHover: boolean[] = [];
+  companies: CompanyTag[] = ['GIVAUDAN','AMOREPACIFIC'];
+  companyFilter: 'ALL' | CompanyTag = 'ALL';
   async ngOnInit(){
     try{
       const u = await this.supabase.getCurrentUser();
@@ -265,6 +250,7 @@ export class AuditGivaudanComponent {
             status: row.status || it.status,
             note: row.note || it.note,
             departments: row.departments || [],
+            companies: row.companies || [],
           } as any;
         });
         this.items.set(next as any);
@@ -282,7 +268,9 @@ export class AuditGivaudanComponent {
     done: false,
     status: 'pending',
     note: '',
-    departments: []
+    departments: [],
+    // 동적으로 companies 필드를 주입해 사용 (DB 없을 때도 안전)
+    ...( { companies: [] as CompanyTag[] } as any )
   })));
 
   resources: ResourceItem[] = [];
@@ -325,6 +313,7 @@ export class AuditGivaudanComponent {
       it.status = (prog.status as any) || it.status;
       it.note = prog.note || it.note;
       it.departments = prog.departments || [];
+      (it as any).companies = (prog as any).companies || [];
     }
     // Load resources
     const { data: res } = await this.supabase.listGivaudanResources(it.id);
@@ -345,6 +334,7 @@ export class AuditGivaudanComponent {
         note: it.note || null,
         status: it.status || null,
         departments: it.departments || [],
+        companies: (it.companies || []) as CompanyTag[],
         updated_by: this.currentUserId,
         updated_by_name: this.userDisplay,
       };
@@ -360,8 +350,9 @@ export class AuditGivaudanComponent {
 
   visibleItems(){
     const arr = this.items();
-    if(this.filterTeams.length===0) return arr;
-    return arr.filter((it:any)=> it.departments?.some((d:string)=> this.filterTeams.includes(d)));
+    const byTeam = this.filterTeams.length===0 ? arr : arr.filter((it:any)=> it.departments?.some((d:string)=> this.filterTeams.includes(d)));
+    if (this.companyFilter === 'ALL') return byTeam;
+    return byTeam.filter((it:any)=> (it.companies||[]).includes(this.companyFilter));
   }
 
   addFilterTeam(dept: string){ if(!dept) return; if(!this.filterTeams.includes(dept)) this.filterTeams = [...this.filterTeams, dept]; }
@@ -379,6 +370,11 @@ export class AuditGivaudanComponent {
     it.departments = (it.departments||[]).filter((d:string)=>d!==dept);
     this.saveProgress(it);
   }
+
+  // 업체 태그 관리
+  addCompany(it: any, c: CompanyTag){ if(!c) return; if(!it.companies) it.companies = []; if(!it.companies.includes(c)){ it.companies.push(c); this.saveProgress(it); } }
+  removeCompany(it: any, c: CompanyTag){ it.companies = (it.companies||[]).filter((x:CompanyTag)=>x!==c); this.saveProgress(it); }
+  onCompanyFilterChange(_: any){}
 
   async addResource(it: any){
     const row = { number: it.id, name: '', type: 'Manual', url: null, file_url: null };

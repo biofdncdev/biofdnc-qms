@@ -371,6 +371,7 @@ export class SupabaseService {
     note?: string | null;
     status?: string | null;
     departments?: string[] | null;
+    companies?: string[] | null;
     updated_by?: string | null;
     updated_by_name?: string | null;
   }) {

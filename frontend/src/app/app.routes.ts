@@ -68,6 +68,10 @@ export const routes: Routes = [
         loadComponent: () => import('./record/rmd-forms/rmd-forms.component').then(m => m.RmdFormsComponent),
       },
       {
+        path: 'audit',
+        loadComponent: () => import('./pages/audit/givaudan/audit-givaudan.component').then(m => m.AuditGivaudanComponent),
+      },
+      {
         path: 'audit/amorepacific',
         loadComponent: () => import('./pages/home/home').then(m => m.HomeComponent),
       },

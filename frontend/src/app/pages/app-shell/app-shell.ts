@@ -114,8 +114,7 @@ export class AppShellComponent {
         },
         {
           key: 'audit', icon: 'rule', label: 'Audit', submenu: [
-            { label: 'AMOREPACIFIC', path: '/app/audit/amorepacific' },
-            { label: 'GIVAUDAN', path: '/app/audit/givaudan' }
+            { label: 'Audit 평가항목', path: '/app/audit' }
           ]
         },
       );
