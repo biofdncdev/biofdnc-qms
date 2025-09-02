@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../../services/supabase.service';
 
-interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; companies?: string[]; comments?: Array<{ user: string; time: string; text: string }>; company?: string | null; doneBy?: string; doneAt?: string; }
+interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; companies?: string[]; comments?: Array<{ user: string; time: string; text: string; ownerTag?: boolean }>; owners?: string[]; company?: string | null; doneBy?: string; doneAt?: string; }
 interface ResourceItem { id?: string; number?: number; name: string; type?: string; url?: string | null; file_url?: string | null; done?: boolean; }
 interface AuditDate { value: string; label: string; }
 
@@ -47,17 +47,18 @@ interface AuditDate { value: string; label: string; }
               <option [ngValue]="'ALL'">전체</option>
               <option *ngFor="let c of companies" [ngValue]="c">{{ c }}</option>
             </select>
-            <!-- 부서 필터 -->
+            <!-- 부서 필터: 단일 선택 -->
             <label style="margin-left:12px">부서</label>
-            <select class="dept-select" [ngModel]="''" (ngModelChange)="addFilterTeam($event)">
-              <option value="" disabled>부서 추가…</option>
-              <option *ngFor="let d of departments" [value]="d" [disabled]="filterTeams.includes(d)">{{ d }}</option>
+            <select class="dept-select" [(ngModel)]="filterDept" (ngModelChange)="onFilterChange()">
+              <option [ngValue]="'ALL'">전체</option>
+              <option *ngFor="let d of departments" [ngValue]="d">{{ d }}</option>
             </select>
-            <div class="chips" *ngIf="filterTeams.length">
-              <span class="chip" *ngFor="let d of filterTeams" [ngClass]="teamClass(d)">{{ d }}
-                <button class="remove" (click)="removeFilterTeam(d)">×</button>
-              </span>
-            </div>
+            <!-- 담당자 필터 -->
+            <label style="margin-left:12px">담당자</label>
+            <select class="dept-select" [(ngModel)]="filterOwner" (ngModelChange)="onFilterChange()">
+              <option [ngValue]="'ALL'">전체</option>
+              <option *ngFor="let u of userOptions" [ngValue]="u">{{ u }}</option>
+            </select>
           </div>
           <div class="item" *ngFor="let it of visibleItems()" [class.open]="openItemId===it.id" (click)="toggleDetails(it)">
             <div class="id">{{ it.id | number:'2.0-0' }}</div>
@@ -66,35 +67,48 @@ interface AuditDate { value: string; label: string; }
               <div class="en">{{ it.titleEn }}</div>
             </div>
             <div class="state">
-              <select class="status-select" [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" (change)="saveProgress(it)" [ngClass]="statusClass(it.status)" [ngStyle]="statusStyle(it.status)" (click)="$event.stopPropagation()">
+              <select class="status-select" [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" (change)="saveProgress(it)" [ngClass]="statusClass(it.status)" [ngStyle]="statusStyle(it.status)" (blur)="saveProgress(it)" (click)="$event.stopPropagation()">
                 <option *ngFor="let s of statusOptions" [value]="s.value">{{ s.emoji }} {{ s.label }}</option>
               </select>
-              <select class="status-select after-status pill" [(ngModel)]="it.company" (ngModelChange)="saveProgress(it)" title="업체 선택" (click)="$event.stopPropagation()">
+              <!-- 2열 상단: 협력업체 선택 -->
+              <select class="status-select after-status pill" [(ngModel)]="it.company" (ngModelChange)="saveProgress(it)" (blur)="saveProgress(it)" title="업체 선택" (click)="$event.stopPropagation()">
                 <option *ngFor="let c of companies" [ngValue]="c">{{ c }}</option>
               </select>
-              <!-- 상단 우측: 비고 입력 (두 행 병합, 줄바꿈 가능) -->
-              <textarea class="note-input" [(ngModel)]="it.note" placeholder="비고" (input)="autoResize($event)" (change)="saveProgress(it)" (blur)="saveProgress(it)" (click)="$event.stopPropagation()"></textarea>
-              <!-- 업체 태그 추가 버튼/선택 -->
-              <select class="dept-select" [ngModel]="''" (ngModelChange)="onAddCompanyChange(it, $event)" title="업체 태그 추가" (click)="$event.stopPropagation()">
-                <option value="" disabled>업체 태그 추가…</option>
-                <option *ngFor="let c of companies" [value]="c" [disabled]="(it.companies||[]).includes(c)">{{ c }}</option>
-              </select>
-              <div class="chips" *ngIf="it.companies?.length">
-                <span class="chip" *ngFor="let c of it.companies" (click)="$event.stopPropagation()">{{ c }}
-                  <button class="remove" (click)="removeCompany(it, c); $event.stopPropagation()">×</button>
-                </span>
+              <!-- 3열 상단: 저장됨 -->
+              <span class="save-badge saved saved-inline" *ngIf="rowSaving[it.id]==='saved'">저장됨</span>
+              <!-- 4열 상단: 비고 입력 (상단 행만, 줄바꿈 가능) -->
+              <textarea class="note-input" [(ngModel)]="it.note" placeholder="비고" spellcheck="false" (ngModelChange)="onNoteModelChange(it)" (input)="autoResize($event)" (change)="saveProgress(it)" (blur)="saveProgress(it)" (click)="$event.stopPropagation()"></textarea>
+
+              <!-- 2열 하단: 칩 영역(업체/부서 표시) -->
+              <div class="col2-bottom">
+                <div class="chips companies" *ngIf="it.companies?.length">
+                  <span class="chip" *ngFor="let c of it.companies" (click)="$event.stopPropagation()">{{ c }}
+                    <button class="remove" (click)="removeCompany(it, c); $event.stopPropagation()">×</button>
+                  </span>
+                </div>
+                <div class="chips depts" *ngIf="it.departments?.length">
+                  <span class="chip" *ngFor="let d of it.departments" [ngClass]="teamClass(d)" (click)="$event.stopPropagation()">{{ displayDeptName(d) }}
+                    <button class="remove" (click)="removeDept(it, d); $event.stopPropagation()">×</button>
+                  </span>
+                </div>
               </div>
-              <select class="dept-select" [ngModel]="''" (ngModelChange)="addDept(it, $event)" title="담당 부서 추가" (click)="$event.stopPropagation()">
-                <option value="" disabled>담당 부서 추가…</option>
+              <select class="dept-select" [ngModel]="''" (ngModelChange)="addDept(it, $event)" (blur)="saveProgress(it)" title="담당 부서 추가" (click)="$event.stopPropagation()">
+                <option value="" disabled>담당 부서 추가</option>
                 <option *ngFor="let d of departments" [value]="d" [disabled]="it.departments.includes(d)">{{ d }}</option>
               </select>
-              <div class="chips" *ngIf="it.departments?.length">
-                <span class="chip" *ngFor="let d of it.departments" [ngClass]="teamClass(d)" (click)="$event.stopPropagation()">{{ displayDeptName(d) }}
-                  <button class="remove" (click)="removeDept(it, d); $event.stopPropagation()">×</button>
+              <span class="save-badge saved-inline" *ngIf="rowSaving[it.id]==='saving'">저장중…</span>
+              
+              <!-- 3열 하단: 담당자 추가 -->
+              <select class="dept-select owner-select" [ngModel]="''" (ngModelChange)="addOwner(it, $event)" (blur)="saveProgress(it)" title="담당자 추가" (click)="$event.stopPropagation()">
+                <option value="" disabled>담당자 추가</option>
+                <option *ngFor="let u of userOptions" [value]="u" [disabled]="(it.owners||[]).includes(u)">{{ u }}</option>
+              </select>
+              <!-- 4열 하단: 담당자 칩 -->
+              <div class="chips owners" *ngIf="it.owners?.length">
+                <span class="chip" *ngFor="let u of it.owners" (click)="$event.stopPropagation()">{{ u }}
+                  <button class="remove" (click)="removeOwner(it, u); $event.stopPropagation()">×</button>
                 </span>
               </div>
-              <span class="save-badge" *ngIf="rowSaving[it.id]==='saving'">저장중…</span>
-              <span class="save-badge saved saved-inline" *ngIf="rowSaving[it.id]==='saved'">저장됨</span>
               
             </div>
             <div class="details" *ngIf="openItemId===it.id" (click)="$event.stopPropagation()">
@@ -189,19 +203,33 @@ interface AuditDate { value: string; label: string; }
     .layout{ display:block; }
     .checklist{ min-width:0; }
 
-    .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 160px); overflow:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
+    .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 160px); overflow-y:auto; overflow-x:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
     .group h3{ margin:8px 6px 12px; }
     .filterbar{ display:flex; align-items:center; gap:10px; margin:6px; flex-wrap:wrap; }
     .item{ display:grid; grid-template-columns: 54px 1fr 1.6fr; gap:12px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; align-items:start; min-width:0; }
     .id{ font-weight:700; color:#475569; display:flex; align-items:center; justify-content:center; }
     .ko{ font-weight:600; margin-bottom:2px; }
     .en{ color:#64748b; font-size:.92em; }
-    /* Left controls grid: col1=status/dept-select, col2=company/chips */
-    .state{ display:grid; grid-template-columns: auto 240px 1fr; grid-template-rows:auto auto; align-items:start; column-gap:12px; row-gap:8px; min-width:0; }
+    /* 4열 x 2행 레이아웃 */
+    .state{ display:grid; grid-template-columns: 20% 20% 12% calc(48% - 36px); grid-template-rows:auto auto; align-items:start; column-gap:12px; row-gap:8px; min-width:0; }
+    /* 1열: 상태(상단), 부서 추가(하단) */
     .state .status-select{ grid-row:1; grid-column:1; }
-    .state .after-status{ grid-row:1; grid-column:2; justify-self:start; width:200px; }
-    .state .dept-select{ grid-row:2; grid-column:1; }
-    .state .chips{ grid-row:2; grid-column:2 / 4; margin-top:0; min-height:32px; display:flex; align-items:center; justify-content:flex-start; }
+    /* 1열 2행: 부서 추가 버튼 (owner-select 제외) */
+    .state .dept-select:not(.owner-select){ grid-row:2; grid-column:1; justify-self:start; }
+    /* 2열: 상단 업체 선택, 하단 기존 칩 묶음 */
+    .state .after-status{ grid-row:1; grid-column:2; justify-self:start; width:100%; }
+    .col2-bottom{ grid-row:2; grid-column:2; display:flex; flex-direction:column; gap:6px; }
+    .company-tag-select{ width:220px; }
+    /* 3열: 상단 저장됨, 하단 담당자 추가 */
+    .saved-inline{ grid-row:1; grid-column:3; justify-self:start; align-self:center; }
+    /* 3열 2행: 담당자 추가 버튼 */
+    .state .owner-select{ grid-row:2; grid-column:3; width:220px; }
+    /* 4열: 상단 비고, 하단 담당자 칩 */
+    /* 비고: 버튼과 동일 높이(약 32px) */
+    .note-input{ grid-row:1; grid-column:4; align-self:stretch; height:32px; min-height:32px; border:1px solid #e5e7eb; border-radius:12px; padding:6px 10px; font-size:13px; box-sizing:border-box; resize:none; white-space:pre-wrap; overflow-y:hidden; }
+    .chips.owners{ grid-row:2; grid-column:4; }
+    /* 기존 칩 정렬 */
+    .state .chips{ margin-top:0; min-height:32px; display:flex; align-items:center; justify-content:flex-start; }
     .state .meta{ color:#475569; font-size:.85em; }
     .status-swatch{ width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #e5e7eb; }
     select{ padding:6px 8px; border:1px solid #d1d5db; border-radius:10px; appearance:none; -webkit-appearance:none; -moz-appearance:none; font-family: var(--font-sans-kr); font-size:13.5px; }
@@ -216,9 +244,9 @@ interface AuditDate { value: string; label: string; }
     .state select.status-na{ background:#f1f5f9; border-color:#cbd5e1; color:#334155; }
     .state select.status-impossible{ background:#fee2e2; border-color:#ef4444; color:#991b1b; }
     .state select.status-done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
-    .save-badge{ margin-left:6px; font-size:.85em; color:#64748b; }
+    .save-badge{ margin-left:6px; font-size:.85em; color:#64748b; height:32px; display:inline-flex; align-items:center; }
     .save-badge.saved{ color:#16a34a; }
-    .saved-inline{ grid-row:1; grid-column:3; justify-self:start; align-self:center; margin-left:8px; }
+    .saved-inline{ margin-left:0; color:#16a34a; height:32px; display:inline-flex; align-items:center; }
     textarea{ width:100%; max-width: none; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
     .note textarea{ width: min(500px, 100%); max-width:100%; box-sizing:border-box; }
 
@@ -227,7 +255,6 @@ interface AuditDate { value: string; label: string; }
     .details-inner{ display:grid; grid-template-columns: 1.4fr .8fr 1fr 1fr; gap:16px; padding:10px 6px 12px; }
     .details-inner.comments-on{ grid-template-columns: 1.4fr 1fr .8fr 1fr; }
     .comments{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:10px; grid-column:4; }
-    .note-input{ grid-column:3; grid-row:1 / 3; align-self:stretch; height:100%; min-height:76px; border:1px solid #e5e7eb; border-radius:12px; padding:10px 12px; font-size:13px; box-sizing:border-box; resize:vertical; white-space:pre-wrap; }
     .comments .new{ display:flex; gap:8px; }
     .comments .new textarea{ flex:1; resize:vertical; min-height:64px; }
     .comments .list{ display:flex; flex-direction:column; gap:8px; max-height:300px; overflow:auto; }
@@ -345,6 +372,11 @@ export class AuditGivaudanComponent {
       this.savedSelectedDate = this.savedDates?.[0] || null;
       // load audit companies for selects/filters
       try{ this.companies = (await this.supabase.listAuditCompanies()).map((r:any)=> r.name).filter(Boolean); }catch{}
+      // 사용자 목록 로드 (담당자 선택/필터용)
+      try{
+        const { data: users } = await this.supabase.getClient().from('users').select('name,email').order('created_at', { ascending: false });
+        this.userOptions = (users||[]).map((u:any)=> u?.name || u?.email).filter(Boolean);
+      }catch{}
       // default date = today
       this.setToday();
     }catch{}
@@ -372,11 +404,13 @@ export class AuditGivaudanComponent {
     status: 'pending',
     note: '',
     departments: [],
+    owners: [],
     // 동적으로 companies 필드를 주입해 사용 (DB 없을 때도 안전)
     ...( { companies: [] as string[] } as any )
   })));
 
   resources: ResourceItem[] = [];
+  userOptions: string[] = [];
   newComment: Record<number, string> = {};
 
   setDate(value: string){ this.selectedDate.set(value); this.loadByDate(); }
@@ -419,7 +453,7 @@ export class AuditGivaudanComponent {
   }
   resetItems(){
     const blank = Array.from({ length: 214 }, (_, i) => ({
-      id: i+1, titleKo: `점검 항목 ${i+1}`, titleEn: `Inspection item ${i+1}`, done: false, status: 'pending', note: '', departments: [], companies: [] as string[]
+      id: i+1, titleKo: `점검 항목 ${i+1}`, titleEn: `Inspection item ${i+1}`, done: false, status: 'pending', note: '', departments: [], owners: [] as string[], companies: [] as string[]
     }));
     this.items.set(blank as any);
   }
@@ -462,8 +496,21 @@ export class AuditGivaudanComponent {
   }
   removeComment(it: any, idx: number){
     if (!it || !Array.isArray(it.comments)) return;
-    it.comments.splice(idx, 1);
-    this.saveProgress(it);
+    const date = this.selectedDate();
+    const perform = async ()=>{
+      try{
+        if (date){
+          const { data: fresh } = await this.supabase.getGivaudanProgressByDate(it.id, date);
+          const list = (fresh as any)?.comments || it.comments || [];
+          list.splice(idx, 1);
+          it.comments = list;
+        } else {
+          it.comments.splice(idx, 1);
+        }
+      }catch{}
+      await this.saveProgress(it);
+    };
+    perform();
   }
 
   // Create current date data (initialize and save)
@@ -474,9 +521,10 @@ export class AuditGivaudanComponent {
     if (this.savedDates.includes(date)) return;
     // 페이지 내용 초기화 후 저장
     this.resetItems();
-    // 생성 직후 필터로 인해 리스트가 비어 보이지 않도록 초기화
+    // 생성 직후 필터 초기화
     this.companyFilter = 'ALL';
-    this.filterTeams = [];
+    this.filterDept = 'ALL';
+    this.filterOwner = 'ALL';
     this.saving = true;
     try{
       await this.saveAllForDate();
@@ -546,6 +594,17 @@ export class AuditGivaudanComponent {
     setTimeout(()=> this.toast=null, 1400);
   }
 
+  // Debounced note save to ensure persistence when user types without blur
+  private noteTimers: Record<number, any> = {};
+  onNoteModelChange(it: any){
+    const id = it?.id; if(!id) return;
+    // throttle: save 600ms after last keystroke
+    clearTimeout(this.noteTimers[id]);
+    this.noteTimers[id] = setTimeout(()=>{
+      this.saveProgress(it);
+    }, 600);
+  }
+
   onCommentKeydown(ev: KeyboardEvent, it: any){
     // Ctrl+Enter: 등록만, Ctrl+Shift+Enter: 등록 후 다음 항목으로 이동
     if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter'){
@@ -592,7 +651,8 @@ export class AuditGivaudanComponent {
   openItemId: number | null = null;
   assessment: any = null;
   departments = ['원료제조팀','식물세포배양팀','품질팀','연구팀','경영지원팀'];
-  filterTeams: string[] = [];
+  filterDept: 'ALL' | string = 'ALL';
+  filterOwner: 'ALL' | string = 'ALL';
 
   async toggleDetails(it: any){
     // Toggle behavior: if already open → close; otherwise open and load
@@ -614,6 +674,7 @@ export class AuditGivaudanComponent {
       it.note = prog.note || it.note;
       it.departments = prog.departments || [];
       (it as any).companies = (prog as any).companies || [];
+      it.owners = (prog as any).owners || it.owners || [];
     }
     // Load resources
     const { data: res } = await this.supabase.listGivaudanResources(it.id);
@@ -637,6 +698,7 @@ export class AuditGivaudanComponent {
         note: it.note || null,
         status: it.status || null,
         departments: it.departments || [],
+        owners: (it.owners || []) as string[],
         companies: (it.companies || []) as string[],
         comments: (it.comments || []) as any,
         company: (it.company || null) as any,
@@ -646,6 +708,22 @@ export class AuditGivaudanComponent {
       };
       const { error } = await this.supabase.upsertGivaudanProgress(payload) as any;
       if (error) throw error;
+      // Reload the single row from server to reflect canonical values
+      try{
+        const date = this.selectedDate();
+        if (date){
+          const { data: fresh } = await this.supabase.getGivaudanProgressByDate(it.id, date);
+          if (fresh){
+            it.status = (fresh as any).status || it.status;
+            it.note = (fresh as any).note || it.note;
+            it.departments = (fresh as any).departments || it.departments || [];
+            it.owners = (fresh as any).owners || it.owners || [];
+            it.company = (fresh as any).company || it.company || null;
+            it.companies = (fresh as any).companies || it.companies || [];
+            it.comments = (fresh as any).comments || it.comments || [];
+          }
+        }
+      }catch{}
       this.setSaving(it.id, 'saved');
       setTimeout(()=>this.setSaving(it.id,'idle'), 1200);
     }catch(e){
@@ -656,19 +734,22 @@ export class AuditGivaudanComponent {
 
   visibleItems(){
     const arr = this.items();
-    const byTeam = this.filterTeams.length===0 ? arr : arr.filter((it:any)=> it.departments?.some((d:string)=> this.filterTeams.includes(d)));
-    if (this.companyFilter === 'ALL') return byTeam;
+    // 부서 필터
+    const byDept = this.filterDept==='ALL' ? arr : arr.filter((it:any)=> (it.departments||[]).includes(this.filterDept));
+    // 담당자 필터
+    const byOwner = this.filterOwner==='ALL' ? byDept : byDept.filter((it:any)=> (it.owners||[]).includes(this.filterOwner));
+    // 업체 필터
+    if (this.companyFilter === 'ALL') return byOwner;
     const selected = this.companyFilter;
     const selectedNorm = this.normalizeCompanyName(selected);
-    return byTeam.filter((it:any)=>{
+    return byOwner.filter((it:any)=>{
       const tags = (it.companies||[]).map((x:string)=> this.normalizeCompanyName(x));
       const primary = this.normalizeCompanyName(it.company || '');
       return tags.includes(selectedNorm) || primary === selectedNorm;
     });
   }
 
-  addFilterTeam(dept: string){ if(!dept) return; if(!this.filterTeams.includes(dept)) this.filterTeams = [...this.filterTeams, dept]; }
-  removeFilterTeam(dept: string){ this.filterTeams = this.filterTeams.filter(d=>d!==dept); }
+  onFilterChange(){}
 
   addDept(it: any, dept: string){
     if(!dept) return;
@@ -702,6 +783,20 @@ export class AuditGivaudanComponent {
     it.companies = (it.companies||[]).filter((x:string)=>x!==c); this.saveProgress(it);
   }
   onCompanyFilterChange(_: any){}
+
+  // 담당자 추가/삭제
+  addOwner(it: any, owner: string){
+    if (!owner) return;
+    const date = this.selectedDate();
+    if (!date || !this.savedDates.includes(date)) { this.showToast('먼저 생성 버튼으로 이 날짜를 생성해 주세요'); return; }
+    if (!it.owners) it.owners = [];
+    if (!(it.owners as string[]).includes(owner)) { (it.owners as string[]).push(owner); this.saveProgress(it); }
+  }
+  removeOwner(it: any, owner: string){
+    const date = this.selectedDate();
+    if (!date || !this.savedDates.includes(date)) { this.showToast('먼저 생성 버튼으로 이 날짜를 생성해 주세요'); return; }
+    it.owners = (it.owners||[]).filter((x:string)=>x!==owner); this.saveProgress(it);
+  }
 
   async addResource(it: any){
     const row = { number: it.id, name: '', type: 'Manual', url: null, file_url: null };
@@ -743,7 +838,16 @@ export class AuditGivaudanComponent {
     this.uploadFor(r, fake);
   }
   toggleResourceDone(r: any){ r.done = !r.done; this.saveResource(r); }
-  autoResize(ev: any){ const ta = ev?.target as HTMLTextAreaElement; if(!ta) return; ta.style.height = 'auto'; ta.style.height = Math.min(120, Math.max(ta.scrollHeight, 28)) + 'px'; }
+  autoResize(ev: any){
+    const ta = ev?.target as HTMLTextAreaElement; if(!ta) return;
+    const lineBreaks = (ta.value.match(/\n/g) || []).length;
+    if (lineBreaks === 0){
+      ta.style.height = '32px';
+      return;
+    }
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(120, Math.max(ta.scrollHeight, 32)) + 'px';
+  }
   getFileName(r: any){ try{ const url = (r?.file_url||'').split('?')[0]; return url.substring(url.lastIndexOf('/')+1); }catch{return '파일 열기';} }
 
   openResource(r: ResourceItem){ this.preview(r); }

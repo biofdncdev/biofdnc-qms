@@ -404,6 +404,7 @@ export class SupabaseService {
     note?: string | null;
     status?: string | null;
     departments?: string[] | null;
+    owners?: string[] | null;
     companies?: string[] | null;
     comments?: Array<{ user: string; time: string; text: string }> | null;
     company?: string | null;
@@ -413,7 +414,7 @@ export class SupabaseService {
   }) {
     return this.ensureClient()
       .from('audit_progress')
-      .upsert(row, { onConflict: 'number,audit_date' });
+      .upsert(row, { onConflict: 'number,audit_date', ignoreDuplicates: false });
   }
 
   async upsertGivaudanProgressMany(rows: Array<{
@@ -421,6 +422,7 @@ export class SupabaseService {
     note?: string | null;
     status?: string | null;
     departments?: string[] | null;
+    owners?: string[] | null;
     companies?: string[] | null;
     comments?: Array<{ user: string; time: string; text: string }> | null;
     company?: string | null;
@@ -436,7 +438,7 @@ export class SupabaseService {
       const part = rows.slice(i, i+BATCH);
       const { error } = await client
         .from('audit_progress')
-        .upsert(part, { onConflict: 'number,audit_date' }) as any; // return=minimal
+        .upsert(part, { onConflict: 'number,audit_date', ignoreDuplicates: false, defaultToNull: false }) as any; // return=minimal
       if (error) lastError = error;
     }
     if (lastError) throw lastError;
