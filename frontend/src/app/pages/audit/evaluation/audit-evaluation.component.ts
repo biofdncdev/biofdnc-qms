@@ -2,13 +2,14 @@ import { Component, HostListener, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../../services/supabase.service';
+import * as XLSX from 'xlsx';
 
 interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; companies?: string[]; comments?: Array<{ user: string; time: string; text: string; ownerTag?: boolean }>; owners?: string[]; company?: string | null; doneBy?: string; doneAt?: string; }
 interface ResourceItem { id?: string; number?: number; name: string; type?: string; url?: string | null; file_url?: string | null; done?: boolean; }
 interface AuditDate { value: string; label: string; }
 
 @Component({
-  selector: 'app-audit-givaudan',
+  selector: 'app-audit-evaluation',
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
@@ -350,7 +351,7 @@ interface AuditDate { value: string; label: string; }
     .btn.danger:hover{ background:#fdba74 !important; border-color:#fdba74 !important; }
   `]
 })
-export class AuditGivaudanComponent {
+export class AuditEvaluationComponent {
   constructor(private supabase: SupabaseService){}
   userDisplay = '사용자';
   currentUserId: string | null = null;
@@ -380,21 +381,42 @@ export class AuditGivaudanComponent {
       }catch{}
       // default date = today
       this.setToday();
-      // Auto-load titles from public/audit-items.json and attempt DB upsert
+      await this.loadTitlesFromExcel();
+    }catch{}
+  }
+
+  private async loadTitlesFromExcel(){
+    const candidates = [
+      '/Audit%20Evaluation%20Items.xlsx',
+      '/asset/Audit%20Evaluation%20Items.xlsx',
+      '/assets/Audit%20Evaluation%20Items.xlsx'
+    ];
+    let buf: ArrayBuffer | null = null;
+    for (const url of candidates){
       try{
-        const res = await fetch('/audit-items.json', { cache: 'no-store' });
-        if (res.ok){
-          const items = await res.json();
-          if (Array.isArray(items)){
-            const updated = this.items().map((it:any)=>{
-              const row = items.find((r:any)=> Number(r.id)===Number(it.id));
-              return row ? ({...it, titleKo: row.titleKo || it.titleKo, titleEn: row.titleEn || it.titleEn}) : it;
-            });
-            this.items.set(updated as any);
-            this.supabase.upsertAuditItems(items).catch(()=>{});
-          }
-        }
+        const res = await fetch(url, { cache: 'no-store' });
+        if (res.ok){ buf = await res.arrayBuffer(); break; }
       }catch{}
+    }
+    if (!buf) return;
+    try{
+      const wb = XLSX.read(buf, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[];
+      if (!Array.isArray(rows) || rows.length === 0) return;
+      const updated = this.items().map((it:any) => {
+        const idx = (it.id - 1);
+        const r = (rows[idx] as any[]) || [];
+        const a = (r[0] ?? '').toString().trim();
+        const b = (r[1] ?? '').toString().trim();
+        const c = (r[2] ?? '').toString().trim();
+        const d = (r[3] ?? '').toString().trim();
+        const e = (r[4] ?? '').toString().trim();
+        const titleKo = [a,b,c].filter(Boolean).join(' ');
+        const titleEn = [d,e].filter(Boolean).join(' ');
+        return { ...it, titleKo: titleKo || it.titleKo, titleEn: titleEn || it.titleEn };
+      });
+      this.items.set(updated as any);
     }catch{}
   }
 

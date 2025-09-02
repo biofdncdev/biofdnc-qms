@@ -69,7 +69,7 @@ export const routes: Routes = [
       },
       {
         path: 'audit',
-        loadComponent: () => import('./pages/audit/givaudan/audit-givaudan.component').then(m => m.AuditGivaudanComponent),
+        loadComponent: () => import('./pages/audit/evaluation/audit-evaluation.component').then(m => m.AuditEvaluationComponent),
       },
       {
         path: 'audit/amorepacific',
@@ -77,7 +77,7 @@ export const routes: Routes = [
       },
       {
         path: 'audit/givaudan',
-        loadComponent: () => import('./pages/audit/givaudan/audit-givaudan.component').then(m => m.AuditGivaudanComponent),
+        loadComponent: () => import('./pages/audit/evaluation/audit-evaluation.component').then(m => m.AuditEvaluationComponent),
       },
       {
         path: 'audit/companies',
