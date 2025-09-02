@@ -458,6 +458,25 @@ export class SupabaseService {
     return Array.from(set);
   }
 
+  // Audit items upsert from JSON (best-effort)
+  async upsertAuditItems(items: Array<{ id: number; titleKo: string; titleEn?: string | null }>) {
+    if (!Array.isArray(items) || items.length === 0) return { ok: true } as any;
+    const rows = items.map(it => ({ id: it.id, title_ko: it.titleKo, title_en: it.titleEn || null }));
+    try {
+      const BATCH = 200;
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const part = rows.slice(i, i + BATCH);
+        const { error } = await this.ensureClient().from('audit_items').upsert(part, { onConflict: 'id' });
+        if (error) throw error;
+      }
+      return { ok: true } as any;
+    } catch (e) {
+      // Ignore when RLS forbids insert/update; the UI can still use local titles
+      console.warn('upsertAuditItems failed (ignored):', e);
+      return { ok: false, error: e } as any;
+    }
+  }
+
   // Audit companies CRUD
   async listAuditCompanies(){
     const { data } = await this.ensureClient().from('audit_companies').select('*').order('name', { ascending: true });

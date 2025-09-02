@@ -96,7 +96,7 @@ interface AuditDate { value: string; label: string; }
                 <option value="" disabled>담당 부서 추가</option>
                 <option *ngFor="let d of departments" [value]="d" [disabled]="it.departments.includes(d)">{{ d }}</option>
               </select>
-              <span class="save-badge saved-inline" *ngIf="rowSaving[it.id]==='saving'">저장중…</span>
+              <span class="save-badge saved-inline" *ngIf="rowSaving[it.id]==='saving'"><span class="spinner inline"></span></span>
               
               <!-- 3열 하단: 담당자 추가 -->
               <select class="dept-select owner-select" [ngModel]="''" (ngModelChange)="addOwner(it, $event)" (blur)="saveProgress(it)" title="담당자 추가" (click)="$event.stopPropagation()">
@@ -252,9 +252,9 @@ interface AuditDate { value: string; label: string; }
 
     .item .details{ grid-column: 1 / -1; overflow:hidden; }
     .item.open .details{ animation: slideDown .22s ease-out; }
-    .details-inner{ display:grid; grid-template-columns: 1.4fr .8fr 1fr 1fr; gap:16px; padding:10px 6px 12px; }
-    .details-inner.comments-on{ grid-template-columns: 1.4fr 1fr .8fr 1fr; }
-    .comments{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:10px; grid-column:4; }
+    .details-inner{ display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:16px; padding:10px 6px 12px; }
+    .details-inner.comments-on{ grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .comments{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:10px; grid-column:4; box-sizing:border-box; max-width:100%; overflow:auto; }
     .comments .new{ display:flex; gap:8px; }
     .comments .new textarea{ flex:1; resize:vertical; min-height:64px; }
     .comments .list{ display:flex; flex-direction:column; gap:8px; max-height:300px; overflow:auto; }
@@ -331,6 +331,7 @@ interface AuditDate { value: string; label: string; }
     .copy-modal .actions{ display:flex; gap:8px; justify-content:flex-end; }
     .copy-modal .busy{ display:flex; align-items:center; gap:8px; color:#374151; font-size:13px; }
     .spinner{ width:14px; height:14px; border-radius:50%; border:2px solid #cbd5e1; border-top-color:#3b82f6; animation:spin 1s linear infinite; }
+    .spinner.inline{ width:16px; height:16px; border:2px solid #cbd5e1; border-top-color:#3b82f6; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Saved dates dropdown (search-result style) */
@@ -379,6 +380,21 @@ export class AuditGivaudanComponent {
       }catch{}
       // default date = today
       this.setToday();
+      // Auto-load titles from public/audit-items.json and attempt DB upsert
+      try{
+        const res = await fetch('/audit-items.json', { cache: 'no-store' });
+        if (res.ok){
+          const items = await res.json();
+          if (Array.isArray(items)){
+            const updated = this.items().map((it:any)=>{
+              const row = items.find((r:any)=> Number(r.id)===Number(it.id));
+              return row ? ({...it, titleKo: row.titleKo || it.titleKo, titleEn: row.titleEn || it.titleEn}) : it;
+            });
+            this.items.set(updated as any);
+            this.supabase.upsertAuditItems(items).catch(()=>{});
+          }
+        }
+      }catch{}
     }catch{}
   }
 
@@ -396,18 +412,21 @@ export class AuditGivaudanComponent {
     try{ return String(s).slice(0,10); }catch{ return s as any; }
   }
 
-  items = signal<AuditItem[]>(Array.from({ length: 214 }, (_, i) => ({
-    id: i+1,
-    titleKo: `점검 항목 ${i+1}`,
-    titleEn: `Inspection item ${i+1}`,
-    done: false,
-    status: 'pending',
-    note: '',
-    departments: [],
-    owners: [],
-    // 동적으로 companies 필드를 주입해 사용 (DB 없을 때도 안전)
-    ...( { companies: [] as string[] } as any )
-  })));
+  items = signal<AuditItem[]>(Array.from({ length: 214 }, (_, i) => {
+    const id = i + 1;
+    const base: AuditItem = {
+      id,
+      titleKo: `점검 항목 ${id}`,
+      titleEn: `Inspection item ${id}`,
+      done: false,
+      status: 'pending',
+      note: '',
+      departments: [],
+      owners: [],
+      ...( { companies: [] as string[] } as any )
+    } as any;
+    return base as any;
+  }));
 
   resources: ResourceItem[] = [];
   userOptions: string[] = [];
@@ -443,6 +462,7 @@ export class AuditGivaudanComponent {
           status: row?.status || 'pending',
           note: row?.note || '',
           departments: row?.departments || [],
+          owners: row?.owners || [],
           companies: row?.companies || [],
           comments: row?.comments || [],
           company: row?.company || null
@@ -452,9 +472,11 @@ export class AuditGivaudanComponent {
     }catch{ this.resetItems(); }
   }
   resetItems(){
-    const blank = Array.from({ length: 214 }, (_, i) => ({
-      id: i+1, titleKo: `점검 항목 ${i+1}`, titleEn: `Inspection item ${i+1}`, done: false, status: 'pending', note: '', departments: [], owners: [] as string[], companies: [] as string[]
-    }));
+    const blank = Array.from({ length: 214 }, (_, i) => {
+      const id = i + 1;
+      const row: any = { id, titleKo: `점검 항목 ${id}`, titleEn: `Inspection item ${id}`, done: false, status: 'pending', note: '', departments: [], owners: [] as string[], companies: [] as string[] };
+      return row;
+    });
     this.items.set(blank as any);
   }
   async saveAllForDate(){
