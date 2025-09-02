@@ -3,9 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../../services/supabase.service';
 
-interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; companies?: CompanyTag[]; doneBy?: string; doneAt?: string; }
+interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; companies?: string[]; comments?: Array<{ user: string; time: string; text: string }>; company?: string | null; doneBy?: string; doneAt?: string; }
 interface ResourceItem { id?: string; number?: number; name: string; type?: string; url?: string | null; file_url?: string | null; done?: boolean; }
-type CompanyTag = 'GIVAUDAN' | 'AMOREPACIFIC';
 interface AuditDate { value: string; label: string; }
 
 @Component({
@@ -15,23 +14,43 @@ interface AuditDate { value: string; label: string; }
   template: `
   <div class="audit-page">
     <header class="audit-header">
-      <div class="title">Audit</div>
+      <div class="title">Audit <small class="sub">평가 항목</small></div>
       <div class="controls">
         <label>Audit Date</label>
-        <select [ngModel]="selectedDate()" (ngModelChange)="setDate($event)">
-          <option *ngFor="let d of dates" [value]="d.value">{{ d.label }}</option>
-        </select>
+        <input class="date-input" type="date" [ngModel]="selectedDate()" (ngModelChange)="setDate($event)" />
+        <button class="btn" (click)="setToday()">오늘</button>
+        <button class="btn info" [disabled]="saving || isDateCreated()" (click)="onCreateClick()">{{ saving ? '생성중...' : '생성' }}</button>
+        <span class="created-note" *ngIf="isDateCreated()">생성됨: {{ createdDateOnly() }}
+          <button class="btn mini danger" style="margin-left:6px" (click)="confirmDeleteDate()">삭제</button>
+        </span>
+        <div class="saved-wrap">
+          <label>저장된 날짜</label>
+          <button class="btn dropdown" (click)="toggleSavedOpen($event)">{{ savedSelectedDate || (savedDates[0] || '날짜 선택') }}</button>
+          <div class="saved-menu" *ngIf="savedOpen" (click)="$event.stopPropagation()">
+            <div class="saved-item" *ngFor="let d of savedDates" (click)="selectSavedDate(d)">{{ d }}</div>
+            <div class="saved-empty" *ngIf="!savedDates?.length">저장된 날짜가 없습니다</div>
+          </div>
+        </div>
+        <button class="btn success" (click)="loadFromSaved()">불러오기</button>
+        <button class="btn" title="복사" (click)="openCopyModal()">복사</button>
       </div>
     </header>
 
     <div class="layout">
       <section class="checklist">
         <div class="group">
-          <h3>요구사항 / Requirements</h3>
+          
           <div class="filterbar">
-            <label>팀 필터</label>
+            <!-- 업체 필터 (먼저 표시) -->
+            <label>업체</label>
+            <select class="dept-select" [(ngModel)]="companyFilter" (ngModelChange)="onCompanyFilterChange($event)">
+              <option [ngValue]="'ALL'">전체</option>
+              <option *ngFor="let c of companies" [ngValue]="c">{{ c }}</option>
+            </select>
+            <!-- 부서 필터 -->
+            <label style="margin-left:12px">부서</label>
             <select class="dept-select" [ngModel]="''" (ngModelChange)="addFilterTeam($event)">
-              <option value="" disabled>팀 추가…</option>
+              <option value="" disabled>부서 추가…</option>
               <option *ngFor="let d of departments" [value]="d" [disabled]="filterTeams.includes(d)">{{ d }}</option>
             </select>
             <div class="chips" *ngIf="filterTeams.length">
@@ -39,13 +58,6 @@ interface AuditDate { value: string; label: string; }
                 <button class="remove" (click)="removeFilterTeam(d)">×</button>
               </span>
             </div>
-            <!-- 업체 필터 -->
-            <label style="margin-left:12px">업체</label>
-            <select class="dept-select" [(ngModel)]="companyFilter" (ngModelChange)="onCompanyFilterChange($event)">
-              <option [ngValue]="'ALL'">전체</option>
-              <option [ngValue]="'GIVAUDAN'">GIVAUDAN</option>
-              <option [ngValue]="'AMOREPACIFIC'">AMOREPACIFIC</option>
-            </select>
           </div>
           <div class="item" *ngFor="let it of visibleItems()" [class.open]="openItemId===it.id" (click)="toggleDetails(it)">
             <div class="id">{{ it.id | number:'2.0-0' }}</div>
@@ -57,10 +69,15 @@ interface AuditDate { value: string; label: string; }
               <select class="status-select" [(ngModel)]="it.status" (ngModelChange)="saveProgress(it)" (change)="saveProgress(it)" [ngClass]="statusClass(it.status)" [ngStyle]="statusStyle(it.status)" (click)="$event.stopPropagation()">
                 <option *ngFor="let s of statusOptions" [value]="s.value">{{ s.emoji }} {{ s.label }}</option>
               </select>
+              <select class="status-select after-status pill" [(ngModel)]="it.company" (ngModelChange)="saveProgress(it)" title="업체 선택" (click)="$event.stopPropagation()">
+                <option *ngFor="let c of companies" [ngValue]="c">{{ c }}</option>
+              </select>
+              <!-- 상단 우측: 비고 입력 (두 행 병합, 줄바꿈 가능) -->
+              <textarea class="note-input" [(ngModel)]="it.note" placeholder="비고" (input)="autoResize($event)" (change)="saveProgress(it)" (blur)="saveProgress(it)" (click)="$event.stopPropagation()"></textarea>
               <!-- 업체 태그 추가 버튼/선택 -->
-              <select class="dept-select" [ngModel]="''" (ngModelChange)="addCompany(it, $event)" title="업체 태그 추가" (click)="$event.stopPropagation()">
+              <select class="dept-select" [ngModel]="''" (ngModelChange)="onAddCompanyChange(it, $event)" title="업체 태그 추가" (click)="$event.stopPropagation()">
                 <option value="" disabled>업체 태그 추가…</option>
-                <option *ngFor="let c of companies" [value]="c" [disabled]="it.companies?.includes(c)">{{ c }}</option>
+                <option *ngFor="let c of companies" [value]="c" [disabled]="(it.companies||[]).includes(c)">{{ c }}</option>
               </select>
               <div class="chips" *ngIf="it.companies?.length">
                 <span class="chip" *ngFor="let c of it.companies" (click)="$event.stopPropagation()">{{ c }}
@@ -76,14 +93,12 @@ interface AuditDate { value: string; label: string; }
                   <button class="remove" (click)="removeDept(it, d); $event.stopPropagation()">×</button>
                 </span>
               </div>
-              <span class="save-badge" *ngIf="saving[it.id]==='saving'">저장중…</span>
-              <span class="save-badge saved after-status" *ngIf="saving[it.id]==='saved'">저장됨</span>
-              <div class="note">
-                <textarea spellcheck="false" [(ngModel)]="it.note" (blur)="saveProgress(it)" rows="2" placeholder="비고 / Notes" (click)="$event.stopPropagation()"></textarea>
-              </div>
+              <span class="save-badge" *ngIf="rowSaving[it.id]==='saving'">저장중…</span>
+              <span class="save-badge saved saved-inline" *ngIf="rowSaving[it.id]==='saved'">저장됨</span>
+              
             </div>
             <div class="details" *ngIf="openItemId===it.id" (click)="$event.stopPropagation()">
-              <div class="details-inner">
+              <div class="details-inner comments-on">
                 <div class="assessment">
                   <h4>평가 내용 / Assessment</h4>
                   <div class="ass-body">
@@ -95,7 +110,19 @@ interface AuditDate { value: string; label: string; }
                     <div class="acc">{{ assessment?.acceptance_criteria }}</div>
                   </div>
                 </div>
-                
+                <div class="comments">
+                  <div class="new">
+                    <textarea [(ngModel)]="newComment[it.id]" id="comment-input-{{it.id}}" (keydown)="onCommentKeydown($event, it)" placeholder="댓글을 입력..." [disabled]="!isDateCreated()"></textarea>
+                    <button class="btn" (click)="addComment(it)" [disabled]="!isDateCreated() || !(newComment[it.id]||'').trim()">추가</button>
+                  </div>
+                  <div class="list">
+                    <div class="comment" *ngFor="let c of (it.comments||[]); let i = index">
+                      <button class="close-x" *ngIf="canDeleteComment(c)" (click)="$event.stopPropagation(); removeComment(it, i)" title="삭제">×</button>
+                      <div class="meta">{{ c.user }} · {{ c.time }}</div>
+                      <div class="text">{{ c.text }}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -117,13 +144,47 @@ interface AuditDate { value: string; label: string; }
       </div>
     </div>
   </div>
+  <div class="toast" *ngIf="toast">{{ toast }}</div>
+  
+  <!-- Copy modal -->
+  <div class="preview-backdrop" *ngIf="copying" (click)="closeCopy()">
+    <div class="preview copy-modal" (click)="$event.stopPropagation()">
+      <header>
+        <div class="name">다른 날짜에서 복사</div>
+        <button (click)="closeCopy()">×</button>
+      </header>
+      <div class="body">
+        <div class="busy" *ngIf="copyingBusy"><span class="spinner"></span> 복사중…</div>
+        <div class="form">
+          <div class="form-row">
+            <label class="lbl">복사할 날짜 선택</label>
+            <select [(ngModel)]="copyFromDate" class="date-select" [disabled]="copyingBusy">
+              <option *ngFor="let d of savedDates" [ngValue]="d">{{ d }}</option>
+            </select>
+          </div>
+          <div class="hint">선택한 날짜의 모든 항목을 현재 Audit Date로 복사합니다.</div>
+          <div class="actions">
+            <button class="btn" (click)="closeCopy()" [disabled]="copyingBusy">취소</button>
+            <button class="btn primary" (click)="confirmCopy()" [disabled]="copyingBusy">{{ copyingBusy ? '복사중…' : '확인' }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
   `,
   styles: [`
     .audit-page{ padding:16px; }
     .audit-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
     .title{ font-weight:800; font-size:20px; }
-    .controls{ display:flex; align-items:center; gap:8px; }
-    .controls select{ padding:8px 10px; border-radius:8px; border:1px solid #e5e7eb; }
+    .title .sub{ font-weight:500; color:#64748b; margin-left:6px; font-size:.85em; }
+    .controls{ display:flex; align-items:center; gap:8px; position:relative; }
+    .controls select, .controls input[type='date']{ padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; font-family: var(--font-sans-kr); font-size:13.5px; height:36px; box-sizing:border-box; }
+    .controls .date-input{ font-weight:400; }
+    .controls .btn{ font-weight:400; }
+    /* Disabled state for create button: clear hover and show gray */
+    .controls .btn:disabled{ background:#e5e7eb !important; color:#9ca3af !important; border-color:#e5e7eb !important; cursor:not-allowed; box-shadow:none; }
+    .controls .btn.info:disabled{ background:#e5e7eb !important; color:#9ca3af !important; border-color:#e5e7eb !important; }
+    .controls .btn:disabled:hover{ filter:none; }
 
     .layout{ display:block; }
     .checklist{ min-width:0; }
@@ -135,17 +196,19 @@ interface AuditDate { value: string; label: string; }
     .id{ font-weight:700; color:#475569; display:flex; align-items:center; justify-content:center; }
     .ko{ font-weight:600; margin-bottom:2px; }
     .en{ color:#64748b; font-size:.92em; }
-    /* Left controls: 2x2 grid (row1: status + saved, row2: dept-select + chips + notes below) */
-    .state{ display:grid; grid-template-columns: auto 1fr; grid-template-rows:auto auto auto; align-items:start; column-gap:12px; row-gap:8px; min-width:0; }
+    /* Left controls grid: col1=status/dept-select, col2=company/chips */
+    .state{ display:grid; grid-template-columns: auto 240px 1fr; grid-template-rows:auto auto; align-items:start; column-gap:12px; row-gap:8px; min-width:0; }
     .state .status-select{ grid-row:1; grid-column:1; }
-    .state .after-status{ grid-row:1; grid-column:2; }
+    .state .after-status{ grid-row:1; grid-column:2; justify-self:start; width:200px; }
     .state .dept-select{ grid-row:2; grid-column:1; }
-    .state .chips{ grid-row:2; grid-column:2; margin-top:0; }
-    .state .note{ grid-row:3; grid-column: 1 / span 2; }
+    .state .chips{ grid-row:2; grid-column:2 / 4; margin-top:0; min-height:32px; display:flex; align-items:center; justify-content:flex-start; }
     .state .meta{ color:#475569; font-size:.85em; }
     .status-swatch{ width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #e5e7eb; }
-    select{ padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; appearance:none; -webkit-appearance:none; -moz-appearance:none; }
+    select{ padding:6px 8px; border:1px solid #d1d5db; border-radius:10px; appearance:none; -webkit-appearance:none; -moz-appearance:none; font-family: var(--font-sans-kr); font-size:13.5px; }
     .status-select, .dept-select{ width: 150px; max-width: 100%; }
+    .pill{ display:inline-flex; align-items:center; height:32px; padding:0 10px; border-radius:999px; border:1px solid #e5e7eb; font-size:12px; }
+    .pill.company-giv{ background:#ecfdf5; border-color:#bbf7d0; color:#065f46; }
+    .pill.company-amo{ background:#e0f2fe; border-color:#93c5fd; color:#0c4a6e; }
     /* 상태별 색상 (진행중=초록, 보류=주황, 해당없음=회색) */
     .state select.status-pending{ background:#fff7ed; border-color:#f59e0b; color:#92400e; }
     .state select.status-in-progress{ background:#ecfdf5; border-color:#10b981; color:#065f46; }
@@ -155,12 +218,24 @@ interface AuditDate { value: string; label: string; }
     .state select.status-done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
     .save-badge{ margin-left:6px; font-size:.85em; color:#64748b; }
     .save-badge.saved{ color:#16a34a; }
+    .saved-inline{ grid-row:1; grid-column:3; justify-self:start; align-self:center; margin-left:8px; }
     textarea{ width:100%; max-width: none; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
     .note textarea{ width: min(500px, 100%); max-width:100%; box-sizing:border-box; }
 
     .item .details{ grid-column: 1 / -1; overflow:hidden; }
     .item.open .details{ animation: slideDown .22s ease-out; }
-    .details-inner{ display:grid; grid-template-columns: 1.4fr .8fr 1fr; gap:16px; padding:10px 6px 12px; }
+    .details-inner{ display:grid; grid-template-columns: 1.4fr .8fr 1fr 1fr; gap:16px; padding:10px 6px 12px; }
+    .details-inner.comments-on{ grid-template-columns: 1.4fr 1fr .8fr 1fr; }
+    .comments{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:10px; grid-column:4; }
+    .note-input{ grid-column:3; grid-row:1 / 3; align-self:stretch; height:100%; min-height:76px; border:1px solid #e5e7eb; border-radius:12px; padding:10px 12px; font-size:13px; box-sizing:border-box; resize:vertical; white-space:pre-wrap; }
+    .comments .new{ display:flex; gap:8px; }
+    .comments .new textarea{ flex:1; resize:vertical; min-height:64px; }
+    .comments .list{ display:flex; flex-direction:column; gap:8px; max-height:300px; overflow:auto; }
+    .comment{ border:1px solid #e5e7eb; border-radius:10px; padding:8px; background:#f9fafb; }
+    .comment{ position:relative; }
+    .comment .close-x{ position:absolute; top:6px; right:6px; width:20px; height:20px; border-radius:6px; border:1px solid #e5e7eb; background:#fff; color:#334155; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; }
+    .comment .close-x:hover{ background:#fee2e2; border-color:#fecaca; color:#991b1b; }
+    .comment .meta{ color:#6b7280; font-size:11px; margin-bottom:6px; }
     @media (max-width: 1200px){ .details-inner{ grid-template-columns: 1fr; } }
     .assessment .row{ display:flex; gap:10px; margin:4px 0; }
     .assessment .q{ margin-top:8px; font-weight:600; }
@@ -168,7 +243,7 @@ interface AuditDate { value: string; label: string; }
     .assessment .acc{ background:#f8fafc; border:1px dashed #e2e8f0; border-radius:8px; padding:8px; }
     .assign select{ min-height: 100px; }
     .chips{ margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; }
-    .chip{ background:#f8fafc; color:#334155; padding:4px 8px; border-radius:999px; font-weight:600; font-size:.85em; display:inline-flex; align-items:center; gap:4px; border:1px solid #e2e8f0; transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
+    .chip{ background:#f8fafc; color:#334155; padding:0 8px; height:32px; border-radius:999px; font-weight:600; font-size:.82em; display:inline-flex; align-items:center; gap:4px; border:1px solid #e2e8f0; transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
     .chip:hover{ border-color:#cbd5e1; }
     .chip .remove{ background:transparent; border:0; color:inherit; cursor:pointer; line-height:1; padding:0 2px; border-radius:8px; }
     .chip .remove:hover{ background:#e2e8f0; }
@@ -221,16 +296,41 @@ interface AuditDate { value: string; label: string; }
     .preview{ width:min(880px,92vw); max-height:80vh; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.2); overflow:hidden; display:flex; flex-direction:column; }
     .preview header{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee; font-weight:700; }
     .preview .body{ padding:16px; overflow:auto; }
+    .copy-modal .form{ display:flex; flex-direction:column; gap:12px; }
+    .copy-modal .form-row{ display:flex; align-items:center; gap:10px; }
+    .copy-modal .form-row .lbl{ width:120px; color:#475569; font-size:13px; }
+    .copy-modal .date-select{ height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px; font-family: var(--font-sans-kr); }
+    .copy-modal .hint{ color:#6b7280; font-size:12px; }
+    .copy-modal .actions{ display:flex; gap:8px; justify-content:flex-end; }
+    .copy-modal .busy{ display:flex; align-items:center; gap:8px; color:#374151; font-size:13px; }
+    .spinner{ width:14px; height:14px; border-radius:50%; border:2px solid #cbd5e1; border-top-color:#3b82f6; animation:spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Saved dates dropdown (search-result style) */
+    .saved-wrap{ position:relative; display:flex; align-items:center; gap:8px; }
+    .saved-wrap label{ color:#475569; font-size:12px; }
+    .saved-wrap .dropdown{ background:#fff; border-color:#d1d5db; color:#0f172a; font-weight:400; height:36px; }
+    .saved-menu{ position:absolute; top:36px; left:64px; min-width:180px; max-height:220px; overflow:auto; background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 12px 28px rgba(2,6,23,.18); padding:6px; z-index:20; }
+    .saved-item{ padding:8px 10px; border-radius:8px; cursor:pointer; font-size:13px; }
+    .saved-item:hover{ background:#f1f5f9; }
+    .saved-empty{ color:#94a3b8; padding:8px 6px; font-size:12px; }
+    .created-note{ font-size:12px; color:#6b7280; margin-left:8px; }
+    .toast{ position:fixed; top:12px; right:12px; background:#111827; color:#fff; padding:8px 12px; border-radius:10px; z-index:10000; font-size:12px; box-shadow:0 6px 16px rgba(0,0,0,.2); }
+
+    /* Delete button to light orange */
+    .btn.danger{ background:#fed7aa !important; border-color:#fed7aa !important; color:#7c2d12 !important; }
+    .btn.danger:hover{ background:#fdba74 !important; border-color:#fdba74 !important; }
   `]
 })
 export class AuditGivaudanComponent {
   constructor(private supabase: SupabaseService){}
   userDisplay = '사용자';
   currentUserId: string | null = null;
+  isAdmin = false;
   hover: boolean = false;
   resourceHover: boolean[] = [];
-  companies: CompanyTag[] = ['GIVAUDAN','AMOREPACIFIC'];
-  companyFilter: 'ALL' | CompanyTag = 'ALL';
+  companies: string[] = [];
+  companyFilter: 'ALL' | string = 'ALL';
   async ngOnInit(){
     try{
       const u = await this.supabase.getCurrentUser();
@@ -238,28 +338,31 @@ export class AuditGivaudanComponent {
         const { data } = await this.supabase.getUserProfile(u.id);
         this.userDisplay = data?.name || data?.email || '사용자';
         this.currentUserId = u.id;
+        this.isAdmin = (data?.role === 'admin');
       }
-      // Hydrate items with saved progress on initial load
-      const { data: all } = await this.supabase.listAllGivaudanProgress();
-      if (Array.isArray(all)) {
-        const next = this.items().map(it => {
-          const row = all.find(r => r.number === it.id);
-          if (!row) return it as any;
-          return {
-            ...it,
-            status: row.status || it.status,
-            note: row.note || it.note,
-            departments: row.departments || [],
-            companies: row.companies || [],
-          } as any;
-        });
-        this.items.set(next as any);
-      }
+      await this.loadSavedDates();
+      // 기본 선택값: 가장 최근 저장일
+      this.savedSelectedDate = this.savedDates?.[0] || null;
+      // load audit companies for selects/filters
+      try{ this.companies = (await this.supabase.listAuditCompanies()).map((r:any)=> r.name).filter(Boolean); }catch{}
+      // default date = today
+      this.setToday();
     }catch{}
   }
 
-  dates: AuditDate[] = [ { value: '2025-09-16', label: '2025-09-16' } ];
-  selectedDate = signal(this.dates[0].value);
+  dates: AuditDate[] = [];
+  selectedDate = signal<string>('');
+  savedDates: string[] = [];
+  savedSelectedDate: string | null = null;
+  savedOpen = false;
+  saving = false; // top-level save button
+  toast: string | null = null;
+  createdAt: string | null = null;
+  createdDateOnly(){
+    const s = this.createdAt || this.selectedDate();
+    if (!s) return '' as any;
+    try{ return String(s).slice(0,10); }catch{ return s as any; }
+  }
 
   items = signal<AuditItem[]>(Array.from({ length: 214 }, (_, i) => ({
     id: i+1,
@@ -270,12 +373,208 @@ export class AuditGivaudanComponent {
     note: '',
     departments: [],
     // 동적으로 companies 필드를 주입해 사용 (DB 없을 때도 안전)
-    ...( { companies: [] as CompanyTag[] } as any )
+    ...( { companies: [] as string[] } as any )
   })));
 
   resources: ResourceItem[] = [];
+  newComment: Record<number, string> = {};
 
-  setDate(value: string){ this.selectedDate.set(value); }
+  setDate(value: string){ this.selectedDate.set(value); this.loadByDate(); }
+  today(){ const d = new Date(); const mm = String(d.getMonth()+1).padStart(2,'0'); const dd = String(d.getDate()).padStart(2,'0'); return `${d.getFullYear()}-${mm}-${dd}`; }
+  setToday(){ this.setDate(this.today()); }
+  async loadSavedDates(){ try{ this.savedDates = await this.supabase.listSavedAuditDates(); }catch{ this.savedDates = []; } }
+  toggleSavedOpen(ev: MouseEvent){ ev.stopPropagation(); this.savedOpen = !this.savedOpen; }
+  selectSavedDate(d: string){ this.savedSelectedDate = d; this.savedOpen = false; /* 불러오기 버튼을 눌러야 실제 로드 */ }
+  @HostListener('document:click') closeSaved(){ this.savedOpen = false; }
+  async loadFromSaved(){
+    const d = this.savedSelectedDate || this.savedDates?.[0];
+    if (!d) return;
+    this.savedSelectedDate = d;
+    this.setDate(d);
+    await this.loadByDate();
+  }
+  async loadByDate(){
+    const date = this.selectedDate();
+    if (!date){ this.resetItems(); return; }
+    // 아직 생성되지 않은 날짜라면 화면을 초기화하고 수정 가드를 켭니다
+    const created = this.savedDates.includes(date);
+    try{
+      const { data: all } = created ? await this.supabase.listGivaudanProgressByDate(date) : { data: [] } as any;
+      // 생성일(최초 저장 시간) 표시
+      try{ this.createdAt = (await this.supabase.getAuditDateCreatedAt(date)) || null; }catch{ this.createdAt = null; }
+      const next = this.items().map(it => {
+        const row = (all||[]).find((r:any) => r.number === it.id);
+        return {
+          ...it,
+          status: row?.status || 'pending',
+          note: row?.note || '',
+          departments: row?.departments || [],
+          companies: row?.companies || [],
+          comments: row?.comments || [],
+          company: row?.company || null
+        } as any;
+      });
+      this.items.set(next as any);
+    }catch{ this.resetItems(); }
+  }
+  resetItems(){
+    const blank = Array.from({ length: 214 }, (_, i) => ({
+      id: i+1, titleKo: `점검 항목 ${i+1}`, titleEn: `Inspection item ${i+1}`, done: false, status: 'pending', note: '', departments: [], companies: [] as string[]
+    }));
+    this.items.set(blank as any);
+  }
+  async saveAllForDate(){
+    const date = this.selectedDate() || this.today();
+    this.selectedDate.set(date);
+    const user = this.currentUserId; const name = this.userDisplay;
+    // optimistic: 먼저 목록에 반영
+    if (!this.savedDates.includes(date)) this.savedDates = [date, ...this.savedDates];
+    // 대량 upsert로 409 충돌을 줄임
+    const payload = this.items().map(it => ({
+      number: it.id,
+      status: it.status,
+      note: it.note,
+      departments: it.departments,
+      companies: it.companies || [],
+      updated_by: user,
+      updated_by_name: name,
+      audit_date: date
+    }));
+    try{
+      await this.supabase.upsertGivaudanProgressMany(payload as any);
+    }catch(e){ console.warn('bulk upsert failed', e); this.showToast('저장이 일부 실패했습니다'); }
+    // 서버 기준으로 최신화
+    try{
+      const latest = await this.supabase.listSavedAuditDates();
+      this.savedDates = Array.from(new Set([date, ...(latest||[])]));
+    }catch{}
+  }
+
+  addComment(it: any){
+    const text = (this.newComment[it.id]||'').trim();
+    if (!text) return;
+    if (!it.comments) it.comments = [];
+    const now = new Date(); const y = now.getFullYear(); const m = String(now.getMonth()+1).padStart(2,'0'); const d = String(now.getDate()).padStart(2,'0');
+    const hh = String(now.getHours()).padStart(2,'0'); const mm = String(now.getMinutes()).padStart(2,'0');
+    it.comments.push({ user: this.userDisplay, time: `${y}-${m}-${d} ${hh}:${mm}`, text });
+    this.newComment[it.id] = '';
+    this.saveProgress(it);
+  }
+  removeComment(it: any, idx: number){
+    if (!it || !Array.isArray(it.comments)) return;
+    it.comments.splice(idx, 1);
+    this.saveProgress(it);
+  }
+
+  // Create current date data (initialize and save)
+  isDateCreated(){ const d = this.selectedDate(); return !!d && this.savedDates.includes(d); }
+  async onCreateClick(){
+    const date = this.selectedDate() || this.today();
+    // 이미 생성되어 있으면 동작하지 않음
+    if (this.savedDates.includes(date)) return;
+    // 페이지 내용 초기화 후 저장
+    this.resetItems();
+    // 생성 직후 필터로 인해 리스트가 비어 보이지 않도록 초기화
+    this.companyFilter = 'ALL';
+    this.filterTeams = [];
+    this.saving = true;
+    try{
+      await this.saveAllForDate();
+    }catch(e){ console.warn('saveAllForDate error', e); }
+    // 저장된 직후에도 아이템이 유지되도록, 서버에서 방금 저장한 값을 로드해 덮어쓰기
+    await this.loadByDate();
+    this.saving = false;
+    this.showToast('생성되었습니다');
+  }
+
+  // Delete all rows of a saved date (admin only)
+  async confirmDeleteDate(){
+    if (!this.isAdmin) { alert('관리자만 삭제할 수 있습니다.'); return; }
+    const date = this.selectedDate(); if (!date){ alert('삭제할 날짜를 선택하세요.'); return; }
+    const ok = confirm(`${date} 데이터를 정말 삭제할까요? 되돌릴 수 없습니다.`);
+    if(!ok) return;
+    try{
+      this.saving = true;
+      await this.supabase.deleteGivaudanProgressByDate(date);
+      // savedDates에서 즉시 제거(낙관적 업데이트)
+      this.savedDates = this.savedDates.filter(d => d !== date);
+      // 현재 화면도 초기화
+      this.resetItems();
+      // 서버 기준으로 재동기화
+      await this.loadSavedDates();
+      this.showToast('삭제되었습니다');
+    } finally {
+      this.saving = false;
+    }
+  }
+
+  // Copy from another date into current date
+  copying = false; copyFromDate: string | null = null;
+  copyingBusy = false;
+  openCopyModal(){ this.copying = true; this.copyFromDate = this.savedDates?.[0] || null; }
+  closeCopy(){ this.copying = false; }
+  async confirmCopy(){
+    try{
+      this.copyingBusy = true;
+      const target = this.selectedDate() || this.today();
+      this.selectedDate.set(target);
+      const from = this.copyFromDate; if (!from){ alert('복사할 날짜를 선택하세요.'); return; }
+      // Load source data and write to target
+      const { data: rows } = await this.supabase.listGivaudanProgressByDate(from);
+      for (const r of (rows||[])){
+        await this.supabase.upsertGivaudanProgress({
+          number: (r as any).number,
+          status: (r as any).status || null,
+          note: (r as any).note || null,
+          departments: (r as any).departments || [],
+          companies: (r as any).companies || [],
+          audit_date: target,
+          updated_by: this.currentUserId,
+          updated_by_name: this.userDisplay
+        });
+      }
+      await this.loadByDate();
+      await this.loadSavedDates();
+    } finally {
+      this.copyingBusy = false;
+      this.copying = false;
+    }
+  }
+
+  private showToast(msg: string){
+    this.toast = msg;
+    setTimeout(()=> this.toast=null, 1400);
+  }
+
+  onCommentKeydown(ev: KeyboardEvent, it: any){
+    // Ctrl+Enter: 등록만, Ctrl+Shift+Enter: 등록 후 다음 항목으로 이동
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter'){
+      ev.preventDefault();
+      if (!this.isDateCreated()) return;
+      const moveNext = ev.shiftKey === true;
+      this.addComment(it);
+      if (moveNext){
+        const nextId = (it.id as number) + 1;
+        const nextItem = this.items().find(x => (x as any).id === nextId);
+        if (nextItem){
+          // Ensure next details are open so the textarea exists
+          if (this.openItemId !== nextId){
+            this.toggleDetails(nextItem as any);
+          }
+          setTimeout(()=>{
+            const el = document.getElementById(`comment-input-${nextId}`) as HTMLTextAreaElement | null;
+            if (el) el.focus();
+          }, 50);
+        }
+      } else {
+        // Keep focus on current input
+        setTimeout(()=>{
+          const curr = document.getElementById(`comment-input-${it.id}`) as HTMLTextAreaElement | null;
+          if (curr) curr.focus();
+        }, 0);
+      }
+    }
+  }
 
   markDone(it: AuditItem){
     if(it.done){
@@ -308,7 +607,8 @@ export class AuditGivaudanComponent {
     const { data } = await this.supabase.getGivaudanAssessment(it.id);
     this.assessment = data;
     // Load progress
-    const { data: prog } = await this.supabase.getGivaudanProgress(it.id);
+    const date = this.selectedDate();
+    const { data: prog } = date ? await this.supabase.getGivaudanProgressByDate(it.id, date) : await this.supabase.getGivaudanProgress(it.id);
     if (prog){
       it.status = (prog.status as any) || it.status;
       it.note = prog.note || it.note;
@@ -327,6 +627,9 @@ export class AuditGivaudanComponent {
   }
 
   async saveProgress(it: any){
+    // 생성되지 않은 날짜면 수정 차단
+    const date = this.selectedDate();
+    if (!date || !this.savedDates.includes(date)) { this.showToast('먼저 생성 버튼으로 이 날짜를 생성해 주세요'); return; }
     try{
       this.setSaving(it.id, 'saving');
       const payload = {
@@ -334,9 +637,12 @@ export class AuditGivaudanComponent {
         note: it.note || null,
         status: it.status || null,
         departments: it.departments || [],
-        companies: (it.companies || []) as CompanyTag[],
+        companies: (it.companies || []) as string[],
+        comments: (it.comments || []) as any,
+        company: (it.company || null) as any,
         updated_by: this.currentUserId,
         updated_by_name: this.userDisplay,
+        audit_date: this.selectedDate() || null,
       };
       const { error } = await this.supabase.upsertGivaudanProgress(payload) as any;
       if (error) throw error;
@@ -352,7 +658,13 @@ export class AuditGivaudanComponent {
     const arr = this.items();
     const byTeam = this.filterTeams.length===0 ? arr : arr.filter((it:any)=> it.departments?.some((d:string)=> this.filterTeams.includes(d)));
     if (this.companyFilter === 'ALL') return byTeam;
-    return byTeam.filter((it:any)=> (it.companies||[]).includes(this.companyFilter));
+    const selected = this.companyFilter;
+    const selectedNorm = this.normalizeCompanyName(selected);
+    return byTeam.filter((it:any)=>{
+      const tags = (it.companies||[]).map((x:string)=> this.normalizeCompanyName(x));
+      const primary = this.normalizeCompanyName(it.company || '');
+      return tags.includes(selectedNorm) || primary === selectedNorm;
+    });
   }
 
   addFilterTeam(dept: string){ if(!dept) return; if(!this.filterTeams.includes(dept)) this.filterTeams = [...this.filterTeams, dept]; }
@@ -362,18 +674,33 @@ export class AuditGivaudanComponent {
     if(!dept) return;
     if(!it.departments) it.departments = [];
     if(!it.departments.includes(dept)){
+      // 생성 전이면 금지
+      const date = this.selectedDate();
+      if (!date || !this.savedDates.includes(date)) { this.showToast('먼저 생성 버튼으로 이 날짜를 생성해 주세요'); return; }
       it.departments.push(dept);
       this.saveProgress(it);
     }
   }
   removeDept(it: any, dept: string){
+    const date = this.selectedDate();
+    if (!date || !this.savedDates.includes(date)) { this.showToast('먼저 생성 버튼으로 이 날짜를 생성해 주세요'); return; }
     it.departments = (it.departments||[]).filter((d:string)=>d!==dept);
     this.saveProgress(it);
   }
 
   // 업체 태그 관리
-  addCompany(it: any, c: CompanyTag){ if(!c) return; if(!it.companies) it.companies = []; if(!it.companies.includes(c)){ it.companies.push(c); this.saveProgress(it); } }
-  removeCompany(it: any, c: CompanyTag){ it.companies = (it.companies||[]).filter((x:CompanyTag)=>x!==c); this.saveProgress(it); }
+  onAddCompanyChange(it: any, c: string){
+    if(!c) return;
+    const date = this.selectedDate();
+    if (!date || !this.savedDates.includes(date)) { this.showToast('먼저 생성 버튼으로 이 날짜를 생성해 주세요'); return; }
+    if(!it.companies) it.companies = [];
+    if(!(it.companies as string[]).includes(c)){ (it.companies as string[]).push(c); this.saveProgress(it); }
+  }
+  removeCompany(it: any, c: string){
+    const date = this.selectedDate();
+    if (!date || !this.savedDates.includes(date)) { this.showToast('먼저 생성 버튼으로 이 날짜를 생성해 주세요'); return; }
+    it.companies = (it.companies||[]).filter((x:string)=>x!==c); this.saveProgress(it);
+  }
   onCompanyFilterChange(_: any){}
 
   async addResource(it: any){
@@ -435,8 +762,8 @@ export class AuditGivaudanComponent {
   }
 
   // UI helpers
-  saving: Record<number, 'idle'|'saving'|'saved'> = {};
-  private setSaving(id: number, state: 'idle'|'saving'|'saved') { this.saving[id] = state; }
+  rowSaving: Record<number, 'idle'|'saving'|'saved'> = {};
+  private setSaving(id: number, state: 'idle'|'saving'|'saved') { this.rowSaving[id] = state; }
   statusOptions = [
     { value: 'pending', label: '준비중 / Pending', emoji: '' },
     { value: 'in-progress', label: '진행중 / In progress', emoji: '' },
@@ -497,4 +824,24 @@ export class AuditGivaudanComponent {
   }
 
   pad2(n: number){ return String(n).padStart(2,'0'); }
+
+  canDeleteComment(c: { user: string }){
+    if (this.isAdmin) return true;
+    const me = (this.userDisplay || '').trim();
+    const owner = (c?.user || '').trim();
+    return !!me && !!owner && me === owner;
+  }
+
+  // Normalize/alias company names to improve matching (e.g., Korean label vs English alias)
+  private normalizeCompanyName(name: string): string{
+    if (!name) return '';
+    const raw = String(name).trim();
+    const alias: Record<string,string> = {
+      '아모레퍼시픽': 'AMOREPACIFIC',
+      '아모레 퍼시픽': 'AMOREPACIFIC',
+      '지보단': 'GIVAUDAN',
+      '기보단': 'GIVAUDAN',
+    };
+    return (alias[raw] || raw).toUpperCase();
+  }
 }

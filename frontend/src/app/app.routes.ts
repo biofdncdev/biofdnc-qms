@@ -80,6 +80,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/audit/givaudan/audit-givaudan.component').then(m => m.AuditGivaudanComponent),
       },
       {
+        path: 'audit/companies',
+        loadComponent: () => import('./pages/audit/companies/audit-companies.component').then(m => m.AuditCompaniesComponent),
+      },
+      {
         path: 'ingredient',
         loadComponent: () => import('./pages/ingredient/ingredient-list').then(m => m.IngredientListComponent),
       },

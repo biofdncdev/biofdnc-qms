@@ -340,30 +340,63 @@ export class SupabaseService {
       });
   }
 
-  // Givaudan Audit - assessment master
+  // Audit - assessment master
   async getGivaudanAssessment(number: number) {
     return this.ensureClient()
-      .from('givaudan_audit_assessment')
+      .from('audit_items')
       .select('*')
       .eq('number', number)
       .single();
   }
 
-  // Givaudan Audit - per-item progress
-  async getGivaudanProgress(number: number) {
+  // Audit - per-item progress
+  async getGivaudanProgress(number: number, audit_date?: string | null) {
     return this.ensureClient()
-      .from('givaudan_audit_progress')
+      .from('audit_progress')
       .select('*')
       .eq('number', number)
       .maybeSingle();
   }
+  async getGivaudanProgressByDate(number: number, audit_date: string) {
+    return this.ensureClient()
+      .from('audit_progress')
+      .select('*')
+      .eq('number', number)
+      .eq('audit_date', audit_date)
+      .maybeSingle();
+  }
 
   // List all progress rows to hydrate UI on initial load
-  async listAllGivaudanProgress() {
+  async listAllGivaudanProgress(audit_date?: string | null) {
     return this.ensureClient()
-      .from('givaudan_audit_progress')
+      .from('audit_progress')
       .select('*')
       .order('number', { ascending: true });
+  }
+  async listGivaudanProgressByDate(audit_date: string) {
+    return this.ensureClient()
+      .from('audit_progress')
+      .select('*')
+      .eq('audit_date', audit_date)
+      .order('number', { ascending: true });
+  }
+
+  async getAuditDateCreatedAt(audit_date: string){
+    const { data } = await this.ensureClient()
+      .from('audit_progress')
+      .select('updated_at')
+      .eq('audit_date', audit_date)
+      .order('updated_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return (data as any)?.updated_at as string | undefined;
+  }
+
+  async deleteGivaudanProgressByDate(audit_date: string){
+    return this.ensureClient()
+      .from('audit_progress')
+      .delete()
+      .eq('audit_date', audit_date);
   }
 
   async upsertGivaudanProgress(row: {
@@ -372,20 +405,76 @@ export class SupabaseService {
     status?: string | null;
     departments?: string[] | null;
     companies?: string[] | null;
+    comments?: Array<{ user: string; time: string; text: string }> | null;
+    company?: string | null;
     updated_by?: string | null;
     updated_by_name?: string | null;
+    audit_date?: string | null;
   }) {
     return this.ensureClient()
-      .from('givaudan_audit_progress')
-      .upsert(row, { onConflict: 'number' })
-      .select()
-      .single();
+      .from('audit_progress')
+      .upsert(row, { onConflict: 'number,audit_date' });
   }
 
-  // Givaudan Audit - resources
+  async upsertGivaudanProgressMany(rows: Array<{
+    number: number;
+    note?: string | null;
+    status?: string | null;
+    departments?: string[] | null;
+    companies?: string[] | null;
+    comments?: Array<{ user: string; time: string; text: string }> | null;
+    company?: string | null;
+    updated_by?: string | null;
+    updated_by_name?: string | null;
+    audit_date?: string | null;
+  }>){
+    if (!Array.isArray(rows) || rows.length===0) return { data: [], error: null } as any;
+    const client = this.ensureClient();
+    const BATCH = 50;
+    let lastError: any = null;
+    for (let i=0;i<rows.length;i+=BATCH){
+      const part = rows.slice(i, i+BATCH);
+      const { error } = await client
+        .from('audit_progress')
+        .upsert(part, { onConflict: 'number,audit_date' }) as any; // return=minimal
+      if (error) lastError = error;
+    }
+    if (lastError) throw lastError;
+    return { data: [], error: null } as any;
+  }
+
+  async listSavedAuditDates(){
+    const { data } = await this.ensureClient()
+      .from('audit_progress')
+      .select('audit_date')
+      .not('audit_date','is', null)
+      .order('audit_date', { ascending: false });
+    const set = new Set<string>();
+    for (const r of (Array.isArray(data) ? data : [])){
+      const d = (r as any)?.audit_date; if (d) set.add(String(d));
+    }
+    return Array.from(set);
+  }
+
+  // Audit companies CRUD
+  async listAuditCompanies(){
+    const { data } = await this.ensureClient().from('audit_companies').select('*').order('name', { ascending: true });
+    return Array.isArray(data) ? data : [];
+  }
+  async addAuditCompany(row: { name: string; note?: string | null }){
+    return this.ensureClient().from('audit_companies').insert(row).select('*').single();
+  }
+  async updateAuditCompany(id: string, row: Partial<{ name: string; note: string }>) {
+    return this.ensureClient().from('audit_companies').update(row).eq('id', id).select('*').single();
+  }
+  async deleteAuditCompany(id: string){
+    return this.ensureClient().from('audit_companies').delete().eq('id', id);
+  }
+
+  // Audit - resources
   async listGivaudanResources(number: number) {
     return this.ensureClient()
-      .from('givaudan_audit_resources')
+      .from('audit_resources')
       .select('*')
       .eq('number', number)
       .order('created_at', { ascending: true });
@@ -393,7 +482,7 @@ export class SupabaseService {
 
   async addGivaudanResource(row: any) {
     return this.ensureClient()
-      .from('givaudan_audit_resources')
+      .from('audit_resources')
       .insert(row)
       .select()
       .single();
@@ -401,7 +490,7 @@ export class SupabaseService {
 
   async updateGivaudanResource(id: string, row: any) {
     return this.ensureClient()
-      .from('givaudan_audit_resources')
+      .from('audit_resources')
       .update(row)
       .eq('id', id)
       .select()
@@ -410,7 +499,7 @@ export class SupabaseService {
 
   async deleteGivaudanResource(id: string) {
     return this.ensureClient()
-      .from('givaudan_audit_resources')
+      .from('audit_resources')
       .delete()
       .eq('id', id);
   }

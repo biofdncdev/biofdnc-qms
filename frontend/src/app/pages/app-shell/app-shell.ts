@@ -114,7 +114,8 @@ export class AppShellComponent {
         },
         {
           key: 'audit', icon: 'rule', label: 'Audit', submenu: [
-            { label: 'Audit 평가항목', path: '/app/audit' }
+            { label: 'Audit 평가 항목', path: '/app/audit' },
+            { label: 'Audit 업체 등록', path: '/app/audit/companies' }
           ]
         },
       );
