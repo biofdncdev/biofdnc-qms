@@ -463,18 +463,55 @@ export class AuditEvaluationComponent {
         const raw = sessionStorage.getItem('audit.eval.ui.v1');
         if (raw){
           const s = JSON.parse(raw);
+          const openId: number | null = s?.openItemId ?? null;
           if (s?.selectedDate) this.selectedDate.set(s.selectedDate);
           if (s?.companyFilter) this.companyFilter = s.companyFilter;
           if (s?.filterDept) this.filterDept = s.filterDept;
           if (s?.filterOwner) this.filterOwner = s.filterOwner;
-          if (!this.selectedDate()) this.setToday(); else await this.loadByDate();
-          setTimeout(()=>{ try{ if(this.listRef) this.listRef.nativeElement.scrollTop = s.scrollTop || 0; }catch{} }, 50);
+          const dateReady = !!this.selectedDate();
+          if (!dateReady) { this.setToday(); }
+          // 1) 즉시 화면 복원: 캐시에 저장된 items가 있으면 선반영
+          const usedCache = this.hydrateFromCache();
+          // 2) 백그라운드 최신화: 서버에서 최신값을 가져오되 UI는 막지 않음
+          if (dateReady) {
+            if (usedCache) { this.loadByDate(); } else { await this.loadByDate(); }
+          }
+          // Restore open item and scroll after data renders
+          setTimeout(()=>{
+            try{
+              if (openId){
+                const it = this.items().find(x => (x as any).id === openId);
+                if (it) this.toggleDetails(it as any);
+              }
+              if(this.listRef) this.listRef.nativeElement.scrollTop = s.scrollTop || 0;
+            }catch{}
+          }, 50);
         } else { this.setToday(); }
       }catch{ this.setToday(); }
-      // JSON+해시 기반으로 반영 (엑셀 변경 감지 시에만 재생성)
-      await this.applyTitlesFromJsonOrExcel();
-      await this.refreshTitlesFromDb();
+      // JSON+해시 기반 반영은 세션당 1회만 수행하여 초기 렌더 지연을 줄임
+      try{
+        if (!sessionStorage.getItem('audit.eval.template.synced')){
+          await this.applyTitlesFromJsonOrExcel();
+          sessionStorage.setItem('audit.eval.template.synced', '1');
+        } else {
+          // 이미 동기화된 경우엔 백그라운드에서 가볍게 최신화
+          this.applyTitlesFromJsonOrExcel();
+        }
+      }catch{}
+      // 제목 최신화는 백그라운드로
+      this.refreshTitlesFromDb();
     }catch{}
+  }
+
+  private hydrateFromCache(): boolean{
+    try{
+      const d = this.selectedDate(); if(!d) return false;
+      const cache = sessionStorage.getItem(`audit.eval.items.${d}`);
+      if(!cache) return false;
+      const rows = JSON.parse(cache);
+      if (Array.isArray(rows) && rows.length){ this.items.set(rows as any); return true; }
+      return false;
+    }catch{ return false; }
   }
 
   private async applyTitlesFromJsonOrExcel(){
@@ -1012,12 +1049,14 @@ export class AuditEvaluationComponent {
       const tabPath = '/tabs/record';
       const navUrl = `/app/record/rmd-forms?open=${encodeURIComponent(l.id)}`;
       // Use TabService to request/activate the shared Record tab
+      this.persistUi();
       this.tabBus.requestOpen('Record 원료제조팀', tabPath, navUrl);
       return;
     }
     // Open/replace a single 'Standard' tab
     const stdTab = '/tabs/standard';
     const stdUrl = `/app/standard/rmd?open=${encodeURIComponent(l.id)}`;
+    this.persistUi();
     this.tabBus.requestOpen('Standard 원료제조팀 규정', stdTab, stdUrl);
   }
   removeSelectedLink(it: any, l: { id: string }){
@@ -1178,9 +1217,11 @@ export class AuditEvaluationComponent {
         companyFilter: this.companyFilter,
         filterDept: this.filterDept,
         filterOwner: this.filterOwner,
-        scrollTop: this.listRef?.nativeElement?.scrollTop || 0
+        scrollTop: this.listRef?.nativeElement?.scrollTop || 0,
+        openItemId: this.openItemId
       };
       sessionStorage.setItem('audit.eval.ui.v1', JSON.stringify(st));
+      const d = this.selectedDate(); if(d){ sessionStorage.setItem(`audit.eval.items.${d}`, JSON.stringify(this.items())); }
     }catch{}
   }
 
