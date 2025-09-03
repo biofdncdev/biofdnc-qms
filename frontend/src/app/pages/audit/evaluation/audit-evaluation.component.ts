@@ -1,4 +1,6 @@
 import { Component, HostListener, ViewChild, ElementRef, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { TabService } from '../../../services/tab.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../../services/supabase.service';
@@ -40,7 +42,7 @@ interface AuditDate { value: string; label: string; }
     </header>
 
     <div class="layout">
-      <section class="checklist">
+      <section class="checklist" #listRef>
         <div class="group">
           
           <div class="filterbar">
@@ -426,7 +428,7 @@ interface AuditDate { value: string; label: string; }
   `]
 })
 export class AuditEvaluationComponent {
-  constructor(private supabase: SupabaseService){}
+  constructor(private supabase: SupabaseService, private router: Router, private tabBus: TabService){}
   userDisplay = '사용자';
   currentUserId: string | null = null;
   isAdmin = false;
@@ -434,6 +436,7 @@ export class AuditEvaluationComponent {
   resourceHover: boolean[] = [];
   companies: string[] = [];
   companyFilter: 'ALL' | string = 'ALL';
+  @ViewChild('listRef') listRef?: ElementRef<HTMLDivElement>;
   async ngOnInit(){
     try{
       const u = await this.supabase.getCurrentUser();
@@ -448,13 +451,26 @@ export class AuditEvaluationComponent {
       this.savedSelectedDate = this.savedDates?.[0] || null;
       // load audit companies for selects/filters
       try{ this.companies = (await this.supabase.listAuditCompanies()).map((r:any)=> r.name).filter(Boolean); }catch{}
+      // Expose tab service bridge for child components (temporary)
+      try{ (window as any).tabBus = (window as any).tabBus || new (class{ requestOpen(){}})(); }catch{}
       // 사용자 목록 로드 (담당자 선택/필터용)
       try{
         const { data: users } = await this.supabase.getClient().from('users').select('name,email').order('created_at', { ascending: false });
         this.userOptions = (users||[]).map((u:any)=> u?.name || u?.email).filter(Boolean);
       }catch{}
-      // default date = today
-      this.setToday();
+      // Restore persisted UI state if available
+      try{
+        const raw = sessionStorage.getItem('audit.eval.ui.v1');
+        if (raw){
+          const s = JSON.parse(raw);
+          if (s?.selectedDate) this.selectedDate.set(s.selectedDate);
+          if (s?.companyFilter) this.companyFilter = s.companyFilter;
+          if (s?.filterDept) this.filterDept = s.filterDept;
+          if (s?.filterOwner) this.filterOwner = s.filterOwner;
+          if (!this.selectedDate()) this.setToday(); else await this.loadByDate();
+          setTimeout(()=>{ try{ if(this.listRef) this.listRef.nativeElement.scrollTop = s.scrollTop || 0; }catch{} }, 50);
+        } else { this.setToday(); }
+      }catch{ this.setToday(); }
       // JSON+해시 기반으로 반영 (엑셀 변경 감지 시에만 재생성)
       await this.applyTitlesFromJsonOrExcel();
       await this.refreshTitlesFromDb();
@@ -990,7 +1006,20 @@ export class AuditEvaluationComponent {
     setTimeout(()=> this.pickerInput?.nativeElement?.focus(), 0);
   }
 
-  openLinkPopup(l: { id: string; title: string }){ this.linkPopup = { ...l, url: this.buildLinkUrl(l) } as any; }
+  openLinkPopup(l: { id: string; title: string; kind?: 'record'|'standard' }){
+    if ((l.kind||'record') === 'record'){
+      // Open/replace a single 'Record' tab instead of replacing current Audit view
+      const tabPath = '/tabs/record';
+      const navUrl = `/app/record/rmd-forms?open=${encodeURIComponent(l.id)}`;
+      // Use TabService to request/activate the shared Record tab
+      this.tabBus.requestOpen('Record 원료제조팀', tabPath, navUrl);
+      return;
+    }
+    // Open/replace a single 'Standard' tab
+    const stdTab = '/tabs/standard';
+    const stdUrl = `/app/standard/rmd?open=${encodeURIComponent(l.id)}`;
+    this.tabBus.requestOpen('Standard 원료제조팀 규정', stdTab, stdUrl);
+  }
   removeSelectedLink(it: any, l: { id: string }){
     if(!it?.selectedLinks) return; it.selectedLinks = (it.selectedLinks as any[]).filter(x => x.id !== l.id); this.saveProgress(it);
   }
@@ -1140,6 +1169,20 @@ export class AuditEvaluationComponent {
     it.companies = (it.companies||[]).filter((x:string)=>x!==c); this.saveProgress(it);
   }
   onCompanyFilterChange(_: any){}
+
+  @HostListener('window:beforeunload')
+  persistUi(){
+    try{
+      const st = {
+        selectedDate: this.selectedDate(),
+        companyFilter: this.companyFilter,
+        filterDept: this.filterDept,
+        filterOwner: this.filterOwner,
+        scrollTop: this.listRef?.nativeElement?.scrollTop || 0
+      };
+      sessionStorage.setItem('audit.eval.ui.v1', JSON.stringify(st));
+    }catch{}
+  }
 
   // 담당자 추가/삭제
   addOwner(it: any, owner: string){
