@@ -303,6 +303,15 @@ export class RmdFormsComponent {
           if(raw){ const map = JSON.parse(raw) as Record<string, any>; for(const cat of this.categories){ for(const it of cat.items as any[]){ const m = map[it.id]; if(m) Object.assign(it, m); } } }
         }catch{}
       }
+      // Deep-link open by id (e.g., ?open=ISO-9001)
+      try{
+        const params = new URLSearchParams(location.search);
+        const openId = params.get('open');
+        if (openId){
+          const target = this.filteredFlat().find(r => r.id === openId);
+          if (target){ this.open(target); }
+        }
+      }catch{}
     });
   }
 
