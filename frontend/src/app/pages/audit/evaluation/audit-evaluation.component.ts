@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../../services/supabase.service';
 import * as XLSX from 'xlsx';
 
-interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; companies?: string[]; comments?: Array<{ user: string; time: string; text: string; ownerTag?: boolean }>; owners?: string[]; company?: string | null; doneBy?: string; doneAt?: string; }
+interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; companies?: string[]; comments?: Array<{ user: string; time: string; text: string; ownerTag?: boolean }>; owners?: string[]; company?: string | null; doneBy?: string; doneAt?: string; col1Text?: string; col3Text?: string; }
 interface ResourceItem { id?: string; number?: number; name: string; type?: string; url?: string | null; file_url?: string | null; done?: boolean; }
 interface AuditDate { value: string; label: string; }
 
@@ -110,21 +110,16 @@ interface AuditDate { value: string; label: string; }
                   <button class="remove" (click)="removeOwner(it, u); $event.stopPropagation()">×</button>
                 </span>
               </div>
+              <button type="button" class="toggle-chevron chevron-inline" (click)="toggleDetails(it); $event.stopPropagation()" title="열기/닫기"></button>
               
             </div>
             <div class="details" *ngIf="openItemId===it.id" (click)="$event.stopPropagation()">
               <div class="details-inner comments-on">
-                <div class="assessment">
-                  <h4>평가 내용 / Assessment</h4>
-                  <div class="ass-body">
-                    <div class="row"><b>No.</b> <span>{{ assessment?.number }}</span></div>
-                    <div class="row"><b>Category</b> <span>{{ assessment?.category_no }}</span></div>
-                    <div class="row"><b>Title</b> <span>{{ assessment?.title }}</span></div>
-                    <div class="q">{{ assessment?.question }}</div>
-                    <div class="t">{{ assessment?.translation }}</div>
-                    <div class="acc">{{ assessment?.acceptance_criteria }}</div>
-                  </div>
-                </div>
+                <div class="assessment" *ngIf="false"></div>
+                <!-- 1열 1행: 상태 select 대신 입력창으로 변경 (그리드 셀 가득 채움) -->
+                <textarea class="status-select slide-input" style="grid-row:1; grid-column:1; width:100%;" rows="5" spellcheck="false" [(ngModel)]="it.col1Text" (input)="autoResize($event)" placeholder="입력..."></textarea>
+                <!-- 3열 1행으로 이동 -->
+                <textarea class="owner-select slide-input" style="grid-row:1; grid-column:3; width:100%;" rows="5" spellcheck="false" [(ngModel)]="it.col3Text" (input)="autoResize($event)" placeholder="입력..."></textarea>
                 <div class="comments">
                   <div class="new">
                     <textarea [(ngModel)]="newComment[it.id]" id="comment-input-{{it.id}}" (keydown)="onCommentKeydown($event, it)" placeholder="댓글을 입력..." [disabled]="!isDateCreated()"></textarea>
@@ -248,6 +243,10 @@ interface AuditDate { value: string; label: string; }
     .save-badge{ margin-left:6px; font-size:.85em; color:#64748b; height:32px; display:inline-flex; align-items:center; }
     .save-badge.saved{ color:#16a34a; }
     .saved-inline{ margin-left:0; color:#16a34a; height:32px; display:inline-flex; align-items:center; }
+    .toggle-chevron{ position:absolute; right:8px; bottom:6px; width:24px; height:16px; border:0; background:transparent; color:#64748b; cursor:pointer; }
+    .chevron-inline{ position:static; margin-left:auto; grid-row:2; grid-column:4; align-self:end; justify-self:end; }
+    .toggle-chevron::before{ content: "▼"; font-size:14px; line-height:16px; display:block; }
+    .item.open .toggle-chevron::before{ content: "▲"; }
     textarea{ width:100%; max-width: none; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
     .note textarea{ width: min(500px, 100%); max-width:100%; box-sizing:border-box; }
 
@@ -265,6 +264,8 @@ interface AuditDate { value: string; label: string; }
     .comment .close-x:hover{ background:#fee2e2; border-color:#fecaca; color:#991b1b; }
     .comment .meta{ color:#6b7280; font-size:11px; margin-bottom:6px; }
     @media (max-width: 1200px){ .details-inner{ grid-template-columns: 1fr; } }
+    .slide-input{ resize:none; overflow:hidden; white-space:pre-wrap; line-height:1.4; font-weight:400; border:1px solid #e5e7eb; border-radius:8px; padding:8px; font-family: var(--font-sans-kr); }
+    /* slide inputs already placed via inline grid-row/column overrides */
     .assessment .row{ display:flex; gap:10px; margin:4px 0; }
     .assessment .q{ margin-top:8px; font-weight:600; }
     .assessment .t{ color:#475569; margin:6px 0; }
@@ -381,42 +382,150 @@ export class AuditEvaluationComponent {
       }catch{}
       // default date = today
       this.setToday();
-      await this.loadTitlesFromExcel();
+      // JSON+해시 기반으로 반영 (엑셀 변경 감지 시에만 재생성)
+      await this.applyTitlesFromJsonOrExcel();
+      await this.refreshTitlesFromDb();
     }catch{}
   }
 
+  private async applyTitlesFromJsonOrExcel(){
+    // Try to read prebuilt JSON + hash; if JSON missing or excel changed, fallback to client parse
+    try{
+      // 1) Prefer CSV if present (authoritative)
+      const csvRes = await fetch('/asset/Audit%20Evaluation%20Items.csv', { cache: 'no-store' });
+      if (csvRes.ok){ await this.loadTitlesFromCsv(csvRes); return; }
+      // 2) Fallback to JSON if CSV missing
+      const jsonRes = await fetch('/audit-items.json', { cache: 'no-store' });
+      if (jsonRes.ok){
+        const items = await jsonRes.json();
+        if (Array.isArray(items) && items.length){
+          const updated = this.items().map((it:any) => {
+            const row = items.find((r:any)=> Number(r.number)===Number(it.id));
+            return row ? ({...it, titleKo: row.titleKo || it.titleKo, titleEn: row.titleEn || it.titleEn}) : it;
+          });
+          this.items.set(updated as any);
+          try{ await this.supabase.upsertAuditItems(items); }catch{}
+          return;
+        }
+      }
+    }catch{}
+    // Fallback: parse CSV directly in client if JSON is missing
+    await this.loadTitlesFromCsv();
+  }
+
+  private async loadTitlesFromCsv(preFetched?: Response){
+    try{
+      const res = preFetched || await fetch('/asset/Audit%20Evaluation%20Items.csv', { cache: 'no-store' });
+      if (!res.ok) return false as any;
+      const buf = await res.arrayBuffer();
+      // Robust CSV parsing via XLSX
+      const wb = XLSX.read(buf, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[];
+      const cleaned = rows.filter(r => Array.isArray(r) && r.length >= 2);
+      const updated = this.items().slice();
+      const upserts: Array<{ number: number; titleKo: string; titleEn: string }>=[];
+      for (const r of cleaned){
+        const num = parseInt(String(r[0] ?? '').trim(), 10);
+        if (!Number.isFinite(num)) continue;
+        const titleKo = String(r[1] ?? '').trim();
+        const titleEn = String(r[2] ?? '').trim();
+        const companyRaw = String(r[3] ?? '').trim();
+        if (companyRaw){
+          if (updated[num-1]){ (updated[num-1] as any).company = companyRaw; }
+        }
+        upserts.push({ number: num, titleKo, titleEn });
+        if (updated[num-1]){
+          updated[num-1] = { ...updated[num-1], titleKo: titleKo || updated[num-1].titleKo, titleEn: titleEn || updated[num-1].titleEn } as any;
+        }
+      }
+      this.items.set(updated as any);
+      if (upserts.length){ try{ await this.supabase.upsertAuditItems(upserts); }catch{} }
+      // 회사명도 함께 저장 (company는 audit_progress가 날짜별이라 items에는 보관하지 않음)
+      // 화면 반영만 즉시 수행
+      this.items.set(updated as any);
+      return true as any;
+    }catch{ return false as any; }
+  }
+
   private async loadTitlesFromExcel(){
-    const candidates = [
-      '/Audit%20Evaluation%20Items.xlsx',
-      '/asset/Audit%20Evaluation%20Items.xlsx',
-      '/assets/Audit%20Evaluation%20Items.xlsx'
-    ];
+    const candidates = ['/asset/Audit%20Evaluation%20Items.xlsx'];
     let buf: ArrayBuffer | null = null;
     for (const url of candidates){
       try{
         const res = await fetch(url, { cache: 'no-store' });
+        console.info('[Audit] Try excel:', url, res.status);
         if (res.ok){ buf = await res.arrayBuffer(); break; }
-      }catch{}
+      }catch(e){ console.warn('[Audit] Excel fetch failed:', url, e); }
     }
-    if (!buf) return;
+    if (!buf){
+      console.warn('[Audit] Excel not found in candidates, using DB titles only');
+      this.showToast('엑셀 파일을 찾지 못해 DB 제목으로 표시합니다');
+      return false as any;
+    }
     try{
       const wb = XLSX.read(buf, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[];
-      if (!Array.isArray(rows) || rows.length === 0) return;
-      const updated = this.items().map((it:any) => {
-        const idx = (it.id - 1);
-        const r = (rows[idx] as any[]) || [];
+      if (!Array.isArray(rows) || rows.length < 3) return false as any;
+      // Grouping parse:
+      // - Start from index 2 (Excel row 3) to skip cover/header rows
+      // - New item begins when column C is non-empty
+      // - titleKo = A + B + C of the first row of the group
+      // - titleEn = concat of D+E across the group rows until next C appears
+      const startIndex = 2;
+      let seq = 1;
+      const max = this.items().length;
+      const updated = this.items().slice();
+      const upserts: Array<{ number: number; titleKo: string; titleEn: string }> = [];
+      for (let i = startIndex; i < rows.length && seq <= max; i++){
+        const r = (rows[i] as any[]) || [];
+        const c = (r[2] ?? '').toString().trim();
+        if (!c) continue; // only start group when C has content
         const a = (r[0] ?? '').toString().trim();
         const b = (r[1] ?? '').toString().trim();
-        const c = (r[2] ?? '').toString().trim();
-        const d = (r[3] ?? '').toString().trim();
-        const e = (r[4] ?? '').toString().trim();
-        const titleKo = [a,b,c].filter(Boolean).join(' ');
-        const titleEn = [d,e].filter(Boolean).join(' ');
-        return { ...it, titleKo: titleKo || it.titleKo, titleEn: titleEn || it.titleEn };
+        const titleKo = [a,b,c].filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
+        const parts: string[] = [];
+        let j = i;
+        while (j < rows.length){
+          const rr = (rows[j] as any[]) || [];
+          if (j > i && (rr[2] ?? '').toString().trim()) break; // next group starts
+          const d = (rr[3] ?? '').toString().trim();
+          const e = (rr[4] ?? '').toString().trim();
+          const sub = [d,e].filter(Boolean).join(' ').trim();
+          if (sub) parts.push(sub);
+          j++;
+        }
+        const titleEn = parts.join(' ');
+        const number = seq++;
+        upserts.push({ number, titleKo, titleEn });
+        if (updated[number-1]){
+          updated[number-1] = { ...updated[number-1], titleKo: titleKo || updated[number-1].titleKo, titleEn: titleEn || updated[number-1].titleEn } as any;
+        }
+        i = j - 1; // continue after group
+      }
+      this.items.set(updated as any);
+      console.info('[Audit] Excel parsed rows:', rows.length, 'sequential mapped items:', upserts.length);
+
+      // Upsert to DB to persist titles by immutable key 'number'
+      if (upserts.length){
+        try{ const res: any = await this.supabase.upsertAuditItems(upserts); console.info('[Audit] Upsert items (sequential):', upserts.length, 'result:', res); return !!(res && res.ok !== false); }catch(e){ console.warn('[Audit] Upsert failed', e); return false as any; }
+      }
+      return true as any;
+    }catch{ return false as any; }
+  }
+
+  private async refreshTitlesFromDb(){
+    try{
+      const rows = await this.supabase.listAuditItems();
+      const map = new Map<number, { title_ko: string; title_en: string }>();
+      for (const r of rows as any[]){ map.set((r as any).number, { title_ko: (r as any).title_ko, title_en: (r as any).title_en }); }
+      const updated = this.items().map((it:any)=>{
+        const t = map.get(it.id);
+        return t ? { ...it, titleKo: t.title_ko || it.titleKo, titleEn: t.title_en || it.titleEn } : it;
       });
       this.items.set(updated as any);
+      console.info('[Audit] Titles refreshed from DB:', rows?.length ?? 0);
     }catch{}
   }
 
@@ -445,7 +554,9 @@ export class AuditEvaluationComponent {
       note: '',
       departments: [],
       owners: [],
-      ...( { companies: [] as string[] } as any )
+      ...( { companies: [] as string[] } as any ),
+      col1Text: '',
+      col3Text: ''
     } as any;
     return base as any;
   }));
@@ -491,6 +602,10 @@ export class AuditEvaluationComponent {
         } as any;
       });
       this.items.set(next as any);
+      // 생성되지 않은 날짜라면, 업서트된 템플릿(CSV/JSON)을 적용해 기본 타이틀/업체가 보이도록 함
+      if (!created){
+        try{ await this.applyTitlesFromJsonOrExcel(); }catch{}
+      }
     }catch{ this.resetItems(); }
   }
   resetItems(){
@@ -514,6 +629,7 @@ export class AuditEvaluationComponent {
       note: it.note,
       departments: it.departments,
       companies: it.companies || [],
+      company: (it as any).company || null,
       updated_by: user,
       updated_by_name: name,
       audit_date: date
@@ -565,6 +681,8 @@ export class AuditEvaluationComponent {
     if (this.savedDates.includes(date)) return;
     // 페이지 내용 초기화 후 저장
     this.resetItems();
+    // 기본 템플릿(제목/부제/업체)을 먼저 적용하여 초기 저장에도 포함되도록
+    try{ await this.applyTitlesFromJsonOrExcel(); }catch{}
     // 생성 직후 필터 초기화
     this.companyFilter = 'ALL';
     this.filterDept = 'ALL';

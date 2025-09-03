@@ -459,22 +459,59 @@ export class SupabaseService {
   }
 
   // Audit items upsert from JSON (best-effort)
-  async upsertAuditItems(items: Array<{ id: number; titleKo: string; titleEn?: string | null }>) {
+  async upsertAuditItems(items: Array<{ number: number; titleKo: string; titleEn?: string | null }>) {
     if (!Array.isArray(items) || items.length === 0) return { ok: true } as any;
-    const rows = items.map(it => ({ id: it.id, title_ko: it.titleKo, title_en: it.titleEn || null }));
-    try {
-      const BATCH = 200;
-      for (let i = 0; i < rows.length; i += BATCH) {
-        const part = rows.slice(i, i + BATCH);
-        const { error } = await this.ensureClient().from('audit_items').upsert(part, { onConflict: 'id' });
-        if (error) throw error;
+    const rows = items
+      .map(it => ({ number: Number(it.number), title_ko: it.titleKo ?? null, title_en: it.titleEn ?? null }))
+      .filter(r => Number.isFinite(r.number));
+    const client = this.ensureClient();
+    const BATCH = 400; // 권장 범위 내 기본값
+    const CONCURRENCY = 3; // 2~4 권장
+
+    const batches: any[][] = [];
+    for (let i = 0; i < rows.length; i += BATCH) batches.push(rows.slice(i, i + BATCH));
+
+    const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+    const upsertBatch = async (part: any[]) => {
+      let attempt = 0;
+      while (true) {
+        attempt++;
+        const { error } = await client.from('audit_items').upsert(part, { onConflict: 'number' });
+        if (!error) return;
+        const msg = (error as any)?.message || '';
+        const status = (error as any)?.code || (error as any)?.status;
+        if (attempt >= 3 || !(status === '429' || String(status).startsWith('5'))) {
+          throw error;
+        }
+        const delay = 400 * Math.pow(2, attempt - 1);
+        await sleep(delay);
       }
-      return { ok: true } as any;
-    } catch (e) {
-      // Ignore when RLS forbids insert/update; the UI can still use local titles
-      console.warn('upsertAuditItems failed (ignored):', e);
-      return { ok: false, error: e } as any;
+    };
+
+    // Run with limited concurrency
+    let idx = 0; let lastErr: any = null;
+    const workers: Promise<void>[] = new Array(CONCURRENCY).fill(0).map(async () => {
+      while (idx < batches.length) {
+        const my = idx++;
+        const part = batches[my];
+        try { await upsertBatch(part); } catch (e) { lastErr = e; }
+      }
+    });
+    await Promise.all(workers);
+    if (lastErr) {
+      console.warn('upsertAuditItems failed (ignored):', lastErr);
+      return { ok: false, error: lastErr } as any;
     }
+    return { ok: true } as any;
+  }
+
+  async listAuditItems(){
+    const { data, error } = await this.ensureClient()
+      .from('audit_items')
+      .select('number,title_ko,title_en')
+      .order('number', { ascending: true });
+    if (error) throw error;
+    return Array.isArray(data) ? data : [];
   }
 
   // Audit companies CRUD
