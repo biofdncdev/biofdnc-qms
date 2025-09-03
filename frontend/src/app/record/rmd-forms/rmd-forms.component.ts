@@ -9,22 +9,94 @@ import { SupabaseService } from '../../services/supabase.service';
   standalone: true,
   imports: [CommonModule, FormsModule],
   styleUrls: ['../../standard/rmd/rmd-page.component.scss'],
+  styles: [
+    `:host .page{ display:grid; grid-template-columns: 280px 0.9fr minmax(420px, 46%); gap:16px; align-items:start; }
+     :host aside.left{ grid-column:1; position:sticky; top:12px; align-self:start; }
+     :host section.center{ grid-column:2; min-width:0; max-height: calc(100vh - 96px); overflow-y:auto; padding-right:8px; }
+     :host main.right{ grid-column:3; min-width:0; max-height: calc(100vh - 96px); overflow-y:auto; padding-right:8px; }
+     :host .filters .f-title{ display:block; margin:10px 0 6px; font-weight:600; }
+     :host .results{ display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+     :host .record-item{ padding:12px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; cursor:pointer; }
+     :host .record-item:hover{ border-color:#cbd5e1; background:#f8fafc; }
+     :host .record-head{ display:flex; gap:12px; align-items:center; }
+     :host .record-id{ font-family:monospace; font-size:12px; color:#475569; }
+     :host .record-title{ font-weight:600; }
+     :host .meta{ margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; }
+     :host .chip{ font-size:12px; padding:2px 8px; border-radius:999px; background:#f1f5f9; color:#334155; }
+     :host .detail-form{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; }
+     :host .detail-form label{ font-size:12px; color:#475569; display:block; margin-bottom:4px; }
+     :host .section-title{ font-weight:700; margin:4px 0 8px; }
+     :host .section-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+     :host .saved-badge{ font-size:12px; color:#16a34a; margin-left:8px; }
+     :host .pdf-zone{ margin-top:14px; }
+     :host .pdf-actions{ display:flex; gap:8px; align-items:center; }
+     :host .pdf-view{ margin-top:10px; width:100%; height:70vh; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+     :host .dropbox{ margin-top:8px; border:2px dashed #cbd5e1; border-radius:10px; padding:12px; display:flex; align-items:center; gap:8px; cursor:pointer; background:#f8fafc; }
+     :host .dropbox.dragover{ background:#eef2ff; border-color:#93c5fd; }
+     :host .file-pill{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; background:#e2e8f0; }
+     :host .file-pill button{ border:0; background:transparent; color:#ef4444; cursor:pointer; }
+    `
+  ],
   template: `
   <div class="page">
-    <aside class="left">
+    <aside class="left" style="flex:0 0 280px; max-width:280px;">
       <div class="sticky">
-        <h2>원료제조팀 지시·기록서</h2>
+        <h2>Record <small class="sub">원료제조팀</small></h2>
         <div class="search">
-          <input type="search" placeholder="지시·기록서 제목 검색" [ngModel]="query()" (ngModelChange)="query.set($event)">
+          <input type="search" placeholder="키워드로 검색" [ngModel]="query()" (ngModelChange)="query.set($event)">
           <button class="clear" *ngIf="query()" (click)="query.set('')">×</button>
         </div>
+        <div class="filters">
+          <label class="f-title">담당부서로 검색</label>
+          <select [ngModel]="dept()" (ngModelChange)="dept.set($event); onFiltersChanged()">
+            <option value="">전체</option>
+            <option *ngFor="let d of departments" [value]="d">{{ d }}</option>
+          </select>
+          <label class="f-title">담당자로 검색</label>
+          <input type="text" [ngModel]="owner()" (ngModelChange)="owner.set($event); onFiltersChanged()" placeholder="이름/이메일">
+          <label class="f-title">기록방법으로 검색</label>
+          <select [ngModel]="method()" (ngModelChange)="method.set($event); onFiltersChanged()">
+            <option value="">전체</option>
+            <option *ngFor="let m of methods" [value]="m">{{ m }}</option>
+          </select>
+          <label class="f-title">기록주기로 검색</label>
+          <select [ngModel]="period()" (ngModelChange)="period.set($event); onFiltersChanged()">
+            <option value="">전체</option>
+            <option *ngFor="let p of periods" [value]="p">{{ p }}</option>
+          </select>
+          <label class="inline"><input type="checkbox" [ngModel]="overdueOnly()" (ngModelChange)="overdueOnly.set($event); onFiltersChanged()"> 기록주기가 지난 것만</label>
+          <label class="f-title">연결된 규정으로 검색</label>
+          <select [ngModel]="standard()" (ngModelChange)="standard.set($event); onFiltersChanged()">
+            <option value="">전체</option>
+            <option *ngFor="let s of standardItems" [value]="s">{{ s }}</option>
+          </select>
+          <label class="f-title">규정 카테고리로 검색</label>
+          <select [ngModel]="standardCategory()" (ngModelChange)="standardCategory.set($event); onFiltersChanged()">
+            <option value="">전체</option>
+            <option *ngFor="let c of categoriesOnly" [value]="c">{{ c }}</option>
+          </select>
+        </div>
       </div>
-      <ng-container *ngFor="let cat of filtered()">
-        <hr />
-        <h4 class="cat">{{ cat.category }}</h4>
-        <button class="item" *ngFor="let it of cat.items" (click)="open(it)">{{ it.id }}. {{ it.title }}</button>
-      </ng-container>
     </aside>
+
+    <section class="center">
+      <section class="results">
+        <div class="record-item" *ngFor="let r of filteredFlat()" (click)="open(r)">
+          <div class="record-head">
+            <span class="record-id">{{ r.id }}</span>
+            <span class="record-title">{{ r.title }}</span>
+          </div>
+          <div class="meta">
+            <span class="chip">부서: {{ r.department || '원료제조팀' }}</span>
+            <span class="chip" *ngIf="r.owner">담당자: {{ r.owner }}</span>
+            <span class="chip" *ngIf="r.method">방법: {{ r.method }}</span>
+            <span class="chip" *ngIf="r.period">주기: {{ r.period }}</span>
+            <span class="chip" *ngIf="r.standard">규정: {{ r.standard }}</span>
+            <span class="chip">카테고리: {{ r.standardCategory }}</span>
+          </div>
+        </div>
+      </section>
+    </section>
 
     <main class="right">
       <div class="toolbar">
@@ -34,6 +106,70 @@ import { SupabaseService } from '../../services/supabase.service';
       <ng-template #choose><h3>좌측에서 항목을 선택하세요.</h3></ng-template>
       <section class="content">
         <div *ngIf="selected() as sel">
+          <div class="section-row">
+            <div class="section-title">기록 정보</div>
+            <div>
+              <button class="primary" [disabled]="isSavingMeta" (click)="saveMeta(sel)">{{ isSavingMeta ? '저장중…' : '저장' }}</button>
+              <span class="saved-badge" *ngIf="metaJustSaved">저장됨</span>
+            </div>
+          </div>
+          <div class="detail-form" (ngModelChange)="persistMeta(sel)">
+            <div>
+              <label>담당부서</label>
+              <select [(ngModel)]="sel.department" (ngModelChange)="persistMeta(sel)">
+                <option *ngFor="let d of departments" [value]="d">{{ d }}</option>
+              </select>
+            </div>
+            <div>
+              <label>담당자</label>
+              <input type="text" [(ngModel)]="sel.owner" (ngModelChange)="persistMeta(sel)" placeholder="이름/이메일">
+            </div>
+            <div>
+              <label>기록방법</label>
+              <select [(ngModel)]="sel.method" (ngModelChange)="persistMeta(sel)">
+                <option *ngFor="let m of methods" [value]="m">{{ m }}</option>
+              </select>
+            </div>
+            <div>
+              <label>기록주기</label>
+              <select [(ngModel)]="sel.period" (ngModelChange)="persistMeta(sel)">
+                <option *ngFor="let p of periods" [value]="p">{{ p }}</option>
+              </select>
+            </div>
+            <div>
+              <label>연결된 규정</label>
+              <select [(ngModel)]="sel.standard" (ngModelChange)="persistMeta(sel)">
+                <option value="">선택</option>
+                <option *ngFor="let s of standardItems" [value]="s">{{ s }}</option>
+              </select>
+            </div>
+            <div>
+              <label>규정 카테고리</label>
+              <select [(ngModel)]="sel.standardCategory" (ngModelChange)="persistMeta(sel)">
+                <option *ngFor="let c of categoriesOnly" [value]="c">{{ c }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="pdf-zone">
+            <div class="section-title">첨부 PDF</div>
+            <div class="pdf-actions">
+              <div class="dropbox" [class.dragover]="dragOver"
+                   (click)="fileInput.click()"
+                   (dragover)="$event.preventDefault(); dragOver=true"
+                   (dragleave)="dragOver=false"
+                   (drop)="onDrop($event)">
+                <span>여기로 드래그하거나 클릭하여 PDF 첨부</span>
+                <input #fileInput type="file" accept="application/pdf" (change)="onPdfPick($event)" style="display:none" />
+              </div>
+              <div *ngIf="recordPdfs.length" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                <a class="file-pill" *ngFor="let p of recordPdfs" [href]="p.url" target="_blank" rel="noopener">
+                  <span>{{ p.name }}</span>
+                  <button type="button" title="삭제" (click)="$event.preventDefault(); removePdf(p)">×</button>
+                </a>
+              </div>
+            </div>
+            <iframe *ngIf="selectedPdfPath" class="pdf-view" [src]="selectedPdfPath"></iframe>
+          </div>
           <ng-container *ngIf="sel.id==='BF-RMD-PM-IR-07'; else genericInfo">
             <div class="th-toolbar">
               <div class="group">
@@ -113,19 +249,151 @@ export class RmdFormsComponent {
   categories: RmdFormCategory[] = RMD_FORM_CATEGORIES;
   query = signal('');
   selected = signal<RmdFormItem | null>(null);
+  // Filters
+  departments: string[] = ['원료제조팀','식물세포배양팀','품질팀','연구팀','경영지원팀'];
+  methods: string[] = ['ERP','QMS','NAS','OneNote','Paper'];
+  periods: string[] = ['일','주','월','년','갱신주기'];
+  standardItems: string[] = [
+    '원료제조팀 규정 1','원료제조팀 규정 2','원료제조팀 규정 3'
+  ];
+  categoriesOnly: string[] = this.categories.map(c=>c.category);
+  dept = signal<string>('');
+  owner = signal<string>('');
+  method = signal<string>('');
+  period = signal<string>('');
+  overdueOnly = signal<boolean>(false);
+  standard = signal<string>('');
+  standardCategory = signal<string>('');
   constructor(private supabase: SupabaseService){}
 
   filtered = computed(() => {
     const q = this.query().trim().toLowerCase();
-    if (!q) return this.categories;
-    return this.categories.map(cat => ({
+    const base = this.categories.map(cat => ({
       ...cat,
-      items: cat.items.filter(i => i.id.toLowerCase().includes(q) || i.title.toLowerCase().includes(q))
+      items: cat.items.filter(i => {
+        const byKeyword = !q || i.id.toLowerCase().includes(q) || i.title.toLowerCase().includes(q);
+        const byDept = !this.dept() || ((i as any).department || '원료제조팀') === this.dept();
+        const byOwner = !this.owner() || ((i as any).owner || '').toLowerCase().includes(this.owner().toLowerCase());
+        const byMethod = !this.method() || (i as any).method === this.method();
+        const byPeriod = !this.period() || (i as any).period === this.period();
+        const byStandard = !this.standard() || ((i as any).standard || '').toLowerCase().includes(this.standard().toLowerCase());
+        const stdCat = ((i as any).standardCategory || cat.category) as string;
+        const byStdCat = !this.standardCategory() || stdCat.toLowerCase() === this.standardCategory().toLowerCase();
+        // overdueOnly flag is placeholder; in real data you'd check due dates
+        const byOverdue = !this.overdueOnly() || !!(i as any).overdue;
+        return byKeyword && byDept && byOwner && byMethod && byPeriod && byStandard && byStdCat && byOverdue;
+      })
     })).filter(cat => cat.items.length > 0);
+    return base;
+  });
+
+  onFiltersChanged(){ /* signals trigger recompute automatically */ }
+
+  ngOnInit(){
+    // Load meta from DB; fallback to localStorage
+    queueMicrotask(async ()=>{
+      try{
+        const all = await this.supabase.listAllFormMeta();
+        const byId: Record<string, any> = {};
+        for(const row of all as any[]){ if(row?.form_id) byId[row.form_id] = row; }
+        for(const cat of this.categories){ for(const it of cat.items as any[]){ const m = byId[it.id]; if(m) Object.assign(it, m); } }
+      }catch{
+        try{
+          const raw = localStorage.getItem('rmd_forms_meta');
+          if(raw){ const map = JSON.parse(raw) as Record<string, any>; for(const cat of this.categories){ for(const it of cat.items as any[]){ const m = map[it.id]; if(m) Object.assign(it, m); } } }
+        }catch{}
+      }
+    });
+  }
+
+  persistMeta(it: any){
+    try{
+      const raw = localStorage.getItem('rmd_forms_meta');
+      const map = raw ? JSON.parse(raw) : {};
+      map[it.id] = { department: it.department, owner: it.owner, method: it.method, period: it.period, standard: it.standard, standardCategory: it.standardCategory };
+      localStorage.setItem('rmd_forms_meta', JSON.stringify(map));
+    }catch{}
+    // Debounced DB upsert
+    this.scheduleUpsert(it);
+  }
+
+  private upsertTimer?: any;
+  private scheduleUpsert(it: any){
+    clearTimeout(this.upsertTimer);
+    this.upsertTimer = setTimeout(async () => {
+      try{
+        await this.supabase.upsertFormMeta({
+          form_id: it.id,
+          department: it.department || null,
+          owner: it.owner || null,
+          method: it.method || null,
+          period: it.period || null,
+          standard: it.standard || null,
+          standard_category: it.standardCategory || null,
+        });
+      }catch{}
+    }, 300);
+  }
+
+  // ===== PDF handling =====
+  recordPdfs: Array<{ name: string; path: string; url: string }> = [];
+  selectedPdfPath: string = '';
+  isSavingMeta = false;
+  metaJustSaved = false;
+  dragOver = false;
+
+  async saveMeta(sel: any){
+    try{
+      this.isSavingMeta = true; this.metaJustSaved = false;
+      await this.supabase.upsertFormMeta({
+        form_id: sel.id,
+        department: sel.department || null,
+        owner: sel.owner || null,
+        method: sel.method || null,
+        period: sel.period || null,
+        standard: sel.standard || null,
+        standard_category: sel.standardCategory || null,
+      });
+      this.metaJustSaved = true;
+      setTimeout(()=> this.metaJustSaved = false, 1500);
+    }finally{ this.isSavingMeta = false; }
+  }
+
+  private async refreshPdfList(){
+    const sel = this.selected(); if(!sel) return;
+    this.recordPdfs = await this.supabase.listRecordPdfs(sel.id);
+    if (this.recordPdfs.length && !this.selectedPdfPath){ this.selectedPdfPath = this.recordPdfs[0].url; }
+  }
+  async onPdfPick(ev: Event){
+    const input = ev.target as HTMLInputElement; const f = input?.files?.[0]; if(!f || !this.selected()) return;
+    await this.supabase.uploadRecordPdf(f, this.selected()!.id);
+    await this.refreshPdfList();
+  }
+  async onDrop(ev: DragEvent){
+    ev.preventDefault(); this.dragOver = false; const file = ev.dataTransfer?.files?.[0]; if(!file || !this.selected()) return;
+    if (file.type !== 'application/pdf') return;
+    await this.supabase.uploadRecordPdf(file, this.selected()!.id);
+    await this.refreshPdfList();
+  }
+  async removePdf(p: { path: string }){
+    try{ await this.supabase.deleteRecordPdf(p.path); }catch{}
+    await this.refreshPdfList();
+  }
+
+  filteredFlat = computed<RmdFormItem[]>(() => {
+    const cats = this.filtered();
+    const flat: RmdFormItem[] = [];
+    for(const cat of cats){
+      for(const it of cat.items){
+        flat.push({ ...(it as any), standardCategory: (it as any).standardCategory || cat.category, department: (it as any).department || '원료제조팀' });
+      }
+    }
+    return flat.sort((a,b)=> a.id.localeCompare(b.id));
   });
 
   async open(it: RmdFormItem){
     this.selected.set(it);
+    await this.refreshPdfList();
     if (it.id === 'BF-RMD-PM-IR-07'){
       try{
         const today = new Date().toISOString().slice(0,10);

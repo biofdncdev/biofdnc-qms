@@ -582,6 +582,60 @@ export class SupabaseService {
     return { path: data.path, publicUrl: urlData.publicUrl };
   }
 
+  // Record PDFs storage (per form)
+  async uploadRecordPdf(file: File, form_id: string){
+    const client = this.ensureClient();
+    // Sanitize filename: keep only safe ascii chars, preserve extension
+    const original = file.name || 'document.pdf';
+    const extMatch = original.toLowerCase().endsWith('.pdf') ? '.pdf' : (original.split('.').pop()?.toLowerCase() || 'pdf');
+    const ext = extMatch === '.pdf' ? '.pdf' : ('.' + extMatch.replace(/[^a-z0-9]/g,''));
+    const base = original.replace(/\.[^\.]+$/,'');
+    const normalized = base.normalize('NFKD').replace(/[\u0300-\u036f]/g,'');
+    const safeBase = normalized.replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'');
+    const name = `${Date.now()}_${safeBase}${ext}`;
+    const safeFolder = String(form_id).replace(/[^a-zA-Z0-9._-]/g,'-');
+    const path = `${safeFolder}/${name}`;
+    const { error, data } = await client.storage.from('rmd_pdfs').upload(path, file, { upsert: true, contentType: 'application/pdf' });
+    if (error) throw error;
+    const { data: pub } = client.storage.from('rmd_pdfs').getPublicUrl(data.path);
+    return { path: data.path, publicUrl: pub.publicUrl } as any;
+  }
+  async listRecordPdfs(form_id: string){
+    const client = this.ensureClient();
+    try{
+      const { data: list } = await client.storage.from('rmd_pdfs').list(form_id, { limit: 100 });
+      const items = (Array.isArray(list)? list: []).filter((o:any)=> (o?.name||'').toLowerCase().endsWith('.pdf'));
+      return await Promise.all(items.map(async (o:any)=>{
+        const full = `${form_id}/${o.name}`;
+        const { data } = client.storage.from('rmd_pdfs').getPublicUrl(full);
+        return { name: o.name, path: full, url: data.publicUrl };
+      }));
+    }catch{
+      return [] as any[];
+    }
+  }
+  async deleteRecordPdf(path: string){
+    const client = this.ensureClient();
+    const { error } = await client.storage.from('rmd_pdfs').remove([path]);
+    if (error) throw error;
+    return { ok: true } as any;
+  }
+
+  // RMD form metadata persistence
+  async getFormMeta(form_id: string){
+    return this.ensureClient().from('rmd_form_meta').select('*').eq('form_id', form_id).maybeSingle();
+  }
+  async upsertFormMeta(row: { form_id: string; department?: string | null; owner?: string | null; method?: string | null; period?: string | null; standard?: string | null; standard_category?: string | null; }){
+    const client = this.ensureClient();
+    const payload: any = { ...row };
+    try{ const { data: u } = await client.auth.getUser(); payload.updated_by = u.user?.id || null; }catch{}
+    return client.from('rmd_form_meta').upsert(payload, { onConflict: 'form_id' }).select('*').maybeSingle();
+  }
+  async listAllFormMeta(){
+    const { data } = await this.ensureClient().from('rmd_form_meta').select('*');
+    return Array.isArray(data) ? data : [];
+  }
+
   async getThRecord(formId: string, weekStart: string) {
     return this.ensureClient()
       .from('rmd_th_record')

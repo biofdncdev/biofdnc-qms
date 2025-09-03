@@ -1,10 +1,12 @@
-import { Component, HostListener, signal } from '@angular/core';
+import { Component, HostListener, ViewChild, ElementRef, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../../services/supabase.service';
+import { RMD_FORM_CATEGORIES, RmdFormItem } from '../../../record/rmd-forms/rmd-forms-data';
+import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
 import * as XLSX from 'xlsx';
 
-interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; companies?: string[]; comments?: Array<{ user: string; time: string; text: string; ownerTag?: boolean }>; owners?: string[]; company?: string | null; doneBy?: string; doneAt?: string; col1Text?: string; col3Text?: string; }
+interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; companies?: string[]; comments?: Array<{ user: string; time: string; text: string; ownerTag?: boolean }>; owners?: string[]; company?: string | null; doneBy?: string; doneAt?: string; col1Text?: string; col3Text?: string; selectedLinks?: Array<{ id: string; title: string; kind: 'record'|'standard' }>; }
 interface ResourceItem { id?: string; number?: number; name: string; type?: string; url?: string | null; file_url?: string | null; done?: boolean; }
 interface AuditDate { value: string; label: string; }
 
@@ -117,9 +119,15 @@ interface AuditDate { value: string; label: string; }
               <div class="details-inner comments-on">
                 <div class="assessment" *ngIf="false"></div>
                 <!-- 1열 1행: 상태 select 대신 입력창으로 변경 (그리드 셀 가득 채움) -->
-                <textarea class="status-select slide-input" style="grid-row:1; grid-column:1; width:100%;" rows="5" spellcheck="false" [(ngModel)]="it.col1Text" (input)="autoResize($event)" placeholder="입력..."></textarea>
+                <textarea class="status-select slide-input" style="grid-row:1; grid-column:1; width:100%;" rows="5" spellcheck="false" [(ngModel)]="it.col1Text" (input)="autoResize($event)" (blur)="saveProgress(it)" placeholder="입력..."></textarea>
+                <div class="link-cell" style="grid-row:1; grid-column:2; display:flex; flex-direction:column; gap:6px; width:100%;">
+                  <button class="btn mini pick-btn" style="align-self:flex-start; margin:4px 0;" (click)="openRecordPicker(it)">규정/기록 선택</button>
+                  <div class="link-list" style="display:flex; flex-direction:column; gap:6px; width:100%;">
+                    <button *ngFor="let l of (it.selectedLinks||[])" class="link-button" (click)="openLinkPopup(l)"><span class="text">{{ l.id }} · {{ l.title }}</span><span class="close-x" title="삭제" (click)="$event.stopPropagation(); removeSelectedLink(it, l)">×</span></button>
+                  </div>
+                </div>
                 <!-- 3열 1행으로 이동 -->
-                <textarea class="owner-select slide-input" style="grid-row:1; grid-column:3; width:100%;" rows="5" spellcheck="false" [(ngModel)]="it.col3Text" (input)="autoResize($event)" placeholder="입력..."></textarea>
+                <textarea class="owner-select slide-input" style="grid-row:1; grid-column:3; width:100%;" rows="5" spellcheck="false" [(ngModel)]="it.col3Text" (input)="autoResize($event)" (blur)="saveProgress(it)" placeholder="입력..."></textarea>
                 <div class="comments">
                   <div class="new">
                     <textarea [(ngModel)]="newComment[it.id]" id="comment-input-{{it.id}}" (keydown)="onCommentKeydown($event, it)" placeholder="댓글을 입력..." [disabled]="!isDateCreated()"></textarea>
@@ -156,6 +164,61 @@ interface AuditDate { value: string; label: string; }
   </div>
   <div class="toast" *ngIf="toast">{{ toast }}</div>
   
+  <!-- Record picker modal -->
+  <div class="preview-backdrop" *ngIf="recordPickerOpen" (click)="closeRecordPicker()">
+    <div class="preview draggable" [ngStyle]="pickerDragStyle()" (click)="$event.stopPropagation()" (keydown)="onPickerKeydown($event)" tabindex="0">
+      <header (mousedown)="startPickerDrag($event)">
+        <div class="name">규정/기록 선택</div>
+        <button (click)="closeRecordPicker()">×</button>
+      </header>
+      <div class="body">
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+          <input #pickerInput type="text" placeholder="규정/기록 (공백=AND)" [(ngModel)]="pickerQuery" (keydown)="onPickerKeydown($event)" style="flex:1; height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px; background:rgba(255,255,255,.65); backdrop-filter: blur(6px);" />
+          <select [(ngModel)]="pickerStdCat" style="height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px;">
+            <option value="">카테고리 전체</option>
+            <option *ngFor="let c of recordCategories" [value]="c">{{ c }}</option>
+          </select>
+          <select [(ngModel)]="pickerDept" style="height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px;">
+            <option value="">부서 전체</option>
+            <option *ngFor="let d of departments" [value]="d">{{ d }}</option>
+          </select>
+          <select [(ngModel)]="pickerMethod" style="height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px;">
+            <option value="">방법 전체</option>
+            <option *ngFor="let m of methods" [value]="m">{{ m }}</option>
+          </select>
+          <select [(ngModel)]="pickerPeriod" style="height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px;">
+            <option value="">주기 전체</option>
+            <option *ngFor="let p of periods" [value]="p">{{ p }}</option>
+          </select>
+        </div>
+        <div class="picker-list" style="max-height:55vh; overflow:auto; border:1px solid #eee; border-radius:12px;">
+          <div *ngFor="let r of pickerResults(); let i = index" (mouseenter)="hoverPickerIndex=i" (mouseleave)="hoverPickerIndex=-1" (click)="chooseRecord(r)" [class.active]="i===pickerIndex" [class.hovered]="i===hoverPickerIndex" [id]="'picker-item-'+i" class="picker-item" style="padding:10px 12px; cursor:pointer; display:flex; gap:12px; align-items:center;">
+            <span style="font-family:monospace; font-size:12px; color:#475569; min-width:120px;">{{ r.id }}</span>
+            <span style="font-weight:600;">{{ r.title }}</span>
+            <span style="margin-left:auto; font-size:12px; color:#64748b;">{{ r.standardCategory || '-' }}</span>
+          </div>
+          <div *ngIf="!pickerResults().length" style="padding:12px; color:#94a3b8;">결과가 없습니다.</div>
+        </div>
+        <div style="margin-top:10px; text-align:right;">
+          <button class="btn" (click)="closeRecordPicker()">닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Link detail popup -->
+  <div class="preview-backdrop" *ngIf="linkPopup" (click)="linkPopup=null">
+    <div class="preview" (click)="$event.stopPropagation()">
+      <header>
+        <div class="name">{{ linkPopup?.id }} · {{ linkPopup?.title }}</div>
+        <button (click)="linkPopup=null">×</button>
+      </header>
+      <div class="body">
+        <p>세부 내용(미리보기) — 추후 실제 문서/페이지로 연결 가능합니다.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Copy modal -->
   <div class="preview-backdrop" *ngIf="copying" (click)="closeCopy()">
     <div class="preview copy-modal" (click)="$event.stopPropagation()">
@@ -238,13 +301,14 @@ interface AuditDate { value: string; label: string; }
     .state select.status-in-progress{ background:#ecfdf5; border-color:#10b981; color:#065f46; }
     .state select.status-on-hold{ background:#fff7ed; border-color:#fb923c; color:#9a3412; }
     .state select.status-na{ background:#f1f5f9; border-color:#cbd5e1; color:#334155; }
-    .state select.status-impossible{ background:#fee2e2; border-color:#ef4444; color:#991b1b; }
+    /* 불가 색상을 해당없음과 동일 계열로 변경 */
+    .state select.status-impossible{ background:#f1f5f9; border-color:#cbd5e1; color:#334155; }
     .state select.status-done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
     .save-badge{ margin-left:6px; font-size:.85em; color:#64748b; height:32px; display:inline-flex; align-items:center; }
     .save-badge.saved{ color:#16a34a; }
     .saved-inline{ margin-left:0; color:#16a34a; height:32px; display:inline-flex; align-items:center; }
-    .toggle-chevron{ position:absolute; right:8px; bottom:6px; width:24px; height:16px; border:0; background:transparent; color:#64748b; cursor:pointer; }
-    .chevron-inline{ position:static; margin-left:auto; grid-row:2; grid-column:4; align-self:end; justify-self:end; }
+    .toggle-chevron{ position:absolute; right:8px; bottom:6px; width:28px; height:20px; border:0; background:#f1f5f9; color:#64748b; cursor:pointer; border-radius:999px; display:flex; align-items:center; justify-content:center; }
+    .chevron-inline{ position:static; margin-left:auto; grid-row:2; grid-column:4; align-self:end; justify-self:end; display:flex; align-items:center; justify-content:center; width:28px; height:20px; background:#f1f5f9; border-radius:999px; }
     .toggle-chevron::before{ content: "▼"; font-size:14px; line-height:16px; display:block; }
     .item.open .toggle-chevron::before{ content: "▲"; }
     textarea{ width:100%; max-width: none; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical; }
@@ -282,6 +346,15 @@ interface AuditDate { value: string; label: string; }
     .chip.team-rnd{ background:#ede9fe; color:#6d28d9; border-color:#ddd6fe; } /* 연구팀: Violet */
     .chip.team-admin{ background:#fef3c7; color:#b45309; border-color:#fde68a; } /* 경영지원팀: Amber */
     /* 내부 resources 편집 섹션 제거로 관련 스타일 삭제 */
+
+    .link-button{ width:100%; text-align:left; padding:8px 10px; border-radius:10px; border:1px solid #e5e7eb; background:#ffffff; font-weight:600; color:#0f172a; display:flex; align-items:center; justify-content:space-between; }
+    .link-button .text{ font-weight:600; opacity:.9; }
+    .link-button .close-x{ font-weight:700; font-size:14px; color:#64748b; padding:0 6px; }
+    .link-button:hover{ background:#f8fafc; }
+
+    /* Picker highlight */
+    .picker-item.hovered{ background:#f8fafc; box-shadow: inset 0 0 0 1px #e5e7eb, 0 2px 8px rgba(59,130,246,.12); border-radius:10px; transition: box-shadow .15s ease, background .15s ease; }
+    .picker-item.active{ background:#eef2ff; box-shadow: inset 0 0 0 2px #6366f1, 0 4px 12px rgba(99,102,241,.18); border-radius:12px; transition: box-shadow .15s ease, background .15s ease; }
 
     @keyframes slideDown { from{ opacity:0; transform: translateY(-6px); } to{ opacity:1; transform:none; } }
 
@@ -556,7 +629,8 @@ export class AuditEvaluationComponent {
       owners: [],
       ...( { companies: [] as string[] } as any ),
       col1Text: '',
-      col3Text: ''
+      col3Text: '',
+      selectedLinks: []
     } as any;
     return base as any;
   }));
@@ -590,6 +664,10 @@ export class AuditEvaluationComponent {
       try{ this.createdAt = (await this.supabase.getAuditDateCreatedAt(date)) || null; }catch{ this.createdAt = null; }
       const next = this.items().map(it => {
         const row = (all||[]).find((r:any) => r.number === it.id);
+        // Extract custom field bundle from comments (persisted without schema change)
+        const rawComments = (row?.comments || []) as any[];
+        const fieldBundle = Array.isArray(rawComments) ? rawComments.find((c:any)=> c && c.type==='fields') : null;
+        const userComments = Array.isArray(rawComments) ? rawComments.filter((c:any)=> !(c && c.type==='fields')) : [];
         return {
           ...it,
           status: row?.status || 'pending',
@@ -597,8 +675,11 @@ export class AuditEvaluationComponent {
           departments: row?.departments || [],
           owners: row?.owners || [],
           companies: row?.companies || [],
-          comments: row?.comments || [],
-          company: row?.company || null
+          comments: userComments || [],
+          company: row?.company || null,
+          col1Text: fieldBundle?.col1 || '',
+          col3Text: fieldBundle?.col3 || '',
+          selectedLinks: fieldBundle?.links || []
         } as any;
       });
       this.items.set(next as any);
@@ -808,6 +889,17 @@ export class AuditEvaluationComponent {
 
   previewing = false; previewItem: any=null;
   preview(r: any){ this.previewItem = r; this.previewing = true; }
+  linkPopup: { id: string; title: string } | null = null;
+  // drag state for picker
+  private pickerDrag = { active: false, startX: 0, startY: 0, offsetX: 0, offsetY: 0 };
+  startPickerDrag(ev: MouseEvent){
+    this.pickerDrag.active = true; this.pickerDrag.startX = ev.clientX; this.pickerDrag.startY = ev.clientY;
+    const move = (e: MouseEvent)=>{
+      if(!this.pickerDrag.active) return; this.pickerDrag.offsetX += (e.clientX - this.pickerDrag.startX); this.pickerDrag.offsetY += (e.clientY - this.pickerDrag.startY); this.pickerDrag.startX = e.clientX; this.pickerDrag.startY = e.clientY; };
+    const up = ()=>{ this.pickerDrag.active = false; window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  }
+  pickerDragStyle(){ return { transform: `translate(${this.pickerDrag.offsetX}px, ${this.pickerDrag.offsetY}px)` } as any; }
 
   // Slide open state and assessment/progress
   openItemId: number | null = null;
@@ -815,6 +907,102 @@ export class AuditEvaluationComponent {
   departments = ['원료제조팀','식물세포배양팀','품질팀','연구팀','경영지원팀'];
   filterDept: 'ALL' | string = 'ALL';
   filterOwner: 'ALL' | string = 'ALL';
+
+  // Record picker state
+  recordPickerOpen = false;
+  @ViewChild('pickerInput') pickerInput?: ElementRef<HTMLInputElement>;
+  pickerQuery = '';
+  pickerStdCat = '';
+  pickerDept = '';
+  pickerMethod = '';
+  pickerPeriod = '';
+  pickerIndex = 0;
+  hoverPickerIndex = -1;
+  methods: string[] = ['ERP','QMS','NAS','OneNote','Paper'];
+  periods: string[] = ['일','주','월','년','갱신주기'];
+  recordData: (RmdFormItem & { kind?: 'record'|'standard' })[] = ([] as any);
+  recordCategories: string[] = ['일반관리기준서','제조위생관리기준서','제조관리기준서','품질관리기준서','ISO'];
+  private pickerTargetItem: any = null;
+
+  openRecordPicker(it: any){
+    this.pickerTargetItem = it;
+    // Load records once (static list)
+    if (!(this.recordData && (this.recordData as any).length)){
+      try{
+        const recs = RMD_FORM_CATEGORIES.flatMap(c => c.items.map(i => ({ ...i, standardCategory: (i as any).standardCategory || (c as any).category, kind: 'record' as const })));
+        const stds = RMD_STANDARDS.flatMap(c => c.items.map(i => ({ id: i.id, title: i.title, standardCategory: c.category, kind: 'standard' as const })));
+        this.recordData = ([] as any).concat(recs, stds);
+      }catch{}
+    }
+    this.recordPickerOpen = true;
+    this.pickerIndex = -1; // 처음에는 입력창에 포커스
+    setTimeout(()=> this.pickerInput?.nativeElement?.focus(), 0);
+  }
+  closeRecordPicker(){ this.recordPickerOpen = false; this.pickerIndex = 0; }
+  pickerResults(){
+    const q = (this.pickerQuery||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    let rows = (this.recordData||[]) as any[];
+    if (this.pickerStdCat) rows = rows.filter(r => (r.standardCategory||'') === this.pickerStdCat);
+    if (this.pickerDept) rows = rows.filter(r => ((r as any).department||'') === this.pickerDept);
+    if (this.pickerMethod) rows = rows.filter(r => ((r as any).method||'') === this.pickerMethod);
+    if (this.pickerPeriod) rows = rows.filter(r => ((r as any).period||'') === this.pickerPeriod);
+    if (q.length){
+      rows = rows.filter(r => {
+        const hay = `${r.id} ${r.title||r.title} ${(r as any).owner||''} ${(r as any).method||''}`.toLowerCase();
+        return q.every(w => hay.includes(w));
+      });
+    }
+    return rows.slice(0, 500);
+  }
+  onPickerKeydown(ev: KeyboardEvent){
+    const list = this.pickerResults();
+    if (ev.key === 'ArrowDown'){
+      // move focus into list
+      const next = Math.max(this.pickerIndex, -1) + 1; this.pickerIndex = Math.min(next, Math.max(0, list.length-1)); ev.preventDefault();
+      setTimeout(()=>{
+        const el = document.getElementById('picker-item-'+this.pickerIndex); if(el) el.scrollIntoView({ block: 'nearest' });
+      }, 0);
+    }
+    else if (ev.key === 'ArrowUp'){
+      // when index <0 revert to input focus
+      this.pickerIndex = Math.max(this.pickerIndex-1, -1); ev.preventDefault();
+      if (this.pickerIndex < 0){ setTimeout(()=> this.pickerInput?.nativeElement?.focus(), 0); }
+      else { setTimeout(()=>{ const el = document.getElementById('picker-item-'+this.pickerIndex); if(el) el.scrollIntoView({ block: 'nearest' }); }, 0); }
+    }
+    else if (ev.key === 'Enter'){
+      if (this.pickerIndex >= 0 && list[this.pickerIndex]){ this.chooseRecord(list[this.pickerIndex]); ev.preventDefault(); }
+      else {
+        // Enter in input triggers search: re-evaluate results (already reactive)
+        ev.preventDefault();
+      }
+    }
+  }
+  chooseRecord(r: any){
+    if (!this.pickerTargetItem) return;
+    if (!this.pickerTargetItem.selectedLinks) this.pickerTargetItem.selectedLinks = [];
+    const exists = (this.pickerTargetItem.selectedLinks as any[]).some(x => x.id === r.id);
+    if (!exists){
+      this.pickerTargetItem.selectedLinks.push({ id: r.id, title: r.title || r.name || '', kind: (r.kind || 'record') });
+      this.saveProgress(this.pickerTargetItem);
+    }
+    this.pickerIndex = 0;
+    // keep picker open for multiple adds; re-focus input
+    setTimeout(()=> this.pickerInput?.nativeElement?.focus(), 0);
+  }
+
+  openLinkPopup(l: { id: string; title: string }){ this.linkPopup = { ...l, url: this.buildLinkUrl(l) } as any; }
+  removeSelectedLink(it: any, l: { id: string }){
+    if(!it?.selectedLinks) return; it.selectedLinks = (it.selectedLinks as any[]).filter(x => x.id !== l.id); this.saveProgress(it);
+  }
+  private buildLinkUrl(l: { id: string; title: string }): string | null {
+    try{
+      // Map by pattern: Standard pages served under /rmd/<ID>.html
+      if(/^BF-/.test(l.id)){
+        return `/rmd/${l.id}.html`;
+      }
+      return null;
+    }catch{ return null; }
+  }
 
   async toggleDetails(it: any){
     // Toggle behavior: if already open → close; otherwise open and load
@@ -862,7 +1050,7 @@ export class AuditEvaluationComponent {
         departments: it.departments || [],
         owners: (it.owners || []) as string[],
         companies: (it.companies || []) as string[],
-        comments: (it.comments || []) as any,
+        comments: ([{ type:'fields', col1: it.col1Text || '', col3: it.col3Text || '', links: (it.selectedLinks||[]) }] as any[]).concat(it.comments || []),
         company: (it.company || null) as any,
         updated_by: this.currentUserId,
         updated_by_name: this.userDisplay,
@@ -882,7 +1070,14 @@ export class AuditEvaluationComponent {
             it.owners = (fresh as any).owners || it.owners || [];
             it.company = (fresh as any).company || it.company || null;
             it.companies = (fresh as any).companies || it.companies || [];
-            it.comments = (fresh as any).comments || it.comments || [];
+            const raw = (fresh as any).comments || [];
+            if (Array.isArray(raw)){
+              const fb = raw.find((c:any)=> c && c.type==='fields');
+              it.comments = raw.filter((c:any)=> !(c && c.type==='fields'));
+              if (fb){ it.col1Text = fb.col1 || it.col1Text; it.col3Text = fb.col3 || it.col3Text; }
+            } else {
+              it.comments = it.comments || [];
+            }
           }
         }
       }catch{}
@@ -1023,8 +1218,11 @@ export class AuditEvaluationComponent {
   clearFile(r: ResourceItem){ r.file_url = null; }
 
   @HostListener('document:keydown.escape') onEsc(){
+    // ESC는 슬라이드를 닫지 않습니다. 열린 팝업만 처리합니다.
     if(this.previewing){ this.previewing=false; return; }
-    if(this.openItemId!=null){ this.openItemId=null; }
+    if(this.linkPopup){ this.linkPopup=null; return; }
+    // 규정/기록 선택 팝업이 열려있을 때는 검색창 초기화
+    if(this.recordPickerOpen){ this.pickerQuery=''; this.pickerIndex = -1; setTimeout(()=> this.pickerInput?.nativeElement?.focus(), 0); }
   }
 
   // UI helpers
@@ -1055,7 +1253,7 @@ export class AuditEvaluationComponent {
         case 'in-progress': return { background:'#ecfdf5', borderColor:'#10b981', color:'#065f46' } as any;
         case 'on-hold': return { background:'#f3f4f6', borderColor:'#9ca3af', color:'#374151' } as any;
         case 'na': return { background:'#f8fafc', borderColor:'#cbd5e1', color:'#475569' } as any;
-        case 'impossible': return { background:'#fee2e2', borderColor:'#ef4444', color:'#991b1b' } as any;
+        case 'impossible': return { background:'#f1f5f9', borderColor:'#cbd5e1', color:'#334155' } as any;
         case 'done': return { background:'#dbeafe', borderColor:'#3b82f6', color:'#1e40af' } as any;
         default: return {} as any;
       }
