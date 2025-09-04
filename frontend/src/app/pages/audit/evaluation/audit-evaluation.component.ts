@@ -1201,7 +1201,24 @@ export class AuditEvaluationComponent {
       const current = container.scrollTop;
       const target = current + (rowRect.top - containerRect.top) - (container.clientHeight/2 - rowRect.height/2);
       const max = container.scrollHeight - container.clientHeight;
-      container.scrollTop = Math.max(0, Math.min(max, target));
+      const to = Math.max(0, Math.min(max, target));
+      try{
+        container.scrollTo({ top: to, behavior: 'smooth' as ScrollBehavior });
+      }catch{
+        // fallback: rAF easing
+        const start = container.scrollTop;
+        const change = to - start;
+        const duration = 220; // ms
+        let startTs: number | null = null;
+        const easeInOut = (t: number)=> t < .5 ? 2*t*t : -1 + (4 - 2*t)*t;
+        const step = (ts: number)=>{
+          if (startTs===null) startTs = ts;
+          const p = Math.min(1, (ts - startTs)/duration);
+          container.scrollTop = start + change * easeInOut(p);
+          if (p < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      }
     }catch{}
   }
 
