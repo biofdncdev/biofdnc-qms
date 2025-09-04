@@ -46,8 +46,10 @@ import { SupabaseService } from '../../services/supabase.service';
      :host .record-id{ font-family:monospace; font-size:12px; color:#475569; }
      :host .record-title{ font-weight:600; }
      :host .meta{ margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; }
-     :host .chip{ font-size:12px; padding:4px 10px; border-radius:999px; background:#f1f5f9; color:#334155; margin-right:8px; margin-bottom:8px; display:inline-flex; align-items:center; gap:6px; }
+     :host .chip{ font-size:12px; padding:4px 10px; border-radius:999px; background:#ffffff; color:#111827; border:1px solid #e5e7eb; margin-right:8px; margin-bottom:8px; display:inline-flex; align-items:center; gap:6px; }
+     :host .chips.owners .chip{ padding:2px 8px; height:26px; }
      :host .chips.owners .chip .remove{ background:transparent; border:0; cursor:pointer; color:#64748b; }
+     :host .chips.owners{ margin-top:8px; }
      :host .summary-chips{ display:flex; flex-wrap:wrap; gap:8px; }
      :host .detail-form{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; box-shadow:0 6px 16px rgba(2,6,23,.04); }
      :host .detail-form label{ font-size:12px; color:#475569; display:block; margin-bottom:4px; }
@@ -67,10 +69,12 @@ import { SupabaseService } from '../../services/supabase.service';
      /* typeahead user suggestions */
      :host .typeahead{ position:relative; width:100%; }
      :host .typeahead input[type='text']{ width:100%; }
-     :host .suggest{ position:absolute; left:0; top:100%; width:100%; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 12px 24px rgba(0,0,0,.12); max-height:220px; overflow:auto; z-index:20; }
-     :host .suggest .item{ padding:8px 10px; cursor:pointer; font-size:13px; }
-     :host .suggest .item.active{ background:#eef2ff; }
-     :host .suggest .item:hover{ background:#f8fafc; }
+     :host .suggest{ position:absolute; left:0; top:100%; width:100%; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 8px 18px rgba(2,6,23,.06); max-height:220px; overflow:auto; z-index:20; }
+     :host .suggest .item{ padding:8px 10px; cursor:pointer; font-size:13px; border-radius:6px; background:#ffffff; color:#111827; }
+     :host .suggest .item + .item{ border-top:1px solid #f1f5f9; }
+     :host .suggest .item.active{ background:#eef2ff; box-shadow:inset 0 0 0 2px rgba(99,102,241,.25); }
+     :host .suggest .item:hover{ background:#eef2ff; }
+     :host .suggest .item:focus{ outline:0; box-shadow:inset 0 0 0 2px rgba(99,102,241,.25); }
      :host .dropbox{ margin-top:8px; border:2px dashed #cbd5e1; border-radius:10px; padding:12px; display:flex; align-items:center; gap:8px; cursor:pointer; background:#f8fafc; }
      :host .dropbox.dragover{ background:#eef2ff; border-color:#93c5fd; }
      :host .file-pill{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; background:#e2e8f0; }
@@ -93,7 +97,7 @@ import { SupabaseService } from '../../services/supabase.service';
             <option *ngFor="let d of departments" [value]="d">{{ d }}</option>
           </select>
           <label class="f-title">담당자로 검색</label>
-          <input type="text" [ngModel]="owner()" (ngModelChange)="owner.set($event); onFiltersChanged()" placeholder="이름/이메일">
+          <input type="text" [ngModel]="ownerFilter()" (ngModelChange)="ownerFilter.set($event); onFiltersChanged()" placeholder="이름/이메일">
           <label class="f-title">기록방법으로 검색</label>
           <div class="btn-group">
             <button class="seg" [class.on]="method()===''" (click)="setMethod('')">전체</button>
@@ -175,9 +179,13 @@ import { SupabaseService } from '../../services/supabase.service';
             <div>
               <label>담당자</label>
               <div class="typeahead">
-                <input type="text" [(ngModel)]="sel.owner" (ngModelChange)="onOwnerInput(sel)" (keydown)="onOwnerKeydown($event, sel)" (keydown.arrowDown)="focusSuggest()" placeholder="이름/이메일">
+                <input #ownerInput type="text" [ngModel]="ownerTyping" (ngModelChange)="onOwnerInputText($event)" (keydown)="onOwnerKeydown($event, sel)" placeholder="이름/이메일" spellcheck="false">
                 <div class="suggest" *ngIf="ownerSuggest.length">
-                  <div class="item" *ngFor="let u of ownerSuggest; let i = index" tabindex="-1" [id]="'owner-sg-'+i" [class.active]="i===ownerIndex" (click)="chooseOwner(sel,u)">{{ u }}</div>
+                  <div class="item" *ngFor="let u of ownerSuggest; let i = index"
+                    tabindex="-1" role="option"
+                    [id]="'owner-sg-'+i" [class.active]="i===ownerIndex"
+                    (click)="chooseOwner(sel,u)"
+                    (keydown)="onOwnerItemKeydown($event, sel, i)">{{ u }}</div>
                 </div>
               </div>
               <div class="chips owners" *ngIf="getOwnerList(sel).length">
@@ -319,7 +327,7 @@ export class RmdFormsComponent {
   // Certification filter
   cert = signal<string>('');
   dept = signal<string>('');
-  owner = signal<string>('');
+  ownerFilter = signal<string>('');
   method = signal<string>('');
   period = signal<string>('');
   overdueOnly = signal<boolean>(false);
@@ -330,6 +338,8 @@ export class RmdFormsComponent {
   userPairs: Array<{ name: string; email: string }> = [];
   ownerSuggest: string[] = [];
   ownerIndex = -1;
+  // decoupled typeahead input value
+  ownerTyping: string = '';
   // For certs multi-select we store in comments JSON bundle or extend model. Keep temporary on the item object as array
   // standard search popup state
   stdPickerOpen = false;
@@ -338,8 +348,9 @@ export class RmdFormsComponent {
   stdIndex = -1;
   stdHover = -1;
   @ViewChild('stdInput') stdInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('ownerInput') ownerInputRef?: ElementRef<HTMLInputElement>;
   @ViewChild('stdPortal') stdPortal?: ElementRef<HTMLDivElement>;
-  infoOpen = signal<boolean>(true);
+  infoOpen = signal<boolean>(false);
   constructor(private supabase: SupabaseService){}
 
   filtered = computed(() => {
@@ -349,7 +360,7 @@ export class RmdFormsComponent {
       items: cat.items.filter(i => {
         const byKeyword = !q || i.id.toLowerCase().includes(q) || i.title.toLowerCase().includes(q);
         const byDept = !this.dept() || ((i as any).department || '원료제조팀') === this.dept();
-        const byOwner = !this.owner() || ((i as any).owner || '').toLowerCase().includes(this.owner().toLowerCase());
+        const byOwner = !this.ownerFilter() || ((i as any).owner || '').toLowerCase().includes(this.ownerFilter().toLowerCase());
         const byMethod = !this.method() || (i as any).method === this.method();
         const byPeriod = !this.period() || (i as any).period === this.period();
         const byStandard = !this.standard() || ((i as any).standard || '').toLowerCase().includes(this.standard().toLowerCase());
@@ -394,19 +405,52 @@ export class RmdFormsComponent {
   }
   chooseStandard(r: { id: string; title: string }){ this.standard.set(`${r.id}`); this.onFiltersChanged(); this.closeStandardPopup(); }
 
-  // owner typeahead handlers
-  onOwnerInput(sel: any){
+  // owner typeahead handlers (decoupled from model)
+  onOwnerInputText(v: string){
     try{
-      const v = (sel.owner||'').toString().trim().toLowerCase();
-      if (!v){ this.ownerSuggest = []; this.persistMeta(sel); return; }
+      this.ownerTyping = v;
+      const q = (v||'').toString().trim().toLowerCase();
+      if (!q){ this.ownerSuggest = []; this.ownerIndex = -1; return; }
       const pool = this.userPairs || [];
-      const matched = pool.filter(p => (p.name||'').toLowerCase().includes(v) || (p.email||'').toLowerCase().includes(v));
+      const matched = pool.filter(p => (p.name||'').toLowerCase().includes(q) || (p.email||'').toLowerCase().includes(q));
       this.ownerSuggest = matched.slice(0,8).map(p => `${p.name} / ${p.email}`);
-      this.ownerIndex = this.ownerSuggest.length ? 0 : -1;
-      this.persistMeta(sel);
-    }catch{ this.ownerSuggest = []; this.persistMeta(sel); }
+      // 초기에는 포커스가 목록으로 이동하지 않도록 유지
+      this.ownerIndex = -1;
+    }catch{ this.ownerSuggest = []; this.ownerIndex = -1; }
   }
-  chooseOwner(sel: any, u: string){ sel.owner = u; this.ownerSuggest = []; this.persistMeta(sel); }
+  private appendOwner(sel: any, text: string){
+    const name = (text||'').toString().trim(); if(!name) return;
+    const list = this.getOwnerList(sel);
+    if (!list.includes(name)) list.push(name);
+    sel.owner = list.join(', ');
+    this.persistMeta(sel);
+  }
+  chooseOwner(sel: any, u: string){
+    this.appendOwner(sel, u);
+    this.ownerTyping = '';
+    this.ownerSuggest = [];
+    this.ownerIndex = -1;
+  }
+
+  onOwnerItemKeydown(ev: KeyboardEvent, sel: any, index: number){
+    const key = ev.key || (ev as any).keyIdentifier || '';
+    if (key === 'Enter'){
+      ev.preventDefault();
+      const pick = this.ownerSuggest[index];
+      if (pick) this.chooseOwner(sel, pick);
+    } else if (key === 'ArrowDown' || key === 'Down'){
+      ev.preventDefault();
+      const next = Math.min(index + 1, this.ownerSuggest.length - 1);
+      this.ownerIndex = next;
+      setTimeout(()=> (document.getElementById('owner-sg-'+next) as HTMLElement | null)?.focus?.(), 0);
+    } else if (key === 'ArrowUp' || key === 'Up'){
+      ev.preventDefault();
+      const prev = index - 1;
+      if (prev < 0){ this.ownerIndex = -1; this.ownerInputRef?.nativeElement?.focus(); return; }
+      this.ownerIndex = prev;
+      setTimeout(()=> (document.getElementById('owner-sg-'+prev) as HTMLElement | null)?.focus?.(), 0);
+    }
+  }
   getOwnerList(sel: any){
     const val = (sel.owner || '').toString();
     return val ? val.split(/\s*,\s*/).filter(Boolean) : [];
@@ -418,26 +462,50 @@ export class RmdFormsComponent {
   }
 
   onOwnerKeydown(ev: KeyboardEvent, sel: any){
-    if (!this.ownerSuggest.length) return;
     const key = ev.key || (ev as any).keyIdentifier || '';
     if (key === 'ArrowDown' || key === 'Down'){
       ev.preventDefault();
-      this.ownerIndex = Math.min(this.ownerIndex + 1, this.ownerSuggest.length - 1);
+      if (!this.ownerSuggest.length) return;
+      this.ownerIndex = Math.min((this.ownerIndex < 0 ? 0 : this.ownerIndex + 1), this.ownerSuggest.length - 1);
       setTimeout(()=>{
-        const el = document.getElementById('owner-sg-'+this.ownerIndex);
+        const el = document.getElementById('owner-sg-'+this.ownerIndex) as HTMLElement | null;
         el?.scrollIntoView({ block: 'nearest' });
+        el?.focus?.();
       },0);
     } else if (key === 'ArrowUp' || key === 'Up'){
       ev.preventDefault();
+      if (!this.ownerSuggest.length){
+        // no suggestions -> move focus back to input
+        this.ownerInputRef?.nativeElement?.focus();
+        return;
+      }
+      if (this.ownerIndex <= 0){
+        this.ownerIndex = -1;
+        this.ownerInputRef?.nativeElement?.focus();
+        return;
+      }
       this.ownerIndex = Math.max(this.ownerIndex - 1, 0);
       setTimeout(()=>{
-        const el = document.getElementById('owner-sg-'+this.ownerIndex);
+        const el = document.getElementById('owner-sg-'+this.ownerIndex) as HTMLElement | null;
         el?.scrollIntoView({ block: 'nearest' });
+        el?.focus?.();
       },0);
     } else if (key === 'Enter'){
       ev.preventDefault();
-      const pick = this.ownerSuggest[this.ownerIndex] || this.ownerSuggest[0];
-      if (pick) this.chooseOwner(sel, pick);
+      if (this.ownerSuggest.length){
+        const pick = this.ownerSuggest[this.ownerIndex] || this.ownerSuggest[0];
+        if (pick) this.chooseOwner(sel, pick);
+      } else {
+        // 입력값만으로는 추가하지 않음 (등록된 사용자만 허용)
+        this.ownerTyping = '';
+      }
+      this.ownerSuggest = [];
+      this.ownerIndex = -1;
+    } else if (key === 'Escape' || key === 'Esc'){
+      ev.preventDefault();
+      this.ownerTyping = '';
+      this.ownerSuggest = [];
+      this.ownerIndex = -1;
     }
   }
   focusSuggest(){
