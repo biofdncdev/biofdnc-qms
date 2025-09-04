@@ -2,6 +2,7 @@ import { Component, computed, ElementRef, HostListener, inject, signal, ViewChil
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RMD_FORM_CATEGORIES, RmdFormCategory, RmdFormItem } from './rmd-forms-data';
+import { RMD_STANDARDS } from '../../standard/rmd/rmd-standards';
 import { SupabaseService } from '../../services/supabase.service';
 
 @Component({
@@ -14,8 +15,28 @@ import { SupabaseService } from '../../services/supabase.service';
      :host aside.left{ grid-column:1; position:sticky; top:12px; align-self:start; }
      :host section.center{ grid-column:2; min-width:0; max-height: calc(100vh - 96px); overflow-y:auto; padding-right:8px; }
      :host main.right{ grid-column:3; min-width:0; max-height: calc(100vh - 96px); overflow-y:auto; padding-right:8px; }
-     :host .filters .f-title{ display:block; margin:10px 0 6px; font-weight:600; }
+     :host .filters{ display:flex; flex-direction:column; gap:10px; }
+     :host .filters .f-title{ display:block; margin:0; font-weight:600; color:#334155; font-size:13px; }
+     :host .filters .group{ display:flex; flex-wrap:wrap; gap:6px; }
+     :host .btn-group{ display:flex; flex-wrap:wrap; gap:6px; }
+     :host .btn-group.wrap{ row-gap:8px; column-gap:6px; }
+     :host .seg{ padding:6px 10px; border:1px solid #e5e7eb; background:#fff; border-radius:999px; font-size:12px; cursor:pointer; }
+     :host .seg.on{ background:#eef2ff; border-color:#c7d2fe; color:#3730a3; }
+     :host .search{ position:relative; }
+     :host .search input[type='search']{ width:100%; padding-right:26px; }
+     :host .search .clear{ position:absolute; right:6px; top:50%; transform:translateY(-50%); border:0; background:transparent; cursor:pointer; color:#64748b; }
      :host .results{ display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+     /* popup for standard search */
+     :host .backdrop{ position:fixed; inset:0; background:rgba(2,6,23,.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
+     :host .modal{ width:min(880px,92vw); max-height:80vh; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.2); overflow:hidden; display:flex; flex-direction:column; }
+     :host .modal header{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee; font-weight:700; }
+     :host .modal .body{ padding:12px; display:flex; flex-direction:column; gap:10px; }
+     :host .modal .tools{ display:flex; gap:8px; align-items:center; }
+     :host .modal .tools input{ flex:1; height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px; }
+     :host .picker-list{ max-height:55vh; overflow:auto; border:1px solid #eee; border-radius:12px; }
+     :host .picker-item{ padding:10px 12px; display:flex; gap:12px; align-items:center; cursor:pointer; }
+     :host .picker-item.hover{ background:#f8fafc; }
+     :host .picker-item.active{ background:#eef2ff; box-shadow: inset 0 0 0 2px #6366f1; }
      :host .record-item{ padding:12px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; cursor:pointer; }
      :host .record-item:hover{ border-color:#cbd5e1; background:#f8fafc; }
      :host .record-head{ display:flex; gap:12px; align-items:center; }
@@ -55,26 +76,53 @@ import { SupabaseService } from '../../services/supabase.service';
           <label class="f-title">담당자로 검색</label>
           <input type="text" [ngModel]="owner()" (ngModelChange)="owner.set($event); onFiltersChanged()" placeholder="이름/이메일">
           <label class="f-title">기록방법으로 검색</label>
-          <select [ngModel]="method()" (ngModelChange)="method.set($event); onFiltersChanged()">
-            <option value="">전체</option>
-            <option *ngFor="let m of methods" [value]="m">{{ m }}</option>
-          </select>
+          <div class="btn-group">
+            <button class="seg" [class.on]="method()===''" (click)="setMethod('')">전체</button>
+            <button class="seg" *ngFor="let m of methods" [class.on]="method()===m" (click)="setMethod(m)">{{ m }}</button>
+          </div>
           <label class="f-title">기록주기로 검색</label>
-          <select [ngModel]="period()" (ngModelChange)="period.set($event); onFiltersChanged()">
-            <option value="">전체</option>
-            <option *ngFor="let p of periods" [value]="p">{{ p }}</option>
-          </select>
+          <div class="btn-group">
+            <button class="seg" [class.on]="period()===''" (click)="setPeriod('')">전체</button>
+            <button class="seg" *ngFor="let p of periods" [class.on]="period()===p" (click)="setPeriod(p)">{{ p }}</button>
+          </div>
           <label class="inline"><input type="checkbox" [ngModel]="overdueOnly()" (ngModelChange)="overdueOnly.set($event); onFiltersChanged()"> 기록주기가 지난 것만</label>
           <label class="f-title">연결된 규정으로 검색</label>
-          <select [ngModel]="standard()" (ngModelChange)="standard.set($event); onFiltersChanged()">
-            <option value="">전체</option>
-            <option *ngFor="let s of standardItems" [value]="s">{{ s }}</option>
-          </select>
+          <div class="search">
+            <input type="search" placeholder="규정 ID/제목 검색" [ngModel]="standard()" (focus)="openStandardPopup()" readonly>
+            <button class="clear" *ngIf="standard()" (click)="standard.set(''); onFiltersChanged()">×</button>
+          </div>
+          <div class="backdrop" *ngIf="stdPickerOpen" (click)="closeStandardPopup()">
+            <div class="modal" (click)="$event.stopPropagation()" tabindex="0" (keydown)="onStdPickerKeydown($event)">
+              <header>
+                <div>규정 검색</div>
+                <button (click)="closeStandardPopup()">×</button>
+              </header>
+              <div class="body">
+                <div class="tools">
+                  <input #stdInput type="text" placeholder="규정 (공백=AND)" [(ngModel)]="stdQuery">
+                  <select [(ngModel)]="stdCat">
+                    <option value="">카테고리 전체</option>
+                    <option *ngFor="let c of categoriesOnly" [value]="c">{{ c }}</option>
+                  </select>
+                </div>
+                <div class="picker-list">
+                  <div class="picker-item" *ngFor="let r of stdResults(); let i=index" [class.active]="i===stdIndex" (mouseenter)="stdHover=i" (mouseleave)="stdHover=-1" (click)="chooseStandard(r)">
+                    <span style="font-family:monospace; font-size:12px; color:#475569; min-width:120px;">{{ r.id }}</span>
+                    <span style="font-weight:600;">{{ r.title }}</span>
+                    <span style="margin-left:auto; font-size:12px; color:#64748b;">{{ r.standardCategory || '-' }}</span>
+                  </div>
+                </div>
+                <div style="text-align:right;">
+                  <button class="btn" (click)="closeStandardPopup()">닫기</button>
+                </div>
+              </div>
+            </div>
+          </div>
           <label class="f-title">규정 카테고리로 검색</label>
-          <select [ngModel]="standardCategory()" (ngModelChange)="standardCategory.set($event); onFiltersChanged()">
-            <option value="">전체</option>
-            <option *ngFor="let c of categoriesOnly" [value]="c">{{ c }}</option>
-          </select>
+          <div class="btn-group wrap">
+            <button class="seg" [class.on]="standardCategory()===''" (click)="setStdCat('')">전체</button>
+            <button class="seg" *ngFor="let c of categoriesOnly" [class.on]="standardCategory()===c" (click)="setStdCat(c)">{{ c }}</button>
+          </div>
         </div>
       </div>
     </aside>
@@ -264,6 +312,13 @@ export class RmdFormsComponent {
   overdueOnly = signal<boolean>(false);
   standard = signal<string>('');
   standardCategory = signal<string>('');
+  // standard search popup state
+  stdPickerOpen = false;
+  stdQuery = '';
+  stdCat = '';
+  stdIndex = -1;
+  stdHover = -1;
+  @ViewChild('stdInput') stdInput?: ElementRef<HTMLInputElement>;
   constructor(private supabase: SupabaseService){}
 
   filtered = computed(() => {
@@ -288,6 +343,25 @@ export class RmdFormsComponent {
   });
 
   onFiltersChanged(){ /* signals trigger recompute automatically */ }
+  setMethod(v: string){ this.method.set(v); this.onFiltersChanged(); }
+  setPeriod(v: string){ this.period.set(v); this.onFiltersChanged(); }
+  setStdCat(v: string){ this.standardCategory.set(v); this.onFiltersChanged(); }
+  openStandardPopup(){ this.stdPickerOpen = true; setTimeout(()=> this.stdInput?.nativeElement?.focus(), 0); }
+  closeStandardPopup(){ this.stdPickerOpen = false; this.stdIndex = -1; this.stdHover = -1; this.stdQuery=''; }
+  stdResults(){
+    const rows = RMD_STANDARDS.flatMap(c => c.items.map(i => ({ id: i.id, title: i.title, standardCategory: c.category })));
+    const q = (this.stdQuery||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const cat = this.stdCat || '';
+    return rows.filter(r => (!cat || r.standardCategory===cat) && q.every(w => (`${r.id} ${r.title}`).toLowerCase().includes(w))).slice(0, 500);
+  }
+  onStdPickerKeydown(ev: KeyboardEvent){
+    const list = this.stdResults();
+    if (ev.key==='ArrowDown'){ ev.preventDefault(); this.stdIndex = Math.min((this.stdIndex<0?0:this.stdIndex+1), Math.max(0,list.length-1)); }
+    else if (ev.key==='ArrowUp'){ ev.preventDefault(); this.stdIndex = Math.max(this.stdIndex-1, -1); }
+    else if (ev.key==='Enter'){ ev.preventDefault(); if (this.stdIndex>=0 && list[this.stdIndex]) this.chooseStandard(list[this.stdIndex]); }
+    else if (ev.key==='Escape'){ ev.preventDefault(); this.closeStandardPopup(); }
+  }
+  chooseStandard(r: { id: string; title: string }){ this.standard.set(`${r.id}`); this.onFiltersChanged(); this.closeStandardPopup(); }
 
   ngOnInit(){
     // Load meta from DB; fallback to localStorage
