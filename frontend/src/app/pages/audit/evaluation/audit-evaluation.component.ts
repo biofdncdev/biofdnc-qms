@@ -1,4 +1,4 @@
-import { Component, HostListener, ViewChild, ElementRef, signal } from '@angular/core';
+import { Component, HostListener, ViewChild, ElementRef, signal, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { TabService } from '../../../services/tab.service';
 import { CommonModule } from '@angular/common';
@@ -16,6 +16,7 @@ interface AuditDate { value: string; label: string; }
   selector: 'app-audit-evaluation',
   standalone: true,
   imports: [CommonModule, FormsModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
   <div class="audit-page">
     <header class="audit-header">
@@ -65,9 +66,9 @@ interface AuditDate { value: string; label: string; }
               <option *ngFor="let u of userOptions" [ngValue]="u">{{ u }}</option>
             </select>
           </div>
-          <div class="item" *ngFor="let it of visibleItems()" [class.open]="openItemId===it.id" (click)="toggleDetails(it)">
+          <div class="item" *ngFor="let it of visibleItems(); trackBy: trackByItem" [class.open]="isOpen(it)" [class.selected]="openItemId===it.id" (click)="selectItem(it)" [attr.data-id]="it.id">
             <div class="id">{{ it.id | number:'2.0-0' }}</div>
-            <div class="text" (click)="$event.stopPropagation()">
+            <div class="text">
               <div class="ko">{{ it.titleKo }}</div>
               <div class="en">{{ it.titleEn }}</div>
             </div>
@@ -82,17 +83,17 @@ interface AuditDate { value: string; label: string; }
               <!-- 3열 상단: 저장됨 -->
               <span class="save-badge saved saved-inline" *ngIf="rowSaving[it.id]==='saved'">저장됨</span>
               <!-- 4열 상단: 비고 입력 (상단 행만, 줄바꿈 가능) -->
-              <textarea class="note-input" [(ngModel)]="it.note" placeholder="비고" spellcheck="false" (ngModelChange)="onNoteModelChange(it)" (input)="autoResize($event)" (change)="saveProgress(it)" (blur)="saveProgress(it)" (click)="$event.stopPropagation()"></textarea>
+              <textarea class="note-input" [(ngModel)]="it.note" placeholder="비고" spellcheck="false" (ngModelChange)="onNoteModelChange(it)" (input)="autoResize($event)" (change)="saveProgress(it)" (blur)="saveProgress(it)"></textarea>
 
               <!-- 2열 하단: 칩 영역(업체/부서 표시) -->
               <div class="col2-bottom">
                 <div class="chips companies" *ngIf="it.companies?.length">
-                  <span class="chip" *ngFor="let c of it.companies" (click)="$event.stopPropagation()">{{ c }}
+                  <span class="chip" *ngFor="let c of it.companies; trackBy: trackByValue">{{ c }}
                     <button class="remove" (click)="removeCompany(it, c); $event.stopPropagation()">×</button>
                   </span>
                 </div>
                 <div class="chips depts" *ngIf="it.departments?.length">
-                  <span class="chip" *ngFor="let d of it.departments" [ngClass]="teamClass(d)" (click)="$event.stopPropagation()">{{ displayDeptName(d) }}
+                  <span class="chip" *ngFor="let d of it.departments; trackBy: trackByValue" [ngClass]="teamClass(d)">{{ displayDeptName(d) }}
                     <button class="remove" (click)="removeDept(it, d); $event.stopPropagation()">×</button>
                   </span>
                 </div>
@@ -110,14 +111,14 @@ interface AuditDate { value: string; label: string; }
               </select>
               <!-- 4열 하단: 담당자 칩 -->
               <div class="chips owners" *ngIf="it.owners?.length">
-                <span class="chip" *ngFor="let u of it.owners" (click)="$event.stopPropagation()">{{ u }}
+                <span class="chip" *ngFor="let u of it.owners; trackBy: trackByValue">{{ u }}
                   <button class="remove" (click)="removeOwner(it, u); $event.stopPropagation()">×</button>
                 </span>
               </div>
-              <button type="button" class="toggle-chevron chevron-inline" (click)="toggleDetails(it); $event.stopPropagation()" title="열기/닫기"></button>
+              <button type="button" class="toggle-chevron chevron-inline" (click)="toggleExtra(it); $event.stopPropagation()" title="열기/닫기"></button>
               
             </div>
-            <div class="details" *ngIf="openItemId===it.id" (click)="$event.stopPropagation()">
+            <div class="details" *ngIf="isOpen(it)" (click)="$event.stopPropagation()">
               <div class="details-inner comments-on">
                 <div class="assessment" *ngIf="false"></div>
                 <!-- 1열 1행: 상태 select 대신 입력창으로 변경 (그리드 셀 가득 채움) -->
@@ -136,7 +137,7 @@ interface AuditDate { value: string; label: string; }
                     <button class="btn" (click)="addComment(it)" [disabled]="!isDateCreated() || !(newComment[it.id]||'').trim()">추가</button>
                   </div>
                   <div class="list">
-                    <div class="comment" *ngFor="let c of (it.comments||[]); let i = index">
+                    <div class="comment" *ngFor="let c of (it.comments||[]); let i = index; trackBy: trackByComment">
                       <button class="close-x" *ngIf="canDeleteComment(c)" (click)="$event.stopPropagation(); removeComment(it, i)" title="삭제">×</button>
                       <div class="meta">{{ c.user }} · {{ c.time }}</div>
                       <div class="text">{{ c.text }}</div>
@@ -173,9 +174,9 @@ interface AuditDate { value: string; label: string; }
         <div class="name">규정/기록 선택</div>
         <button (click)="closeRecordPicker()">×</button>
       </header>
-      <div class="body">
+      <div class="body" (keydown)="onPickerKeydown($event)">
         <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
-          <input #pickerInput type="text" placeholder="규정/기록 (공백=AND)" [(ngModel)]="pickerQuery" (keydown)="onPickerKeydown($event)" style="flex:1; height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px; background:rgba(255,255,255,.65); backdrop-filter: blur(6px);" />
+          <input #pickerInput type="text" placeholder="규정/기록 (공백=AND)" [(ngModel)]="pickerQuery" (keydown)="onPickerKeydown($event); $event.stopPropagation()" style="flex:1; height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px; background:rgba(255,255,255,.65); backdrop-filter: blur(6px);" />
           <select [(ngModel)]="pickerStdCat" style="height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px;">
             <option value="">카테고리 전체</option>
             <option *ngFor="let c of recordCategories" [value]="c">{{ c }}</option>
@@ -267,7 +268,9 @@ interface AuditDate { value: string; label: string; }
     .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 160px); overflow-y:auto; overflow-x:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
     .group h3{ margin:8px 6px 12px; }
     .filterbar{ display:flex; align-items:center; gap:10px; margin:6px; flex-wrap:wrap; }
-    .item{ display:grid; grid-template-columns: 54px 1fr 1.6fr; gap:12px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; align-items:start; min-width:0; }
+    .item{ display:grid; grid-template-columns: 54px 1fr 1.6fr; gap:12px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; align-items:start; min-width:0; transition: box-shadow .18s ease, transform .18s ease; }
+    .item.selected{ box-shadow: 0 10px 28px rgba(2,6,23,.10), inset 0 0 0 1px rgba(99,102,241,.22); transform: translateZ(0); }
+    .item.selected::after{ content:''; position:absolute; left:8px; right:8px; bottom:-2px; height:4px; border-radius:999px; background:linear-gradient(90deg,rgba(99,102,241,.22),rgba(99,102,241,.08)); }
     .id{ font-weight:700; color:#475569; display:flex; align-items:center; justify-content:center; }
     .ko{ font-weight:600; margin-bottom:2px; }
     .en{ color:#64748b; font-size:.92em; }
@@ -565,11 +568,16 @@ export class AuditEvaluationComponent {
           updated[num-1] = { ...updated[num-1], titleKo: titleKo || updated[num-1].titleKo, titleEn: titleEn || updated[num-1].titleEn } as any;
         }
       }
-      this.items.set(updated as any);
+      // in-place로 제목만 갱신
+      const curr = this.items();
+      for (let i=0;i<curr.length;i++) curr[i] = updated[i] as any;
+      this.items.set(curr as any);
       if (upserts.length){ try{ await this.supabase.upsertAuditItems(upserts); }catch{} }
       // 회사명도 함께 저장 (company는 audit_progress가 날짜별이라 items에는 보관하지 않음)
       // 화면 반영만 즉시 수행
-      this.items.set(updated as any);
+      const curr2 = this.items();
+      for (let i=0;i<curr2.length;i++) curr2[i] = updated[i] as any;
+      this.items.set(curr2 as any);
       return true as any;
     }catch{ return false as any; }
   }
@@ -630,7 +638,9 @@ export class AuditEvaluationComponent {
         }
         i = j - 1; // continue after group
       }
-      this.items.set(updated as any);
+      const curr3 = this.items();
+      for (let i=0;i<curr3.length;i++) curr3[i] = updated[i] as any;
+      this.items.set(curr3 as any);
       console.info('[Audit] Excel parsed rows:', rows.length, 'sequential mapped items:', upserts.length);
 
       // Upsert to DB to persist titles by immutable key 'number'
@@ -688,6 +698,11 @@ export class AuditEvaluationComponent {
     return base as any;
   }));
 
+  // trackBy handlers to keep DOM nodes stable
+  trackByItem = (_: number, it: AuditItem) => it.id;
+  trackByValue = (_: number, v: string) => v;
+  trackByComment = (_: number, c: { user: string; time: string; text: string }) => `${c.user}|${c.time}|${c.text}`;
+
   resources: ResourceItem[] = [];
   userOptions: string[] = [];
   newComment: Record<number, string> = {};
@@ -735,7 +750,10 @@ export class AuditEvaluationComponent {
           selectedLinks: fieldBundle?.links || []
         } as any;
       });
-      this.items.set(next as any);
+      // in-place 업데이트로 참조를 유지하여 깜박임 최소화
+      const curr = this.items();
+      for (let i=0;i<curr.length;i++) curr[i] = next[i] as any;
+      this.items.set(curr as any);
       // 생성되지 않은 날짜라면, 업서트된 템플릿(CSV/JSON)을 적용해 기본 타이틀/업체가 보이도록 함
       if (!created){
         try{ await this.applyTitlesFromJsonOrExcel(); }catch{}
@@ -748,7 +766,9 @@ export class AuditEvaluationComponent {
       const row: any = { id, titleKo: `점검 항목 ${id}`, titleEn: `Inspection item ${id}`, done: false, status: 'pending', note: '', departments: [], owners: [] as string[], companies: [] as string[] };
       return row;
     });
-    this.items.set(blank as any);
+    const curr = this.items();
+    for (let i=0;i<curr.length;i++) curr[i] = blank[i] as any;
+    this.items.set(curr as any);
   }
   async saveAllForDate(){
     const date = this.selectedDate() || this.today();
@@ -789,22 +809,12 @@ export class AuditEvaluationComponent {
     this.saveProgress(it);
   }
   removeComment(it: any, idx: number){
-    if (!it || !Array.isArray(it.comments)) return;
-    const date = this.selectedDate();
-    const perform = async ()=>{
-      try{
-        if (date){
-          const { data: fresh } = await this.supabase.getGivaudanProgressByDate(it.id, date);
-          const list = (fresh as any)?.comments || it.comments || [];
-          list.splice(idx, 1);
-          it.comments = list;
-        } else {
-          it.comments.splice(idx, 1);
-        }
-      }catch{}
-      await this.saveProgress(it);
-    };
-    perform();
+    if (!it) return;
+    const list = Array.isArray(it.comments) ? it.comments : [];
+    if (idx >= 0 && idx < list.length){ list.splice(idx, 1); }
+    // 즉시 UI 반영 후 저장
+    it.comments = list;
+    this.saveProgress(it);
   }
 
   // Create current date data (initialize and save)
@@ -956,6 +966,7 @@ export class AuditEvaluationComponent {
 
   // Slide open state and assessment/progress
   openItemId: number | null = null;
+  private openExtra = new Set<number>();
   assessment: any = null;
   departments = ['원료제조팀','식물세포배양팀','품질팀','연구팀','경영지원팀'];
   filterDept: 'ALL' | string = 'ALL';
@@ -1007,27 +1018,33 @@ export class AuditEvaluationComponent {
     }
     return rows.slice(0, 500);
   }
+  private pickerKeyGuard = { lastTs: 0, lastKey: '' };
   onPickerKeydown(ev: KeyboardEvent){
+    // 키 반복/중복 방지: 같은 키가 30ms 내에 다시 들어오면 무시
+    const now = performance.now();
+    if (this.pickerKeyGuard.lastKey === ev.key && (now - this.pickerKeyGuard.lastTs) < 30){
+      ev.preventDefault();
+      return;
+    }
+    this.pickerKeyGuard.lastKey = ev.key; this.pickerKeyGuard.lastTs = now;
+
     const list = this.pickerResults();
     if (ev.key === 'ArrowDown'){
-      // move focus into list
-      const next = Math.max(this.pickerIndex, -1) + 1; this.pickerIndex = Math.min(next, Math.max(0, list.length-1)); ev.preventDefault();
-      setTimeout(()=>{
-        const el = document.getElementById('picker-item-'+this.pickerIndex); if(el) el.scrollIntoView({ block: 'nearest' });
-      }, 0);
+      ev.preventDefault();
+      const next = this.pickerIndex < 0 ? 0 : this.pickerIndex + 1;
+      this.pickerIndex = Math.min(next, Math.max(0, list.length-1));
+      if (this.pickerIndex >= 0){
+        setTimeout(()=>{ const el = document.getElementById('picker-item-'+this.pickerIndex); if(el) el.scrollIntoView({ block: 'nearest' }); }, 0);
+      }
     }
     else if (ev.key === 'ArrowUp'){
-      // when index <0 revert to input focus
-      this.pickerIndex = Math.max(this.pickerIndex-1, -1); ev.preventDefault();
-      if (this.pickerIndex < 0){ setTimeout(()=> this.pickerInput?.nativeElement?.focus(), 0); }
-      else { setTimeout(()=>{ const el = document.getElementById('picker-item-'+this.pickerIndex); if(el) el.scrollIntoView({ block: 'nearest' }); }, 0); }
+      ev.preventDefault();
+      if (this.pickerIndex <= 0){ this.pickerIndex = -1; setTimeout(()=> this.pickerInput?.nativeElement?.focus(), 0); }
+      else { this.pickerIndex = Math.max(this.pickerIndex-1, 0); setTimeout(()=>{ const el = document.getElementById('picker-item-'+this.pickerIndex); if(el) el.scrollIntoView({ block: 'nearest' }); }, 0); }
     }
     else if (ev.key === 'Enter'){
-      if (this.pickerIndex >= 0 && list[this.pickerIndex]){ this.chooseRecord(list[this.pickerIndex]); ev.preventDefault(); }
-      else {
-        // Enter in input triggers search: re-evaluate results (already reactive)
-        ev.preventDefault();
-      }
+      ev.preventDefault();
+      if (this.pickerIndex >= 0 && list[this.pickerIndex]){ this.chooseRecord(list[this.pickerIndex]); }
     }
   }
   chooseRecord(r: any){
@@ -1073,14 +1090,51 @@ export class AuditEvaluationComponent {
   }
 
   async toggleDetails(it: any){
-    // Toggle behavior: if already open → close; otherwise open and load
-    if (this.openItemId === it.id) {
-      this.openItemId = null;
-      this.assessment = null;
-      this.resources = [];
-      return;
+    // 유지: 다른 코드에서 사용하는 경우를 위해 남겨둠. selection 기반으로 위임
+    await this.selectItem(it);
+  }
+
+  private isEditableTarget(target: EventTarget | null){
+    try{
+      const el = target as HTMLElement | null;
+      if (!el) return false;
+      const tag = (el.tagName||'').toLowerCase();
+      if (tag==='input' || tag==='textarea' || tag==='select') return true;
+      if ((el as HTMLElement).isContentEditable) return true;
+      const role = el.getAttribute?.('role')||'';
+      if (role==='textbox') return true;
+      return false;
+    }catch{ return false; }
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onKeyNav(ev: KeyboardEvent){
+    const key = ev.key || '';
+    const isDown = key==='ArrowDown' || key==='Down' || (ev as any).keyCode===40;
+    const isUp = key==='ArrowUp' || key==='Up' || (ev as any).keyCode===38;
+    if (!isDown && !isUp) return;
+    if (this.isEditableTarget(ev.target)) return; // 폼 입력 중이면 무시
+    ev.preventDefault();
+    ev.stopPropagation();
+    const arr = this.visibleItems();
+    if (!arr.length) return;
+    let idx = this.openItemId ? arr.findIndex(x => (x as any).id === this.openItemId) : -1;
+    if (idx < 0) idx = -1; // no selection yet
+    if (isDown) idx = Math.min(idx + 1, arr.length - 1);
+    if (isUp) idx = Math.max(idx - 1, 0);
+    const next = arr[Math.max(0, idx)];
+    if (next) {
+      this.selectItem(next as any);
+      // center selected row in viewport for keyboard navigation
+      setTimeout(()=> this.centerRow((next as any).id), 0);
     }
+  }
+
+  async selectItem(it: any){
+    // 단일 선택: 기존 임시 열림을 모두 닫고 선택 항목만 열림 상태 유지
     this.openItemId = it.id;
+    this.openExtra.clear();
+    this.openExtra.add(it.id);
     // Load assessment master
     const { data } = await this.supabase.getGivaudanAssessment(it.id);
     this.assessment = data;
@@ -1093,16 +1147,62 @@ export class AuditEvaluationComponent {
       it.departments = prog.departments || [];
       (it as any).companies = (prog as any).companies || [];
       it.owners = (prog as any).owners || it.owners || [];
+      const raw = (prog as any).comments || [];
+      if (Array.isArray(raw)){
+        const fb = raw.find((c:any)=> c && c.type==='fields');
+        it.comments = raw.filter((c:any)=> !(c && c.type==='fields'));
+        if (fb){ it.col1Text = fb.col1 || it.col1Text; it.col3Text = fb.col3 || it.col3Text; it.selectedLinks = fb.links || it.selectedLinks || []; }
+      }
     }
     // Load resources
     const { data: res } = await this.supabase.listGivaudanResources(it.id);
     this.resources = res || [];
-    // Adjust textareas height after resources load
-    setTimeout(()=>{
-      document.querySelectorAll('.re-text').forEach(el=>{
-        const ta = el as HTMLTextAreaElement; if(!ta) return; ta.style.height='auto'; ta.style.height=Math.min(120, Math.max(ta.scrollHeight, 38))+'px';
-      });
-    }, 0);
+  }
+
+  isOpen(it: any){ return this.openItemId === it.id || this.openExtra.has(it.id); }
+
+  async toggleExtra(it: any){
+    if (this.openExtra.has(it.id)){
+      this.openExtra.delete(it.id);
+      if (this.openItemId === it.id) this.openItemId = null;
+      return;
+    }
+    this.openExtra.add(it.id);
+    // 열릴 때 필요한 데이터는 selectItem과 동일하게 로드
+    const { data } = await this.supabase.getGivaudanAssessment(it.id);
+    this.assessment = data;
+    const date = this.selectedDate();
+    const { data: prog } = date ? await this.supabase.getGivaudanProgressByDate(it.id, date) : await this.supabase.getGivaudanProgress(it.id);
+    if (prog){
+      it.status = (prog.status as any) || it.status;
+      it.note = prog.note || it.note;
+      it.departments = prog.departments || [];
+      (it as any).companies = (prog as any).companies || [];
+      it.owners = (prog as any).owners || it.owners || [];
+      const raw = (prog as any).comments || [];
+      if (Array.isArray(raw)){
+        const fb = raw.find((c:any)=> c && c.type==='fields');
+        it.comments = raw.filter((c:any)=> !(c && c.type==='fields'));
+        if (fb){ it.col1Text = fb.col1 || it.col1Text; it.col3Text = fb.col3 || it.col3Text; it.selectedLinks = fb.links || it.selectedLinks || []; }
+      }
+    }
+    const { data: res } = await this.supabase.listGivaudanResources(it.id);
+    this.resources = res || [];
+  }
+
+  private centerRow(id: number){
+    try{
+      const container = this.listRef?.nativeElement as HTMLElement | undefined;
+      if (!container) return;
+      const row = container.querySelector(`.item[data-id="${id}"]`) as HTMLElement | null;
+      if (!row) return;
+      const containerRect = container.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      const current = container.scrollTop;
+      const target = current + (rowRect.top - containerRect.top) - (container.clientHeight/2 - rowRect.height/2);
+      const max = container.scrollHeight - container.clientHeight;
+      container.scrollTop = Math.max(0, Math.min(max, target));
+    }catch{}
   }
 
   async saveProgress(it: any){
