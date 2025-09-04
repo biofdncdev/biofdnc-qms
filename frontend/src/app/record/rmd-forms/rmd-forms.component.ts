@@ -30,8 +30,8 @@ import { SupabaseService } from '../../services/supabase.service';
      :host h2 .sub{ font-size:14px; font-weight:700; margin-left:6px; color:#6b7280; }
      :host .results{ display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
      /* popup for standard search */
-     :host .backdrop{ position:fixed; inset:0; background:rgba(2,6,23,.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
-     :host .modal{ width:min(880px,92vw); max-height:80vh; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.2); overflow:hidden; display:flex; flex-direction:column; }
+     :host .backdrop{ position:fixed; inset:0; background:rgba(2,6,23,.55); display:flex; align-items:center; justify-content:center; z-index:2147483647; }
+     :host .modal{ width:min(720px,86vw); max-height:70vh; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.25); overflow:hidden; display:flex; flex-direction:column; }
      :host .modal header{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee; font-weight:700; }
      :host .modal .body{ padding:12px; display:flex; flex-direction:column; gap:10px; }
      :host .modal .tools{ display:flex; gap:8px; align-items:center; }
@@ -46,19 +46,30 @@ import { SupabaseService } from '../../services/supabase.service';
      :host .record-id{ font-family:monospace; font-size:12px; color:#475569; }
      :host .record-title{ font-weight:600; }
      :host .meta{ margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; }
-     :host .chip{ font-size:12px; padding:2px 8px; border-radius:999px; background:#f1f5f9; color:#334155; }
+     :host .chip{ font-size:12px; padding:4px 10px; border-radius:999px; background:#f1f5f9; color:#334155; margin-right:8px; margin-bottom:8px; display:inline-flex; align-items:center; gap:6px; }
+     :host .chips.owners .chip .remove{ background:transparent; border:0; cursor:pointer; color:#64748b; }
+     :host .summary-chips{ display:flex; flex-wrap:wrap; gap:8px; }
      :host .detail-form{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; box-shadow:0 6px 16px rgba(2,6,23,.04); }
      :host .detail-form label{ font-size:12px; color:#475569; display:block; margin-bottom:4px; }
      :host .section-title{ font-weight:700; margin:4px 0 8px; }
      :host .section-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+     :host .toolbar-line{ margin-bottom:6px; }
      :host .saved-badge{ font-size:12px; color:#16a34a; margin-left:8px; }
+     /* unified action buttons */
+     :host .action{ height:30px; padding:0 12px; border-radius:10px; border:1px solid #d1d5db; background:#fff; color:#111827; cursor:pointer; font-size:12px; display:inline-flex; align-items:center; justify-content:center; transition: transform .06s ease, box-shadow .12s ease, background .12s ease; }
+     :host .action:hover{ background:#f8fafc; box-shadow:0 2px 6px rgba(2,6,23,.08); }
+     :host .action:active{ transform: translateY(1px); }
+     :host .action.primary{ background:#2563eb; border-color:#2563eb; color:#fff; }
+     :host .action.primary:hover{ background:#1d4ed8; }
      :host .doc-title{ font-size:22px; font-weight:800; margin:0; }
      :host .title-wrap{ display:flex; align-items:baseline; gap:12px; }
      :host .doc-meta{ color:#6b7280; font-size:12px; }
      /* typeahead user suggestions */
-     :host .typeahead{ position:relative; }
-     :host .suggest{ position:absolute; left:0; right:0; top:100%; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 12px 24px rgba(0,0,0,.12); max-height:220px; overflow:auto; z-index:20; }
+     :host .typeahead{ position:relative; width:100%; }
+     :host .typeahead input[type='text']{ width:100%; }
+     :host .suggest{ position:absolute; left:0; top:100%; width:100%; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 12px 24px rgba(0,0,0,.12); max-height:220px; overflow:auto; z-index:20; }
      :host .suggest .item{ padding:8px 10px; cursor:pointer; font-size:13px; }
+     :host .suggest .item.active{ background:#eef2ff; }
      :host .suggest .item:hover{ background:#f8fafc; }
      :host .dropbox{ margin-top:8px; border:2px dashed #cbd5e1; border-radius:10px; padding:12px; display:flex; align-items:center; gap:8px; cursor:pointer; background:#f8fafc; }
      :host .dropbox.dragover{ background:#eef2ff; border-color:#93c5fd; }
@@ -94,42 +105,20 @@ import { SupabaseService } from '../../services/supabase.service';
             <button class="seg" *ngFor="let p of periods" [class.on]="period()===p" (click)="setPeriod(p)">{{ p }}</button>
           </div>
           <label class="inline"><input type="checkbox" [ngModel]="overdueOnly()" (ngModelChange)="overdueOnly.set($event); onFiltersChanged()"> 기록주기가 지난 것만</label>
-          <label class="f-title">연결된 규정으로 검색</label>
-          <div class="search">
-            <input type="search" placeholder="규정 ID/제목 검색" [ngModel]="standard()" (focus)="openStandardPopup()" readonly>
-            <button class="clear" *ngIf="standard()" (click)="standard.set(''); onFiltersChanged()">×</button>
-          </div>
-          <div class="backdrop" *ngIf="stdPickerOpen" (click)="closeStandardPopup()">
-            <div class="modal" (click)="$event.stopPropagation()" tabindex="0" (keydown)="onStdPickerKeydown($event)">
-              <header>
-                <div>규정 검색</div>
-                <button (click)="closeStandardPopup()">×</button>
-              </header>
-              <div class="body">
-                <div class="tools">
-                  <input #stdInput type="text" placeholder="규정 (공백=AND)" [(ngModel)]="stdQuery">
-                  <select [(ngModel)]="stdCat">
-                    <option value="">카테고리 전체</option>
-                    <option *ngFor="let c of categoriesOnly" [value]="c">{{ c }}</option>
-                  </select>
-                </div>
-                <div class="picker-list">
-                  <div class="picker-item" *ngFor="let r of stdResults(); let i=index" [class.active]="i===stdIndex" (mouseenter)="stdHover=i" (mouseleave)="stdHover=-1" (click)="chooseStandard(r)">
-                    <span style="font-family:monospace; font-size:12px; color:#475569; min-width:120px;">{{ r.id }}</span>
-                    <span style="font-weight:600;">{{ r.title }}</span>
-                    <span style="margin-left:auto; font-size:12px; color:#64748b;">{{ r.standardCategory || '-' }}</span>
-                  </div>
-                </div>
-                <div style="text-align:right;">
-                  <button class="btn" (click)="closeStandardPopup()">닫기</button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <!-- 규정 검색 팝업 제거 요청으로 임시 비활성화 -->
           <label class="f-title">규정 카테고리로 검색</label>
           <div class="btn-group wrap">
             <button class="seg" [class.on]="standardCategory()===''" (click)="setStdCat('')">전체</button>
-            <button class="seg" *ngFor="let c of categoriesOnly" [class.on]="standardCategory()===c" (click)="setStdCat(c)">{{ c }}</button>
+            <button class="seg" *ngFor="let c of categoriesNoISO" [class.on]="standardCategory()===c" (click)="setStdCat(c)">{{ c }}</button>
+          </div>
+
+          <label class="f-title" style="margin-top:8px;">인증 체계로 검색</label>
+          <div class="btn-group wrap">
+            <button class="seg" [class.on]="cert()===''" (click)="setCert('')">전체</button>
+            <button class="seg" [class.on]="cert()==='ISO9001'" (click)="setCert('ISO9001')">ISO9001</button>
+            <button class="seg" [class.on]="cert()==='ISO22716'" (click)="setCert('ISO22716')">ISO22716</button>
+            <button class="seg" [class.on]="cert()==='ISO14001'" (click)="setCert('ISO14001')">ISO14001</button>
+            <button class="seg" [class.on]="cert()==='HALAL'" (click)="setCert('HALAL')">HALAL</button>
           </div>
         </div>
       </div>
@@ -143,12 +132,12 @@ import { SupabaseService } from '../../services/supabase.service';
             <span class="record-title">{{ r.title }}</span>
           </div>
           <div class="meta">
-            <span class="chip">부서: {{ r.department || '원료제조팀' }}</span>
+            <span class="chip">{{ r.department || '원료제조팀' }}</span>
             <span class="chip" *ngIf="r.owner">담당자: {{ r.owner }}</span>
             <span class="chip" *ngIf="r.method">방법: {{ r.method }}</span>
             <span class="chip" *ngIf="r.period">주기: {{ r.period }}</span>
             <span class="chip" *ngIf="r.standard">규정: {{ r.standard }}</span>
-            <span class="chip">카테고리: {{ r.standardCategory }}</span>
+            <span class="chip">{{ r.standardCategory }}</span>
           </div>
         </div>
       </section>
@@ -167,13 +156,15 @@ import { SupabaseService } from '../../services/supabase.service';
       <ng-template #choose><h3>좌측에서 항목을 선택하세요.</h3></ng-template>
       <section class="content">
         <div *ngIf="selected() as sel">
-          <div class="section-row">
+          <div class="section-row toolbar-line">
             <div class="section-title">기록 정보</div>
-            <div>
-              <button class="primary" [disabled]="isSavingMeta" (click)="saveMeta(sel)">{{ isSavingMeta ? '저장중…' : '저장' }}</button>
+            <div style="display:flex; align-items:center; gap:10px;">
               <span class="saved-badge" *ngIf="metaJustSaved">저장됨</span>
+              <button class="action" (click)="toggleInfo()">{{ infoOpen() ? '간략히 보기' : '자세히 보기' }}</button>
+              <button class="action primary" [disabled]="isSavingMeta" (click)="saveMeta(sel)">저장</button>
             </div>
           </div>
+          <ng-container *ngIf="infoOpen(); else infoSummary">
           <div class="detail-form" (ngModelChange)="persistMeta(sel)">
             <div>
               <label>담당부서</label>
@@ -184,10 +175,15 @@ import { SupabaseService } from '../../services/supabase.service';
             <div>
               <label>담당자</label>
               <div class="typeahead">
-                <input type="text" [(ngModel)]="sel.owner" (ngModelChange)="onOwnerInput(sel)" placeholder="이름/이메일">
+                <input type="text" [(ngModel)]="sel.owner" (ngModelChange)="onOwnerInput(sel)" (keydown)="onOwnerKeydown($event, sel)" (keydown.arrowDown)="focusSuggest()" placeholder="이름/이메일">
                 <div class="suggest" *ngIf="ownerSuggest.length">
-                  <div class="item" *ngFor="let u of ownerSuggest" (click)="chooseOwner(sel,u)">{{ u }}</div>
+                  <div class="item" *ngFor="let u of ownerSuggest; let i = index" tabindex="-1" [id]="'owner-sg-'+i" [class.active]="i===ownerIndex" (click)="chooseOwner(sel,u)">{{ u }}</div>
                 </div>
+              </div>
+              <div class="chips owners" *ngIf="getOwnerList(sel).length">
+                <span class="chip" *ngFor="let n of getOwnerList(sel)">{{ n }}
+                  <button class="remove" (click)="removeOwnerChip(sel,n)" title="삭제">×</button>
+                </span>
               </div>
             </div>
             <div>
@@ -202,20 +198,40 @@ import { SupabaseService } from '../../services/supabase.service';
                 <button class="seg" *ngFor="let p of periods" [class.on]="sel.period===p" (click)="sel.period=p; persistMeta(sel)">{{ p }}</button>
               </div>
             </div>
+            <!-- 인증 체계 (연결된 규정과 위치 교체) -->
             <div>
-              <label>연결된 규정</label>
-              <div class="search">
-                <input type="search" placeholder="규정 ID/제목 검색" [ngModel]="sel.standard" (focus)="openStandardPopup()" readonly>
-                <button class="clear" *ngIf="sel.standard" (click)="sel.standard=''; persistMeta(sel)">×</button>
+              <label>인증 체계</label>
+              <div class="btn-group wrap">
+                <button class="seg" [class.on]="isCert(sel,'ISO9001')" (click)="toggleCert(sel,'ISO9001')">ISO9001</button>
+                <button class="seg" [class.on]="isCert(sel,'ISO22716')" (click)="toggleCert(sel,'ISO22716')">ISO22716</button>
+                <button class="seg" [class.on]="isCert(sel,'ISO14001')" (click)="toggleCert(sel,'ISO14001')">ISO14001</button>
+                <button class="seg" [class.on]="isCert(sel,'HALAL')" (click)="toggleCert(sel,'HALAL')">HALAL</button>
               </div>
             </div>
             <div>
               <label>규정 카테고리</label>
               <div class="btn-group wrap">
-                <button class="seg" *ngFor="let c of categoriesOnly" [class.on]="sel.standardCategory===c" (click)="sel.standardCategory=c; persistMeta(sel)">{{ c }}</button>
+                <button class="seg" *ngFor="let c of categoriesNoISO" [class.on]="sel.standardCategory===c" (click)="sel.standardCategory=c; persistMeta(sel)">{{ c }}</button>
+              </div>
+            </div>
+            <div>
+              <label>연결된 규정</label>
+              <div class="search">
+                <input type="search" placeholder="규정 ID/제목 검색" [ngModel]="sel.standard" readonly>
+                <button class="clear" *ngIf="sel.standard" (click)="sel.standard=''; persistMeta(sel)">×</button>
               </div>
             </div>
           </div>
+          </ng-container>
+          <ng-template #infoSummary>
+            <div class="summary-chips">
+              <span class="chip">{{ sel.department || '부서 미지정' }}</span>
+              <span class="chip" *ngIf="sel.owner">{{ sel.owner }}</span>
+              <span class="chip" *ngIf="sel.method">{{ sel.method }}</span>
+              <span class="chip" *ngIf="sel.period">{{ sel.period }}</span>
+              <span class="chip" *ngIf="sel.standardCategory">{{ sel.standardCategory }}</span>
+            </div>
+          </ng-template>
           <ng-container *ngIf="sel.id==='BF-RMD-PM-IR-07'; else genericInfo">
             <div class="th-toolbar">
               <div class="group">
@@ -280,11 +296,7 @@ import { SupabaseService } from '../../services/supabase.service';
                 (touchstart)="$event.preventDefault()" (touchmove)="$event.preventDefault()" (touchend)="$event.preventDefault()"></canvas>
             </div>
           </ng-container>
-          <ng-template #genericInfo>
-            <p>문서번호: {{ sel.id }}</p>
-            <p>문서명: {{ sel.title }}</p>
-            <p class="muted">문서 스캔 또는 PDF 양식을 연결해 주세요.</p>
-          </ng-template>
+          <ng-template #genericInfo></ng-template>
         </div>
       </section>
     </main>
@@ -297,12 +309,15 @@ export class RmdFormsComponent {
   selected = signal<RmdFormItem | null>(null);
   // Filters
   departments: string[] = ['원료제조팀','식물세포배양팀','품질팀','연구팀','경영지원팀'];
-  methods: string[] = ['ERP','QMS','NAS','OneNote','Paper'];
+  methods: string[] = ['ERP','QMS','NAS','OneNote','수기'];
   periods: string[] = ['일','주','월','년','갱신주기'];
   standardItems: string[] = [
     '원료제조팀 규정 1','원료제조팀 규정 2','원료제조팀 규정 3'
   ];
   categoriesOnly: string[] = this.categories.map(c=>c.category);
+  categoriesNoISO: string[] = this.categoriesOnly.filter(c => c !== 'ISO');
+  // Certification filter
+  cert = signal<string>('');
   dept = signal<string>('');
   owner = signal<string>('');
   method = signal<string>('');
@@ -312,7 +327,10 @@ export class RmdFormsComponent {
   standardCategory = signal<string>('');
   // user options for typeahead
   users: string[] = [];
+  userPairs: Array<{ name: string; email: string }> = [];
   ownerSuggest: string[] = [];
+  ownerIndex = -1;
+  // For certs multi-select we store in comments JSON bundle or extend model. Keep temporary on the item object as array
   // standard search popup state
   stdPickerOpen = false;
   stdQuery = '';
@@ -320,6 +338,8 @@ export class RmdFormsComponent {
   stdIndex = -1;
   stdHover = -1;
   @ViewChild('stdInput') stdInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('stdPortal') stdPortal?: ElementRef<HTMLDivElement>;
+  infoOpen = signal<boolean>(true);
   constructor(private supabase: SupabaseService){}
 
   filtered = computed(() => {
@@ -347,8 +367,18 @@ export class RmdFormsComponent {
   setMethod(v: string){ this.method.set(v); this.onFiltersChanged(); }
   setPeriod(v: string){ this.period.set(v); this.onFiltersChanged(); }
   setStdCat(v: string){ this.standardCategory.set(v); this.onFiltersChanged(); }
-  openStandardPopup(){ this.stdPickerOpen = true; setTimeout(()=> this.stdInput?.nativeElement?.focus(), 0); }
-  closeStandardPopup(){ this.stdPickerOpen = false; this.stdIndex = -1; this.stdHover = -1; this.stdQuery=''; }
+  setCert(v: string){ this.cert.set(v); this.onFiltersChanged(); }
+  openStandardPopup(){
+    this.stdPickerOpen = true;
+    // lock background scroll
+    try{ document.body.style.overflow = 'hidden'; }catch{}
+    setTimeout(()=> this.stdInput?.nativeElement?.focus(), 0);
+  }
+  closeStandardPopup(){
+    this.stdPickerOpen = false; this.stdIndex = -1; this.stdHover = -1; this.stdQuery='';
+    // restore scroll
+    try{ document.body.style.overflow = ''; }catch{}
+  }
   stdResults(){
     const rows = RMD_STANDARDS.flatMap(c => c.items.map(i => ({ id: i.id, title: i.title, standardCategory: c.category })));
     const q = (this.stdQuery||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -369,12 +399,53 @@ export class RmdFormsComponent {
     try{
       const v = (sel.owner||'').toString().trim().toLowerCase();
       if (!v){ this.ownerSuggest = []; this.persistMeta(sel); return; }
-      const pool = this.users || [];
-      this.ownerSuggest = pool.filter(u => (u||'').toLowerCase().includes(v)).slice(0, 8);
+      const pool = this.userPairs || [];
+      const matched = pool.filter(p => (p.name||'').toLowerCase().includes(v) || (p.email||'').toLowerCase().includes(v));
+      this.ownerSuggest = matched.slice(0,8).map(p => `${p.name} / ${p.email}`);
+      this.ownerIndex = this.ownerSuggest.length ? 0 : -1;
       this.persistMeta(sel);
     }catch{ this.ownerSuggest = []; this.persistMeta(sel); }
   }
   chooseOwner(sel: any, u: string){ sel.owner = u; this.ownerSuggest = []; this.persistMeta(sel); }
+  getOwnerList(sel: any){
+    const val = (sel.owner || '').toString();
+    return val ? val.split(/\s*,\s*/).filter(Boolean) : [];
+  }
+  removeOwnerChip(sel: any, name: string){
+    const list = this.getOwnerList(sel).filter((n:string)=> n!==name);
+    sel.owner = list.join(', ');
+    this.persistMeta(sel);
+  }
+
+  onOwnerKeydown(ev: KeyboardEvent, sel: any){
+    if (!this.ownerSuggest.length) return;
+    const key = ev.key || (ev as any).keyIdentifier || '';
+    if (key === 'ArrowDown' || key === 'Down'){
+      ev.preventDefault();
+      this.ownerIndex = Math.min(this.ownerIndex + 1, this.ownerSuggest.length - 1);
+      setTimeout(()=>{
+        const el = document.getElementById('owner-sg-'+this.ownerIndex);
+        el?.scrollIntoView({ block: 'nearest' });
+      },0);
+    } else if (key === 'ArrowUp' || key === 'Up'){
+      ev.preventDefault();
+      this.ownerIndex = Math.max(this.ownerIndex - 1, 0);
+      setTimeout(()=>{
+        const el = document.getElementById('owner-sg-'+this.ownerIndex);
+        el?.scrollIntoView({ block: 'nearest' });
+      },0);
+    } else if (key === 'Enter'){
+      ev.preventDefault();
+      const pick = this.ownerSuggest[this.ownerIndex] || this.ownerSuggest[0];
+      if (pick) this.chooseOwner(sel, pick);
+    }
+  }
+  focusSuggest(){
+    setTimeout(()=>{
+      const el = document.getElementById('owner-sg-'+(this.ownerIndex>=0?this.ownerIndex:0));
+      (el as any)?.focus?.();
+    },0);
+  }
 
   ngOnInit(){
     // Load meta from DB; fallback to localStorage
@@ -393,7 +464,8 @@ export class RmdFormsComponent {
       // Load user list for typeahead (name/email)
       try{
         const { data: users } = await this.supabase.getClient().from('users').select('name,email');
-        this.users = (users||[]).map((u:any)=> u?.name || u?.email).filter(Boolean);
+        this.userPairs = (users||[]).map((u:any)=> ({ name: u?.name || '', email: u?.email || '' }));
+        this.users = this.userPairs.map(p => p.name || p.email).filter(Boolean);
       }catch{}
       // Deep-link open by id (e.g., ?open=ISO-9001)
       try{
@@ -574,6 +646,16 @@ export class RmdFormsComponent {
   setPenColor(c: string){ this.penColor.set(c); this.ctxDraw && (this.ctxDraw.strokeStyle = c); }
   setPenWidth(w: number){ this.penWidth.set(+w); this.ctxDraw && (this.ctxDraw.lineWidth = +w); }
   setEraserWidth(w: number){ this.eraserWidth.set(+w); }
+  toggleInfo(){ this.infoOpen.set(!this.infoOpen()); }
+  // cert helpers
+  isCert(sel: any, c: string){ const arr = (sel.certs || []) as string[]; return arr.includes(c); }
+  toggleCert(sel: any, c: string){
+    let arr = (sel.certs || []) as string[];
+    if (arr.includes(c)) arr = arr.filter(x=>x!==c); else arr = [...arr, c];
+    sel.certs = arr; this.persistMeta(sel);
+  }
+
+  methodClass(m: string){ return {} as any; }
 
   ngAfterViewInit(){
     queueMicrotask(async ()=>{
