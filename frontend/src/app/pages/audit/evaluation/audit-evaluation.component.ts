@@ -43,29 +43,30 @@ interface AuditDate { value: string; label: string; }
     </header>
 
     <div class="layout">
+      <!-- Detached sticky filter header -->
+      <div class="filters">
+        <div class="filterbar">
+          <label>키워드</label>
+          <input class="kw-input" type="text" [(ngModel)]="keyword" (ngModelChange)="onFilterChange()" placeholder="제목/비고/입력/링크/댓글 검색" />
+          <label style="margin-left:12px">업체</label>
+          <select class="dept-select" [(ngModel)]="companyFilter" (ngModelChange)="onCompanyFilterChange($event)">
+            <option [ngValue]="'ALL'">전체</option>
+            <option *ngFor="let c of companies" [ngValue]="c">{{ c }}</option>
+          </select>
+          <label style="margin-left:12px">부서</label>
+          <select class="dept-select" [(ngModel)]="filterDept" (ngModelChange)="onFilterChange()">
+            <option [ngValue]="'ALL'">전체</option>
+            <option *ngFor="let d of departments" [ngValue]="d">{{ d }}</option>
+          </select>
+          <label style="margin-left:12px">담당자</label>
+          <select class="dept-select" [(ngModel)]="filterOwner" (ngModelChange)="onFilterChange()">
+            <option [ngValue]="'ALL'">전체</option>
+            <option *ngFor="let u of userOptions" [ngValue]="u">{{ u }}</option>
+          </select>
+        </div>
+      </div>
       <section class="checklist" #listRef>
         <div class="group">
-          
-          <div class="filterbar">
-            <!-- 업체 필터 (먼저 표시) -->
-            <label>업체</label>
-            <select class="dept-select" [(ngModel)]="companyFilter" (ngModelChange)="onCompanyFilterChange($event)">
-              <option [ngValue]="'ALL'">전체</option>
-              <option *ngFor="let c of companies" [ngValue]="c">{{ c }}</option>
-            </select>
-            <!-- 부서 필터: 단일 선택 -->
-            <label style="margin-left:12px">부서</label>
-            <select class="dept-select" [(ngModel)]="filterDept" (ngModelChange)="onFilterChange()">
-              <option [ngValue]="'ALL'">전체</option>
-              <option *ngFor="let d of departments" [ngValue]="d">{{ d }}</option>
-            </select>
-            <!-- 담당자 필터 -->
-            <label style="margin-left:12px">담당자</label>
-            <select class="dept-select" [(ngModel)]="filterOwner" (ngModelChange)="onFilterChange()">
-              <option [ngValue]="'ALL'">전체</option>
-              <option *ngFor="let u of userOptions" [ngValue]="u">{{ u }}</option>
-            </select>
-          </div>
           <div class="item" *ngFor="let it of visibleItems(); trackBy: trackByItem" [class.open]="isOpen(it)" [class.selected]="openItemId===it.id" (click)="selectItem(it)" [attr.data-id]="it.id">
             <div class="id">{{ it.id | number:'2.0-0' }}</div>
             <div class="text">
@@ -262,12 +263,14 @@ interface AuditDate { value: string; label: string; }
     .controls .btn.info:disabled{ background:#e5e7eb !important; color:#9ca3af !important; border-color:#e5e7eb !important; }
     .controls .btn:disabled:hover{ filter:none; }
 
-    .layout{ display:block; }
+    .layout{ display:grid; grid-template-rows: auto 1fr; gap:8px; }
+    .filters{ position:sticky; top:0; z-index:8; background:#fff; }
     .checklist{ min-width:0; }
 
-    .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 160px); overflow-y:auto; overflow-x:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
+    .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 180px); overflow-y:auto; overflow-x:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
     .group h3{ margin:8px 6px 12px; }
-    .filterbar{ display:flex; align-items:center; gap:10px; margin:6px; flex-wrap:wrap; }
+    .filterbar{ display:flex; align-items:center; gap:10px; margin:0; padding:8px 10px; flex-wrap:wrap; background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 4px 10px rgba(2,6,23,.04); }
+    .kw-input{ width:220px; height:32px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px; font-family: var(--font-sans-kr); font-size:13.5px; }
     .item{ display:grid; grid-template-columns: 54px 1fr 1.6fr; gap:12px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; align-items:start; min-width:0; transition: box-shadow .18s ease, transform .18s ease; }
     .item.selected{ box-shadow: 0 10px 28px rgba(2,6,23,.10), inset 0 0 0 1px rgba(99,102,241,.22); transform: translateZ(0); }
     .item.selected::after{ content:''; position:absolute; left:8px; right:8px; bottom:-2px; height:4px; border-radius:999px; background:linear-gradient(90deg,rgba(99,102,241,.22),rgba(99,102,241,.08)); }
@@ -431,7 +434,31 @@ interface AuditDate { value: string; label: string; }
   `]
 })
 export class AuditEvaluationComponent {
-  constructor(private supabase: SupabaseService, private router: Router, private tabBus: TabService){}
+  constructor(private supabase: SupabaseService, private router: Router, private tabBus: TabService){
+    // Pre-hydrate UI from sessionStorage to avoid initial flicker on tab switching
+    this.prehydrateFromSession();
+  }
+
+  private prehydrateFromSession(){
+    try{
+      const raw = sessionStorage.getItem('audit.eval.ui.v1');
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s?.selectedDate) this.selectedDate.set(s.selectedDate);
+      if (s?.companyFilter) this.companyFilter = s.companyFilter;
+      if (s?.filterDept) this.filterDept = s.filterDept;
+      if (s?.filterOwner) this.filterOwner = s.filterOwner;
+      // items cache
+      const d = s?.selectedDate;
+      if (d){
+        const cache = sessionStorage.getItem(`audit.eval.items.${d}`);
+        if (cache){
+          const rows = JSON.parse(cache);
+          if (Array.isArray(rows) && rows.length){ this.items.set(rows as any); this.preHydrated = true; }
+        }
+      }
+    }catch{}
+  }
   userDisplay = '사용자';
   currentUserId: string | null = null;
   isAdmin = false;
@@ -440,6 +467,10 @@ export class AuditEvaluationComponent {
   companies: string[] = [];
   companyFilter: 'ALL' | string = 'ALL';
   @ViewChild('listRef') listRef?: ElementRef<HTMLDivElement>;
+  // UI pre-hydration
+  private preHydrated: boolean = false;
+  uiHydrated: boolean = false;
+  private initialScrollTop: number = 0;
   async ngOnInit(){
     try{
       const u = await this.supabase.getCurrentUser();
@@ -461,7 +492,7 @@ export class AuditEvaluationComponent {
         const { data: users } = await this.supabase.getClient().from('users').select('name,email').order('created_at', { ascending: false });
         this.userOptions = (users||[]).map((u:any)=> u?.name || u?.email).filter(Boolean);
       }catch{}
-      // Restore persisted UI state if available
+      // Restore persisted UI state if available (no flicker)
       try{
         const raw = sessionStorage.getItem('audit.eval.ui.v1');
         if (raw){
@@ -486,9 +517,11 @@ export class AuditEvaluationComponent {
                 const it = this.items().find(x => (x as any).id === openId);
                 if (it) this.toggleDetails(it as any);
               }
-              if(this.listRef) this.listRef.nativeElement.scrollTop = s.scrollTop || 0;
+              this.initialScrollTop = s.scrollTop || 0;
+              if(this.listRef) this.listRef.nativeElement.scrollTop = this.initialScrollTop;
             }catch{}
-          }, 50);
+          }, 0);
+          this.uiHydrated = true;
         } else { this.setToday(); }
       }catch{ this.setToday(); }
       // JSON+해시 기반 반영은 세션당 1회만 수행하여 초기 렌더 지연을 줄임
@@ -503,6 +536,7 @@ export class AuditEvaluationComponent {
       }catch{}
       // 제목 최신화는 백그라운드로
       this.refreshTitlesFromDb();
+      this.uiHydrated = true;
     }catch{}
   }
 
@@ -512,7 +546,7 @@ export class AuditEvaluationComponent {
       const cache = sessionStorage.getItem(`audit.eval.items.${d}`);
       if(!cache) return false;
       const rows = JSON.parse(cache);
-      if (Array.isArray(rows) && rows.length){ this.items.set(rows as any); return true; }
+      if (Array.isArray(rows) && rows.length){ this.items.set(rows as any); this.preHydrated = true; return true; }
       return false;
     }catch{ return false; }
   }
@@ -971,6 +1005,7 @@ export class AuditEvaluationComponent {
   departments = ['원료제조팀','식물세포배양팀','품질팀','연구팀','경영지원팀'];
   filterDept: 'ALL' | string = 'ALL';
   filterOwner: 'ALL' | string = 'ALL';
+  keyword: string = '';
 
   // Record picker state
   recordPickerOpen = false;
@@ -1276,8 +1311,16 @@ export class AuditEvaluationComponent {
 
   visibleItems(){
     const arr = this.items();
+    // 키워드 필터 (제목/비고 포함)
+    const kw = (this.keyword||'').trim().toLowerCase();
+    const byKw = kw ? arr.filter((it:any)=>{
+      const links = ((it.selectedLinks||[]) as any[]).map(l=> `${l.id||''} ${l.title||''}`).join(' ');
+      const comments = ((it.comments||[]) as any[]).map(c=> `${c.text||''}`).join(' ');
+      const hay = `${it.titleKo||''} ${it.titleEn||''} ${it.note||''} ${(it.col1Text||'')} ${(it.col3Text||'')} ${links} ${comments}`.toLowerCase();
+      return hay.includes(kw);
+    }) : arr;
     // 부서 필터
-    const byDept = this.filterDept==='ALL' ? arr : arr.filter((it:any)=> (it.departments||[]).includes(this.filterDept));
+    const byDept = this.filterDept==='ALL' ? byKw : byKw.filter((it:any)=> (it.departments||[]).includes(this.filterDept));
     // 담당자 필터
     const byOwner = this.filterOwner==='ALL' ? byDept : byDept.filter((it:any)=> (it.owners||[]).includes(this.filterOwner));
     // 업체 필터
