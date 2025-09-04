@@ -1226,8 +1226,14 @@ export class SupabaseService {
         if (newVal === undefined) continue;
         const oldVal = (existing as any)[col];
         const oldNorm = (oldVal===undefined || oldVal===null || String(oldVal).trim()==='') ? null : oldVal;
-        const newNorm = (newVal===undefined || newVal===null || (typeof newVal==='string' && newVal.trim()==='')) ? null : newVal;
-        // 빈 셀은 null로 간주하여 업데이트(=제거)하되, 필수 컬럼은 보호
+        let newNorm = (newVal===undefined || newVal===null || (typeof newVal==='string' && newVal.trim()==='')) ? null : newVal;
+        // 영문명은 공백이 들어와도 null로 처리해 제거하거나 값이 있으면 업데이트
+        if ((col as string) === 'name_en'){
+          if (newVal === undefined) continue; // not provided
+          const cleaned = (typeof newVal==='string') ? newVal.trim() : newVal;
+          newNorm = (cleaned===undefined || cleaned===null || cleaned==='') ? null : cleaned;
+        }
+        // 빈 값이면 필수 컬럼은 건너뜀
         if (newNorm === null && REQUIRED.has(col as string)) { continue; }
         if (JSON.stringify(oldNorm) !== JSON.stringify(newNorm)) { (diff as any)[col] = newNorm; changed = true; }
       }

@@ -25,9 +25,9 @@ interface AuditDate { value: string; label: string; }
         <label>Audit Date</label>
         <input class="date-input" type="date" [ngModel]="selectedDate()" (ngModelChange)="setDate($event)" />
         <button class="btn" (click)="setToday()">오늘</button>
-        <button class="btn info" [disabled]="saving || isDateCreated()" (click)="onCreateClick()">{{ saving ? '생성중...' : '생성' }}</button>
+        <button class="btn info" [disabled]="saving() || isDateCreated()" (click)="onCreateClick()">{{ saving() ? '생성중...' : '생성' }} <span *ngIf="saving()" class="spinner inline" style="margin-left:6px"></span></button>
         <span class="created-note" *ngIf="isDateCreated()">생성됨: {{ createdDateOnly() }}
-          <button class="btn mini danger" style="margin-left:6px" (click)="confirmDeleteDate()">삭제</button>
+          <button class="btn mini danger" style="margin-left:6px" (click)="confirmDeleteDate()" [disabled]="deleting()">{{ deleting() ? '삭제중...' : '삭제' }} <span *ngIf="deleting()" class="spinner inline" style="margin-left:4px"></span></button>
         </span>
         <div class="saved-wrap">
           <label>저장된 날짜</label>
@@ -37,7 +37,8 @@ interface AuditDate { value: string; label: string; }
             <div class="saved-empty" *ngIf="!savedDates?.length">저장된 날짜가 없습니다</div>
           </div>
         </div>
-        <button class="btn success" (click)="loadFromSaved()">불러오기</button>
+        <button class="btn success" (click)="loadFromSaved()" [disabled]="loadingSaved()">불러오기</button>
+        <span *ngIf="loadingSaved()" class="spinner inline" title="불러오는 중…"></span>
         <button class="btn" title="복사" (click)="openCopyModal()">복사</button>
       </div>
     </header>
@@ -47,7 +48,7 @@ interface AuditDate { value: string; label: string; }
       <div class="filters">
         <div class="filterbar">
           <label>키워드</label>
-          <input class="kw-input" type="text" [(ngModel)]="keyword" (ngModelChange)="onFilterChange()" placeholder="제목/비고/입력/링크/댓글 검색" />
+          <input #kwInput class="kw-input" type="text" [(ngModel)]="keyword" (ngModelChange)="onFilterChange()" placeholder="제목/비고/입력/링크/댓글 검색" />
           <label style="margin-left:12px">업체</label>
           <select class="dept-select" [(ngModel)]="companyFilter" (ngModelChange)="onCompanyFilterChange($event)">
             <option [ngValue]="'ALL'">전체</option>
@@ -224,25 +225,26 @@ interface AuditDate { value: string; label: string; }
   </div>
 
   <!-- Copy modal -->
-  <div class="preview-backdrop" *ngIf="copying" (click)="closeCopy()">
-    <div class="preview copy-modal" (click)="$event.stopPropagation()">
+  <div class="preview-backdrop" *ngIf="copying" (click)="onCopyBackdropClick()" [class.active]="copying">
+    <div class="preview copy-modal" #copyModalRoot tabindex="0" (click)="$event.stopPropagation()">
       <header>
         <div class="name">다른 날짜에서 복사</div>
-        <button (click)="closeCopy()">×</button>
+        <button (click)="onCopyCloseClick()">×</button>
       </header>
       <div class="body">
-        <div class="busy" *ngIf="copyingBusy"><span class="spinner"></span> 복사중…</div>
+        <div class="busy" *ngIf="copyingBusy()"><span class="spinner"></span> 복사중…</div>
+        <div class="busy ok" *ngIf="!copyingBusy() && copyJustFinished()"><span class="dot ok"></span> 복사 완료</div>
         <div class="form">
           <div class="form-row">
             <label class="lbl">복사할 날짜 선택</label>
-            <select [(ngModel)]="copyFromDate" class="date-select" [disabled]="copyingBusy">
+            <select [(ngModel)]="copyFromDate" class="date-select" [disabled]="copyingBusy()">
               <option *ngFor="let d of savedDates" [ngValue]="d">{{ d }}</option>
             </select>
           </div>
           <div class="hint">선택한 날짜의 모든 항목을 현재 Audit Date로 복사합니다.</div>
           <div class="actions">
-            <button class="btn" (click)="closeCopy()" [disabled]="copyingBusy">취소</button>
-            <button class="btn primary" (click)="confirmCopy()" [disabled]="copyingBusy">{{ copyingBusy ? '복사중…' : '확인' }}</button>
+            <button class="btn" (click)="onCopyCloseClick()">취소</button>
+            <button class="btn primary" (click)="confirmCopy()" [disabled]="copyingBusy()">{{ copyingBusy() ? '복사중…' : '복사' }}</button>
           </div>
         </div>
       </div>
@@ -269,7 +271,8 @@ interface AuditDate { value: string; label: string; }
 
     .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 180px); overflow-y:auto; overflow-x:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
     .group h3{ margin:8px 6px 12px; }
-    .filterbar{ display:flex; align-items:center; gap:10px; margin:0; padding:8px 10px; flex-wrap:wrap; background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 4px 10px rgba(2,6,23,.04); }
+    .filterbar{ display:flex; align-items:center; gap:10px; margin:0; padding:8px 10px; flex-wrap:wrap; background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 4px 10px rgba(2,6,23,.04); transition: filter .15s ease; }
+    .audit-page.modal-open .filterbar{ filter: grayscale(1) brightness(.92); }
     .kw-input{ width:220px; height:32px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px; font-family: var(--font-sans-kr); font-size:13.5px; }
     .item{ display:grid; grid-template-columns: 54px 1fr 1.6fr; gap:12px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; align-items:start; min-width:0; transition: box-shadow .18s ease, transform .18s ease; }
     .item.selected{ box-shadow: 0 10px 28px rgba(2,6,23,.10), inset 0 0 0 1px rgba(99,102,241,.22); transform: translateZ(0); }
@@ -402,7 +405,7 @@ interface AuditDate { value: string; label: string; }
       .state .after-status{ grid-row:auto; grid-column:auto; justify-self:start; }
     }
 
-    .preview-backdrop{ position:fixed; inset:0; background:rgba(2,6,23,.45); display:flex; align-items:center; justify-content:center; }
+    .preview-backdrop{ position:fixed; inset:0; background:rgba(2,6,23,.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
     .preview{ width:min(880px,92vw); max-height:80vh; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.2); overflow:hidden; display:flex; flex-direction:column; }
     .preview header{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee; font-weight:700; }
     .preview .body{ padding:16px; overflow:auto; }
@@ -413,6 +416,8 @@ interface AuditDate { value: string; label: string; }
     .copy-modal .hint{ color:#6b7280; font-size:12px; }
     .copy-modal .actions{ display:flex; gap:8px; justify-content:flex-end; }
     .copy-modal .busy{ display:flex; align-items:center; gap:8px; color:#374151; font-size:13px; }
+    .copy-modal .busy.ok{ color:#166534; }
+    .copy-modal .dot.ok{ width:10px; height:10px; border-radius:50%; background:#22c55e; display:inline-block; }
     .spinner{ width:14px; height:14px; border-radius:50%; border:2px solid #cbd5e1; border-top-color:#3b82f6; animation:spin 1s linear infinite; }
     .spinner.inline{ width:16px; height:16px; border:2px solid #cbd5e1; border-top-color:#3b82f6; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -704,8 +709,10 @@ export class AuditEvaluationComponent {
   savedDates: string[] = [];
   savedSelectedDate: string | null = null;
   savedOpen = false;
-  saving = false; // top-level save button
+  saving = signal(false); // 진행 상태: 생성
+  deleting = signal(false); // 진행 상태: 삭제
   toast: string | null = null;
+  loadingSaved = signal(false); // 진행 상태: 불러오기
   createdAt: string | null = null;
   createdDateOnly(){
     const s = this.createdAt || this.selectedDate();
@@ -751,9 +758,14 @@ export class AuditEvaluationComponent {
   async loadFromSaved(){
     const d = this.savedSelectedDate || this.savedDates?.[0];
     if (!d) return;
-    this.savedSelectedDate = d;
-    this.setDate(d);
-    await this.loadByDate();
+    this.loadingSaved.set(true);
+    try{
+      this.savedSelectedDate = d;
+      this.setDate(d);
+      await this.loadByDate();
+    } finally {
+      this.loadingSaved.set(false);
+    }
   }
   async loadByDate(){
     const date = this.selectedDate();
@@ -865,13 +877,13 @@ export class AuditEvaluationComponent {
     this.companyFilter = 'ALL';
     this.filterDept = 'ALL';
     this.filterOwner = 'ALL';
-    this.saving = true;
+    this.saving.set(true);
     try{
       await this.saveAllForDate();
     }catch(e){ console.warn('saveAllForDate error', e); }
     // 저장된 직후에도 아이템이 유지되도록, 서버에서 방금 저장한 값을 로드해 덮어쓰기
     await this.loadByDate();
-    this.saving = false;
+    this.saving.set(false);
     this.showToast('생성되었습니다');
   }
 
@@ -882,7 +894,7 @@ export class AuditEvaluationComponent {
     const ok = confirm(`${date} 데이터를 정말 삭제할까요? 되돌릴 수 없습니다.`);
     if(!ok) return;
     try{
-      this.saving = true;
+      this.deleting.set(true);
       await this.supabase.deleteGivaudanProgressByDate(date);
       // savedDates에서 즉시 제거(낙관적 업데이트)
       this.savedDates = this.savedDates.filter(d => d !== date);
@@ -892,40 +904,74 @@ export class AuditEvaluationComponent {
       await this.loadSavedDates();
       this.showToast('삭제되었습니다');
     } finally {
-      this.saving = false;
+      this.deleting.set(false);
     }
   }
 
   // Copy from another date into current date
   copying = false; copyFromDate: string | null = null;
-  copyingBusy = false;
-  openCopyModal(){ this.copying = true; this.copyFromDate = this.savedDates?.[0] || null; }
-  closeCopy(){ this.copying = false; }
+  copyingBusy = signal(false);
+  copyJustFinished = signal(false);
+  @ViewChild('copyModalRoot') copyModalRoot?: ElementRef<HTMLDivElement>;
+  @ViewChild('kwInput') kwInput?: ElementRef<HTMLInputElement>;
+  openCopyModal(){
+    this.copying = true; this.copyFromDate = this.savedDates?.[0] || null;
+    // 모달이 열리면 모달 자체에 포커스를 이동시켜 배경 검색창 하이라이트 방지
+    setTimeout(()=> this.copyModalRoot?.nativeElement?.focus(), 0);
+    try{ document.getElementById('app-root')?.classList.add('modal-open'); }catch{}
+  }
+  closeCopy(){
+    this.copying = false;
+    setTimeout(()=> this.kwInput?.nativeElement?.blur(), 0);
+    try{ document.getElementById('app-root')?.classList.remove('modal-open'); }catch{}
+  }
+  private confirmCancelCopy(): boolean{
+    if (!this.copyingBusy()) return true;
+    return confirm('복사를 취소할까요? 진행 중인 작업이 중단됩니다.');
+  }
+  onCopyBackdropClick(){
+    if (this.confirmCancelCopy()){
+      // 취소 선택 시 진행 상태 초기화(대기 상태로)
+      this.copyingBusy.set(false);
+      this.copyJustFinished.set(false);
+      this.closeCopy();
+    }
+  }
+  onCopyCloseClick(){
+    if (this.confirmCancelCopy()){
+      this.copyingBusy.set(false);
+      this.copyJustFinished.set(false);
+      this.closeCopy();
+    }
+  }
   async confirmCopy(){
     try{
-      this.copyingBusy = true;
+      this.copyingBusy.set(true);
+      this.copyJustFinished.set(false);
       const target = this.selectedDate() || this.today();
       this.selectedDate.set(target);
       const from = this.copyFromDate; if (!from){ alert('복사할 날짜를 선택하세요.'); return; }
-      // Load source data and write to target
+      // 원본을 한번에 읽고, 단일 벌크 업서트로 처리하여 속도와 완료 타이밍 개선
       const { data: rows } = await this.supabase.listGivaudanProgressByDate(from);
-      for (const r of (rows||[])){
-        await this.supabase.upsertGivaudanProgress({
-          number: (r as any).number,
-          status: (r as any).status || null,
-          note: (r as any).note || null,
-          departments: (r as any).departments || [],
-          companies: (r as any).companies || [],
-          audit_date: target,
-          updated_by: this.currentUserId,
-          updated_by_name: this.userDisplay
-        });
-      }
+      const payload = (rows||[]).map((r:any)=> ({
+        number: r.number,
+        status: r.status || null,
+        note: r.note || null,
+        departments: r.departments || [],
+        companies: r.companies || [],
+        audit_date: target,
+        updated_by: this.currentUserId,
+        updated_by_name: this.userDisplay
+      }));
+      if (payload.length){ await this.supabase.upsertGivaudanProgressMany(payload as any); }
       await this.loadByDate();
       await this.loadSavedDates();
+      // 완료 안내 (모달은 유지)
+      this.showToast('복사가 완료되었습니다');
+      this.copyJustFinished.set(true);
     } finally {
-      this.copyingBusy = false;
-      this.copying = false;
+      this.copyingBusy.set(false);
+      // 모달은 유지하고, 닫기는 사용자가 직접 수행
     }
   }
 

@@ -40,7 +40,7 @@ export class AppShellComponent {
   readonly drawerEasing = 'cubic-bezier(0.2, 0, 0, 1)';
   sectionMenu: Array<{ label: string; path?: string; onClick?: () => void; selected?: boolean }> = [];
   // Simple in-app tab bar for quick nav
-  tabs: Array<{ title: string; path: string }>=[];
+  tabs: Array<{ title: string; path: string; lastUrl?: string }> = [];
   activeTabIndex = 0;
   // Tab overflow handling
   visibleCount = 8;
@@ -244,23 +244,24 @@ export class AppShellComponent {
   openTab(title: string, path: string){
     const idx = this.tabs.findIndex(t => t.path === path);
     if (idx === -1) {
-      this.tabs.push({ title, path });
+      this.tabs.push({ title, path, lastUrl: path });
       this.activeTabIndex = this.tabs.length - 1;
     } else {
       this.activeTabIndex = idx;
     }
     // Support absolute path with query by using navigateByUrl
-    this.router.navigateByUrl(path);
+    this.router.navigateByUrl(this.tabs[this.activeTabIndex].lastUrl || path);
     this.updateVisibleCount();
   }
 
   private openOrNavigateTab(title: string, tabPath: string, navUrl: string){
     const idx = this.tabs.findIndex(t => t.path === tabPath);
     if (idx === -1) {
-      this.tabs.push({ title, path: tabPath });
+      this.tabs.push({ title, path: tabPath, lastUrl: navUrl });
       this.activeTabIndex = this.tabs.length - 1;
     } else {
       this.activeTabIndex = idx;
+      this.tabs[idx].lastUrl = navUrl; // remember last visited URL for this tab
     }
     this.router.navigateByUrl(navUrl);
     this.updateVisibleCount();
@@ -288,7 +289,9 @@ export class AppShellComponent {
   }
   activateTab(i: number){
     this.activeTabIndex = i;
-    this.router.navigate([this.tabs[i].path]);
+    const t = this.tabs[i];
+    const url = t.lastUrl || t.path;
+    this.router.navigateByUrl(url);
     this.syncMenuToCurrentRoute();
   }
 
@@ -327,7 +330,10 @@ export class AppShellComponent {
   toggleOverflow(){ this.overflowOpen = !this.overflowOpen; }
   activateTabByPath(path: string){
     const idx = this.tabs.findIndex(t=>t.path===path);
-    if (idx>=0){ this.activateTab(idx); this.overflowOpen=false; }
+    if (idx>=0){
+      this.activateTab(idx);
+      this.overflowOpen=false;
+    }
   }
 
   private getKeyForPath(path: string): string | null {
@@ -336,7 +342,12 @@ export class AppShellComponent {
   }
   private syncMenuToCurrentRoute(){
     try{
-      const path = this.router.url || this.tabs[this.activeTabIndex]?.path || '/app/home';
+      const currentUrl = this.router.url;
+      // remember current URL as lastUrl for active tab
+      if (this.tabs[this.activeTabIndex]){
+        this.tabs[this.activeTabIndex].lastUrl = currentUrl;
+      }
+      const path = currentUrl || this.tabs[this.activeTabIndex]?.path || '/app/home';
       this.syncMenuSelectionByPath(path);
     }catch{}
   }
