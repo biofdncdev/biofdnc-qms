@@ -67,7 +67,7 @@ interface AuditDate { value: string; label: string; }
       </div>
       <section class="checklist" #listRef>
         <div class="group">
-          <div class="item" *ngFor="let it of visibleItems(); trackBy: trackByItem" [class.open]="isOpen(it)" [class.selected]="openItemId===it.id" (click)="selectItem(it)" [attr.data-id]="it.id">
+          <div class="item" *ngFor="let it of visibleItems(); trackBy: trackByItem" [class.open]="isOpen(it)" [class.selected]="openItemId===it.id" (click)="selectItem(it)" [attr.data-id]="it.id" (mouseenter)="hoverItemId=it.id" (mouseleave)="hoverItemId=null">
             <div class="id">{{ it.id | number:'2.0-0' }}</div>
             <div class="text">
               <div class="ko">{{ it.titleKo }}</div>
@@ -1006,6 +1006,7 @@ export class AuditEvaluationComponent {
   filterDept: 'ALL' | string = 'ALL';
   filterOwner: 'ALL' | string = 'ALL';
   keyword: string = '';
+  hoverItemId: number | null = null;
 
   // Record picker state
   recordPickerOpen = false;
@@ -1163,6 +1164,35 @@ export class AuditEvaluationComponent {
       // center selected row in viewport for keyboard navigation
       setTimeout(()=> this.centerRow((next as any).id), 0);
     }
+  }
+
+  @HostListener('document:copy', ['$event'])
+  onCopy(ev: ClipboardEvent){
+    try{
+      const id = this.openItemId || this.hoverItemId;
+      if (!id) return;
+      const it: any = this.items().find(x => (x as any).id === id);
+      if (!it) return;
+      const lines: string[] = [];
+      lines.push(`번호,${id}`);
+      lines.push(`제목,${(it.titleKo||'').replace(/\n/g,' ').trim()}`);
+      lines.push(`부제목,${(it.titleEn||'').replace(/\n/g,' ').trim()}`);
+      lines.push(`입력1,${(it.col1Text||'').replace(/\n/g,' ').trim()}`);
+      lines.push(`입력2,${(it.col3Text||'').replace(/\n/g,' ').trim()}`);
+      const links = ((it.selectedLinks||[]) as any[]).map((l:any)=>`${l.id||''} ${l.title||''}`).join(' | ');
+      lines.push(`규정/기록,${links}`);
+      const comments = ((it.comments||[]) as any[]).map((c:any)=>`${c.user||''}:${c.text||''}`).join(' | ');
+      lines.push(`댓글,${comments}`);
+      lines.push(`비고,${(it.note||'').replace(/\n/g,' ').trim()}`);
+      lines.push(`진행상황,${it.status||''}`);
+      lines.push(`업체선택,${it.company||''}`);
+      lines.push(`담당부서,${(it.departments||[]).join(' / ')}`);
+      lines.push(`담당자,${(it.owners||[]).join(' / ')}`);
+      const csv = lines.join('\n');
+      ev.clipboardData?.setData('text/plain', csv);
+      ev.preventDefault();
+      this.showToast('항목 정보가 복사되었습니다');
+    }catch{}
   }
 
   async selectItem(it: any){

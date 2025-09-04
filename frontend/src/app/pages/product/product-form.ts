@@ -356,7 +356,7 @@ export class ProductFormComponent implements OnInit {
   pickerRows: Array<{ id: string; inci_name: string; korean_name?: string; chinese_name?: string; cas_no?: string }> = [];
   private pickerTimer: any = null;
   private pickerDefaultsCache: Array<{ id: string; inci_name: string; korean_name?: string; chinese_name?: string; cas_no?: string }> | null = null;
-  saved = true;
+  saved = false;
   pickerPointer = -1;
   private pickerPointerMoved = false;
   // Product picker
@@ -369,7 +369,7 @@ export class ProductFormComponent implements OnInit {
 
   // Materials state
   materials: Array<{ material_id?: string; material_number?: string; material_name?: string; spec?: string; specification?: string; search_keyword?: string; linked_inci?: string | null }> = [];
-  matSaved = true;
+  matSaved = false;
   matPickerOpen = false; matPickerQuery = ''; matPickerRows: any[] = [];
 
   constructor(private route: ActivatedRoute, private router: Router, private supabase: SupabaseService) {}
@@ -412,6 +412,24 @@ export class ProductFormComponent implements OnInit {
     if (stateKey){
       try{ const raw = this.readPerUser(stateKey); if(raw){ const s=JSON.parse(raw); if(s?.id===this.id()){ if(Array.isArray(s.compositions)) this.compositions = s.compositions; if (s.model) this.model = { ...this.model, ...s.model }; if (Array.isArray(s.verifyLogs)) this.verifyLogs = s.verifyLogs; if (Array.isArray(s.materials)) this.materials = s.materials; if (Array.isArray(s.materialsVerifyLogs)) this.materialsVerifyLogs = s.materialsVerifyLogs; } } }catch{}
     }
+    // Listen for composition updates from updater page to live-refresh when same product is open
+    window.addEventListener('product-composition-updated', async (e:any)=>{
+      try{
+        const code = String(e?.detail?.product_code||'');
+        if (!code) return;
+        if (this.model?.product_code && this.model.product_code === code){
+          await this.reloadCompositions();
+        }
+      }catch{}
+    });
+  }
+  private async reloadCompositions(){
+    try{
+      const pid = this.id(); if (!pid) return;
+      const { data: comps } = await this.supabase.listProductCompositions(pid) as any;
+      this.compositions = (comps || []).map((c:any)=>({ ...c, inci_name: (c.ingredient && c.ingredient.inci_name) || '', korean_name: (c.ingredient && c.ingredient.korean_name) || '', cas_no: (c.ingredient && c.ingredient.cas_no) || '', }));
+      this.saved = Array.isArray(this.compositions) && this.compositions.length>0;
+    }catch{}
   }
   setTab(tab: 'composition' | 'extra'){ this.activeTab = tab; localStorage.setItem('product.form.activeTab', tab); }
   addComposition(){ this.compositions.push({ ingredient_id: '', percent: null, note: '' }); }
@@ -804,6 +822,7 @@ export class ProductFormComponent implements OnInit {
       cas_no: (c.ingredient && c.ingredient.cas_no) || '',
     }));
     this.ingredientSuggest = this.compositions.map(()=>[]);
+    this.saved = Array.isArray(this.compositions) && this.compositions.length>0;
     try{
       const logs = await this.supabase.getProductVerifyLogs(pid);
       this.verifyLogs = Array.isArray(logs) ? logs : [];
@@ -839,6 +858,7 @@ export class ProductFormComponent implements OnInit {
         }
       }
       try{ const mlogs = await this.supabase.getProductMaterialsVerifyLogs(pid); this.materialsVerifyLogs = Array.isArray(mlogs)? mlogs: []; this.lastMaterialsVerifiedAt = null; }catch{ this.materialsVerifyLogs = []; this.lastMaterialsVerifiedAt = null; }
+      this.matSaved = Array.isArray(this.materials) && this.materials.length>0;
     }catch{}
     this.saveStateSnapshot();
   }

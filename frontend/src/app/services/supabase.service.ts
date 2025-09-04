@@ -718,7 +718,9 @@ export class SupabaseService {
     // Build a targeted superset using server-side filters: AND-of-OR across common searchable columns
     const searchableCols = [
       'product_code','main_code','name_kr','name_en','asset_category','item_category','item_midcategory','item_status',
-      'spec','main_spec','specification','unit','remarks','keywords_alias','main_name'
+      'spec','main_spec','specification','unit','remarks','keywords_alias','main_name','special_notes','manufacturer','cas_no',
+      'country_of_manufacture','source_of_origin_method','plant_part','country_of_origin','nmpa_no','allergen','furocoumarins',
+      'expiration_date','storage_location','storage_method1','stability_note1','storage_note1','safety_handling1','cert_organic','cert_kosher','cert_halal','cert_vegan','cert_isaaa','cert_rspo','cert_reach'
     ];
     const makeGroup = (w: string) => searchableCols.map(c => `${c}.ilike.*${w}*`).join(',');
     const andGroups = words.map(w => `or(${makeGroup(w)})`).join(',');
@@ -758,7 +760,7 @@ export class SupabaseService {
     const kw = (keyword||'').trim();
     if (!kw) return { data: [] as any[] } as any;
     const words = kw.split(/\s+/).map(s=>s.trim()).filter(Boolean);
-    const cols = ['product_code','name_kr','name_en','cas_no','spec','specification','keywords_alias','special_notes'];
+    const cols = ['product_code','name_kr','name_en','cas_no','spec','specification','keywords_alias','special_notes','manufacturer','country_of_manufacture','source_of_origin_method','plant_part','country_of_origin','nmpa_no','allergen','furocoumarins','expiration_date','storage_location','storage_method1','stability_note1','storage_note1','safety_handling1','cert_organic','cert_kosher','cert_halal','cert_vegan','cert_isaaa','cert_rspo','cert_reach'];
     // Server-side AND-of-OR: every token must match at least one of the searchable columns
     const makeGroup = (w:string)=> cols.map(c=> `${c}.ilike.*${w}*`).join(',');
     const andLogic = `and(${words.map(w=> `or(${makeGroup(w)})`).join(',')})`;
@@ -771,6 +773,7 @@ export class SupabaseService {
     return { data: rows.slice(0, 200) } as any;
   }
   async getProduct(id: string){ return this.ensureClient().from('products').select('*').eq('id', id).single(); }
+  async getProductByCode(product_code: string){ return this.ensureClient().from('products').select('*').eq('product_code', product_code).maybeSingle(); }
   async upsertProduct(row: any){ return this.ensureClient().from('products').upsert(row, { onConflict: 'id' }).select('*').single(); }
   async deleteProduct(id: string){ return this.ensureClient().from('products').delete().eq('id', id); }
 
@@ -1224,9 +1227,8 @@ export class SupabaseService {
         const oldVal = (existing as any)[col];
         const oldNorm = (oldVal===undefined || oldVal===null || String(oldVal).trim()==='') ? null : oldVal;
         const newNorm = (newVal===undefined || newVal===null || (typeof newVal==='string' && newVal.trim()==='')) ? null : newVal;
-        // Do not overwrite required columns with null (treat blanks as "no change")
+        // 빈 셀은 null로 간주하여 업데이트(=제거)하되, 필수 컬럼은 보호
         if (newNorm === null && REQUIRED.has(col as string)) { continue; }
-        // Update when value differs OR when DB is null and upload provides a value (including date fill-ins)
         if (JSON.stringify(oldNorm) !== JSON.stringify(newNorm)) { (diff as any)[col] = newNorm; changed = true; }
       }
       // Safety: always include required fields so accidental INSERT by upsert won't violate NOT NULL
