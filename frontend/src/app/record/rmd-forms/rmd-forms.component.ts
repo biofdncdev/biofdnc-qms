@@ -25,7 +25,10 @@ import { SupabaseService } from '../../services/supabase.service';
      :host .search{ position:relative; }
      :host .search input[type='search']{ width:100%; padding-right:26px; }
      :host .search .clear{ position:absolute; right:6px; top:50%; transform:translateY(-50%); border:0; background:transparent; cursor:pointer; color:#64748b; }
-     :host .results{ display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+     :host .page-head{ display:flex; align-items:center; gap:8px; }
+     :host h2{ margin:0; font-size:20px; font-weight:800; }
+     :host h2 .sub{ font-size:14px; font-weight:700; margin-left:6px; color:#6b7280; }
+     :host .results{ display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
      /* popup for standard search */
      :host .backdrop{ position:fixed; inset:0; background:rgba(2,6,23,.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
      :host .modal{ width:min(880px,92vw); max-height:80vh; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.2); overflow:hidden; display:flex; flex-direction:column; }
@@ -38,20 +41,25 @@ import { SupabaseService } from '../../services/supabase.service';
      :host .picker-item.hover{ background:#f8fafc; }
      :host .picker-item.active{ background:#eef2ff; box-shadow: inset 0 0 0 2px #6366f1; }
      :host .record-item{ padding:12px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; cursor:pointer; }
-     :host .record-item:hover{ border-color:#cbd5e1; background:#f8fafc; }
+     :host .record-item:hover{ border-color:#cbd5e1; background:#f8fafc; box-shadow:0 8px 18px rgba(2,6,23,.06); }
      :host .record-head{ display:flex; gap:12px; align-items:center; }
      :host .record-id{ font-family:monospace; font-size:12px; color:#475569; }
      :host .record-title{ font-weight:600; }
      :host .meta{ margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; }
      :host .chip{ font-size:12px; padding:2px 8px; border-radius:999px; background:#f1f5f9; color:#334155; }
-     :host .detail-form{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; }
+     :host .detail-form{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#ffffff; box-shadow:0 6px 16px rgba(2,6,23,.04); }
      :host .detail-form label{ font-size:12px; color:#475569; display:block; margin-bottom:4px; }
      :host .section-title{ font-weight:700; margin:4px 0 8px; }
      :host .section-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
      :host .saved-badge{ font-size:12px; color:#16a34a; margin-left:8px; }
-     :host .pdf-zone{ margin-top:14px; }
-     :host .pdf-actions{ display:flex; gap:8px; align-items:center; }
-     :host .pdf-view{ margin-top:10px; width:100%; height:70vh; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+     :host .doc-title{ font-size:22px; font-weight:800; margin:0; }
+     :host .title-wrap{ display:flex; align-items:baseline; gap:12px; }
+     :host .doc-meta{ color:#6b7280; font-size:12px; }
+     /* typeahead user suggestions */
+     :host .typeahead{ position:relative; }
+     :host .suggest{ position:absolute; left:0; right:0; top:100%; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 12px 24px rgba(0,0,0,.12); max-height:220px; overflow:auto; z-index:20; }
+     :host .suggest .item{ padding:8px 10px; cursor:pointer; font-size:13px; }
+     :host .suggest .item:hover{ background:#f8fafc; }
      :host .dropbox{ margin-top:8px; border:2px dashed #cbd5e1; border-radius:10px; padding:12px; display:flex; align-items:center; gap:8px; cursor:pointer; background:#f8fafc; }
      :host .dropbox.dragover{ background:#eef2ff; border-color:#93c5fd; }
      :host .file-pill{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; background:#e2e8f0; }
@@ -62,7 +70,7 @@ import { SupabaseService } from '../../services/supabase.service';
   <div class="page">
     <aside class="left" style="flex:0 0 280px; max-width:280px;">
       <div class="sticky">
-        <h2>Record <small class="sub">원료제조팀</small></h2>
+        <div class="page-head"><h2>Record <span class="sub">원료제조팀</span></h2></div>
         <div class="search">
           <input type="search" placeholder="키워드로 검색" [ngModel]="query()" (ngModelChange)="query.set($event)">
           <button class="clear" *ngIf="query()" (click)="query.set('')">×</button>
@@ -148,7 +156,12 @@ import { SupabaseService } from '../../services/supabase.service';
 
     <main class="right">
       <div class="toolbar">
-        <h3 *ngIf="selected(); else choose"> {{ selected()?.title }} </h3>
+        <ng-container *ngIf="selected() as sel; else choose">
+          <div class="title-wrap">
+            <h3 class="doc-title">{{ sel.title }}</h3>
+            <div class="doc-meta">문서번호: {{ sel.id }}</div>
+          </div>
+        </ng-container>
         <div class="spacer"></div>
       </div>
       <ng-template #choose><h3>좌측에서 항목을 선택하세요.</h3></ng-template>
@@ -170,53 +183,38 @@ import { SupabaseService } from '../../services/supabase.service';
             </div>
             <div>
               <label>담당자</label>
-              <input type="text" [(ngModel)]="sel.owner" (ngModelChange)="persistMeta(sel)" placeholder="이름/이메일">
+              <div class="typeahead">
+                <input type="text" [(ngModel)]="sel.owner" (ngModelChange)="onOwnerInput(sel)" placeholder="이름/이메일">
+                <div class="suggest" *ngIf="ownerSuggest.length">
+                  <div class="item" *ngFor="let u of ownerSuggest" (click)="chooseOwner(sel,u)">{{ u }}</div>
+                </div>
+              </div>
             </div>
             <div>
               <label>기록방법</label>
-              <select [(ngModel)]="sel.method" (ngModelChange)="persistMeta(sel)">
-                <option *ngFor="let m of methods" [value]="m">{{ m }}</option>
-              </select>
+              <div class="btn-group">
+                <button class="seg" *ngFor="let m of methods" [class.on]="sel.method===m" (click)="sel.method=m; persistMeta(sel)">{{ m }}</button>
+              </div>
             </div>
             <div>
               <label>기록주기</label>
-              <select [(ngModel)]="sel.period" (ngModelChange)="persistMeta(sel)">
-                <option *ngFor="let p of periods" [value]="p">{{ p }}</option>
-              </select>
+              <div class="btn-group">
+                <button class="seg" *ngFor="let p of periods" [class.on]="sel.period===p" (click)="sel.period=p; persistMeta(sel)">{{ p }}</button>
+              </div>
             </div>
             <div>
               <label>연결된 규정</label>
-              <select [(ngModel)]="sel.standard" (ngModelChange)="persistMeta(sel)">
-                <option value="">선택</option>
-                <option *ngFor="let s of standardItems" [value]="s">{{ s }}</option>
-              </select>
+              <div class="search">
+                <input type="search" placeholder="규정 ID/제목 검색" [ngModel]="sel.standard" (focus)="openStandardPopup()" readonly>
+                <button class="clear" *ngIf="sel.standard" (click)="sel.standard=''; persistMeta(sel)">×</button>
+              </div>
             </div>
             <div>
               <label>규정 카테고리</label>
-              <select [(ngModel)]="sel.standardCategory" (ngModelChange)="persistMeta(sel)">
-                <option *ngFor="let c of categoriesOnly" [value]="c">{{ c }}</option>
-              </select>
-            </div>
-          </div>
-          <div class="pdf-zone">
-            <div class="section-title">첨부 PDF</div>
-            <div class="pdf-actions">
-              <div class="dropbox" [class.dragover]="dragOver"
-                   (click)="fileInput.click()"
-                   (dragover)="$event.preventDefault(); dragOver=true"
-                   (dragleave)="dragOver=false"
-                   (drop)="onDrop($event)">
-                <span>여기로 드래그하거나 클릭하여 PDF 첨부</span>
-                <input #fileInput type="file" accept="application/pdf" (change)="onPdfPick($event)" style="display:none" />
-              </div>
-              <div *ngIf="recordPdfs.length" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-                <a class="file-pill" *ngFor="let p of recordPdfs" [href]="p.url" target="_blank" rel="noopener">
-                  <span>{{ p.name }}</span>
-                  <button type="button" title="삭제" (click)="$event.preventDefault(); removePdf(p)">×</button>
-                </a>
+              <div class="btn-group wrap">
+                <button class="seg" *ngFor="let c of categoriesOnly" [class.on]="sel.standardCategory===c" (click)="sel.standardCategory=c; persistMeta(sel)">{{ c }}</button>
               </div>
             </div>
-            <iframe *ngIf="selectedPdfPath" class="pdf-view" [src]="selectedPdfPath"></iframe>
           </div>
           <ng-container *ngIf="sel.id==='BF-RMD-PM-IR-07'; else genericInfo">
             <div class="th-toolbar">
@@ -312,6 +310,9 @@ export class RmdFormsComponent {
   overdueOnly = signal<boolean>(false);
   standard = signal<string>('');
   standardCategory = signal<string>('');
+  // user options for typeahead
+  users: string[] = [];
+  ownerSuggest: string[] = [];
   // standard search popup state
   stdPickerOpen = false;
   stdQuery = '';
@@ -363,6 +364,18 @@ export class RmdFormsComponent {
   }
   chooseStandard(r: { id: string; title: string }){ this.standard.set(`${r.id}`); this.onFiltersChanged(); this.closeStandardPopup(); }
 
+  // owner typeahead handlers
+  onOwnerInput(sel: any){
+    try{
+      const v = (sel.owner||'').toString().trim().toLowerCase();
+      if (!v){ this.ownerSuggest = []; this.persistMeta(sel); return; }
+      const pool = this.users || [];
+      this.ownerSuggest = pool.filter(u => (u||'').toLowerCase().includes(v)).slice(0, 8);
+      this.persistMeta(sel);
+    }catch{ this.ownerSuggest = []; this.persistMeta(sel); }
+  }
+  chooseOwner(sel: any, u: string){ sel.owner = u; this.ownerSuggest = []; this.persistMeta(sel); }
+
   ngOnInit(){
     // Load meta from DB; fallback to localStorage
     queueMicrotask(async ()=>{
@@ -377,6 +390,11 @@ export class RmdFormsComponent {
           if(raw){ const map = JSON.parse(raw) as Record<string, any>; for(const cat of this.categories){ for(const it of cat.items as any[]){ const m = map[it.id]; if(m) Object.assign(it, m); } } }
         }catch{}
       }
+      // Load user list for typeahead (name/email)
+      try{
+        const { data: users } = await this.supabase.getClient().from('users').select('name,email');
+        this.users = (users||[]).map((u:any)=> u?.name || u?.email).filter(Boolean);
+      }catch{}
       // Deep-link open by id (e.g., ?open=ISO-9001)
       try{
         const params = new URLSearchParams(location.search);
