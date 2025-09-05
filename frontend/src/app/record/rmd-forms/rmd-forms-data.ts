@@ -9,6 +9,7 @@ export interface RmdFormItem {
   standard?: string;     // 연결된 규정명
   standardCategory?: string; // 일반관리기준서 / 제조위생관리기준서 / 제조관리기준서 / 품질관리기준서
   certs?: string[];      // 인증 체계 배열 (ISO9001, ISO22716, ISO14001, HALAL 등)
+  selectedLinks?: Array<{ id: string; title: string; kind?: 'record'|'standard' }>;
 }
 export interface RmdFormCategory { category: string; items: RmdFormItem[]; }
 

@@ -78,6 +78,7 @@ import { SupabaseService } from '../../services/supabase.service';
      :host .dropbox{ margin-top:8px; border:2px dashed #cbd5e1; border-radius:10px; padding:12px; display:flex; align-items:center; gap:8px; cursor:pointer; background:#f8fafc; }
      :host .dropbox.dragover{ background:#eef2ff; border-color:#93c5fd; }
      :host .file-pill{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; background:#e2e8f0; }
+     :host .std-row{ display:flex; gap:12px; align-items:flex-start; }
      :host .file-pill button{ border:0; background:transparent; color:#ef4444; cursor:pointer; }
     `
   ],
@@ -225,9 +226,17 @@ import { SupabaseService } from '../../services/supabase.service';
             </div>
             <div>
               <label>연결된 규정</label>
-              <div class="search">
-                <input type="search" placeholder="규정 ID/제목 검색" [ngModel]="sel.standard" readonly>
-                <button class="clear" *ngIf="sel.standard" (click)="sel.standard=''; persistMeta(sel)">×</button>
+              <div class="std-row">
+                <div class="search" style="flex:1;">
+                  <input type="search" placeholder="규정 ID/제목 검색" readonly (click)="openStandardPicker(sel)">
+                </div>
+                <div class="std-chips" style="flex:1;">
+                  <div class="chips" *ngIf="(sel.selectedLinks||[]).length">
+                    <span class="chip" *ngFor="let l of sel.selectedLinks">{{ l.id }} / {{ l.title }}
+                      <button class="remove" (click)="removeStandardChip(sel, l)">×</button>
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -350,6 +359,7 @@ export class RmdFormsComponent {
   stdHover = -1;
   @ViewChild('stdInput') stdInput?: ElementRef<HTMLInputElement>;
   @ViewChild('ownerInput') ownerInputRef?: ElementRef<HTMLInputElement>;
+  private pickerTargetItem: any = null;
   @ViewChild('stdPortal') stdPortal?: ElementRef<HTMLDivElement>;
   infoOpen = signal<boolean>(false);
   constructor(private supabase: SupabaseService){}
@@ -406,6 +416,14 @@ export class RmdFormsComponent {
   }
   chooseStandard(r: { id: string; title: string }){ this.standard.set(`${r.id}`); this.onFiltersChanged(); this.closeStandardPopup(); }
 
+  // simplified picker open for standards only (reuses existing record picker UI)
+  openStandardPicker(sel: any){ this.stdPickerOpen = true; this.stdQuery=''; this.stdIndex=-1; setTimeout(()=> this.stdInput?.nativeElement?.focus(), 0); this.pickerTargetItem = sel; }
+
+  removeStandardChip(sel: any, l: { id: string }){
+    if (!sel?.selectedLinks) return;
+    sel.selectedLinks = (sel.selectedLinks as any[]).filter((x:any)=> x.id !== l.id);
+    this.persistMeta(sel);
+  }
   // owner typeahead handlers (decoupled from model)
   onOwnerInputText(v: string){
     try{
