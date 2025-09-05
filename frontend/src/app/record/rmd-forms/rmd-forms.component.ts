@@ -137,11 +137,12 @@ import { SupabaseService } from '../../services/supabase.service';
           </div>
           <div class="meta">
             <span class="chip">{{ r.department || '원료제조팀' }}</span>
-            <span class="chip" *ngIf="r.owner">담당자: {{ r.owner }}</span>
-            <span class="chip" *ngIf="r.method">방법: {{ r.method }}</span>
-            <span class="chip" *ngIf="r.period">주기: {{ r.period }}</span>
+            <span class="chip" *ngIf="r.owner">{{ r.owner }}</span>
+            <span class="chip" *ngIf="r.method">{{ r.method }}</span>
+            <span class="chip" *ngIf="r.period">{{ r.period }}</span>
+            <span class="chip" *ngFor="let c of (r.certs||[])">{{ c }}</span>
             <span class="chip" *ngIf="r.standard">규정: {{ r.standard }}</span>
-            <span class="chip">{{ r.standardCategory }}</span>
+            <span class="chip" *ngIf="r.standardCategory && r.standardCategory !== 'ISO'">{{ r.standardCategory }}</span>
           </div>
         </div>
       </section>
@@ -237,7 +238,7 @@ import { SupabaseService } from '../../services/supabase.service';
               <span class="chip" *ngIf="sel.owner">{{ sel.owner }}</span>
               <span class="chip" *ngIf="sel.method">{{ sel.method }}</span>
               <span class="chip" *ngIf="sel.period">{{ sel.period }}</span>
-              <span class="chip" *ngIf="sel.standardCategory">{{ sel.standardCategory }}</span>
+              <span class="chip" *ngIf="sel.standardCategory && sel.standardCategory !== 'ISO'">{{ sel.standardCategory }}</span>
             </div>
           </ng-template>
           <ng-container *ngIf="sel.id==='BF-RMD-PM-IR-07'; else genericInfo">
@@ -496,7 +497,7 @@ export class RmdFormsComponent {
         const pick = this.ownerSuggest[this.ownerIndex] || this.ownerSuggest[0];
         if (pick) this.chooseOwner(sel, pick);
       } else {
-        // 입력값만으로는 추가하지 않음 (등록된 사용자만 허용)
+        // 제안이 없는 경우는 사용자 목록에 없으므로 추가하지 않음
         this.ownerTyping = '';
       }
       this.ownerSuggest = [];
@@ -521,8 +522,42 @@ export class RmdFormsComponent {
       try{
         const all = await this.supabase.listAllFormMeta();
         const byId: Record<string, any> = {};
-        for(const row of all as any[]){ if(row?.form_id) byId[row.form_id] = row; }
-        for(const cat of this.categories){ for(const it of cat.items as any[]){ const m = byId[it.id]; if(m) Object.assign(it, m); } }
+        for(const row of all as any[]){
+          if(!row?.form_id) continue;
+          // Normalize snake_case → camelCase used in UI
+          byId[row.form_id] = {
+            department: row.department || undefined,
+            owner: row.owner || undefined,
+            method: row.method || undefined,
+            period: row.period || undefined,
+            standard: row.standard || undefined,
+            standardCategory: row.standard_category || undefined,
+            certs: Array.isArray(row.certs) ? row.certs : [],
+          };
+        }
+        for(const cat of this.categories){
+          for(const it of cat.items as any[]){
+            const m = byId[it.id];
+            if(m){
+              it.department = m.department ?? it.department;
+              it.owner = m.owner ?? it.owner;
+              it.method = m.method ?? it.method;
+              it.period = m.period ?? it.period;
+              it.standard = m.standard ?? it.standard;
+              // If DB has standardCategory as 'ISO', keep blank to hide in badges
+              const sc = m.standardCategory === 'ISO' ? undefined : m.standardCategory;
+              it.standardCategory = sc ?? it.standardCategory;
+              it.certs = Array.isArray(m.certs) ? m.certs : (it.certs||[]);
+            }
+          }
+        }
+        // Overlay with localStorage conservatively: only apply defined & non-empty values
+        try{
+          const raw = localStorage.getItem('rmd_forms_meta');
+          if(raw){
+            // Local cache는 더 이상 우선 적용하지 않습니다. (DB 우선)
+          }
+        }catch{}
       }catch{
         try{
           const raw = localStorage.getItem('rmd_forms_meta');
@@ -551,11 +586,11 @@ export class RmdFormsComponent {
     try{
       const raw = localStorage.getItem('rmd_forms_meta');
       const map = raw ? JSON.parse(raw) : {};
-      map[it.id] = { department: it.department, owner: it.owner, method: it.method, period: it.period, standard: it.standard, standardCategory: it.standardCategory };
+      const sc = (it.standardCategory === 'ISO') ? undefined : it.standardCategory;
+      map[it.id] = { department: it.department, owner: it.owner, method: it.method, period: it.period, standard: it.standard, standardCategory: sc, certs: (it.certs||[]) };
       localStorage.setItem('rmd_forms_meta', JSON.stringify(map));
     }catch{}
-    // Debounced DB upsert
-    this.scheduleUpsert(it);
+    // Note: 자동 DB 저장은 비활성화. 사용자가 [저장]을 눌렀을 때만 커밋합니다.
   }
 
   private upsertTimer?: any;
@@ -571,6 +606,7 @@ export class RmdFormsComponent {
           period: it.period || null,
           standard: it.standard || null,
           standard_category: it.standardCategory || null,
+          certs: (it.certs||[])
         });
       }catch{}
     }, 300);
@@ -586,17 +622,54 @@ export class RmdFormsComponent {
   async saveMeta(sel: any){
     try{
       this.isSavingMeta = true; this.metaJustSaved = false;
-      await this.supabase.upsertFormMeta({
+      const up = await this.supabase.upsertFormMeta({
         form_id: sel.id,
         department: sel.department || null,
         owner: sel.owner || null,
         method: sel.method || null,
         period: sel.period || null,
         standard: sel.standard || null,
-        standard_category: sel.standardCategory || null,
+        standard_category: (sel.standardCategory==='ISO') ? null : (sel.standardCategory || null),
+        certs: (sel.certs||[])
       });
+      // Re-fetch canonical row and patch UI to ensure persistence actually reflected
+      try{
+        const { data: fresh } = await this.supabase.getFormMeta(sel.id) as any;
+        if (fresh){
+          sel.department = fresh.department || sel.department;
+          sel.owner = fresh.owner || sel.owner;
+          sel.method = fresh.method || sel.method;
+          sel.period = fresh.period || sel.period;
+          sel.standard = fresh.standard || sel.standard;
+          sel.standardCategory = fresh.standard_category || sel.standardCategory;
+          sel.certs = Array.isArray(fresh.certs) ? fresh.certs : (sel.certs||[]);
+          // UI 리스트에도 즉시 반영
+          const all = this.filteredFlat();
+          const idx = all.findIndex(r => r.id === sel.id);
+          if (idx >= 0){
+            (all[idx] as any).department = sel.department;
+            (all[idx] as any).owner = sel.owner;
+            (all[idx] as any).method = sel.method;
+            (all[idx] as any).period = sel.period;
+            (all[idx] as any).standard = sel.standard;
+            (all[idx] as any).standardCategory = sel.standardCategory;
+            (all[idx] as any).certs = sel.certs || [];
+          }
+        }
+      }catch{}
+      // Also persist immediately to localStorage to ensure F5 후에도 유지
+      try{
+        const raw = localStorage.getItem('rmd_forms_meta');
+        const map = raw ? JSON.parse(raw) : {};
+        const sc = (sel.standardCategory === 'ISO') ? undefined : sel.standardCategory;
+        map[sel.id] = { department: sel.department, owner: sel.owner, method: sel.method, period: sel.period, standard: sel.standard, standardCategory: sc, certs: (sel.certs||[]) };
+        localStorage.setItem('rmd_forms_meta', JSON.stringify(map));
+      }catch{}
       this.metaJustSaved = true;
       setTimeout(()=> this.metaJustSaved = false, 1500);
+    }catch(e){
+      console.error('[Record] saveMeta failed', e);
+      alert('저장에 문제가 발생했습니다. 로그인 상태를 확인하거나 네트워크를 다시 시도해 주세요.');
     }finally{ this.isSavingMeta = false; }
   }
 
@@ -626,7 +699,11 @@ export class RmdFormsComponent {
     const flat: RmdFormItem[] = [];
     for(const cat of cats){
       for(const it of cat.items){
-        flat.push({ ...(it as any), standardCategory: (it as any).standardCategory || cat.category, department: (it as any).department || '원료제조팀' });
+        const ref: any = it as any;
+        if (!ref.certs) ref.certs = [];
+        if (!ref.standardCategory) ref.standardCategory = cat.category;
+        if (!ref.department) ref.department = '원료제조팀';
+        flat.push(ref as RmdFormItem);
       }
     }
     return flat.sort((a,b)=> a.id.localeCompare(b.id));

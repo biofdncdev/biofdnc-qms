@@ -15,12 +15,13 @@ import { MatDialogModule } from '@angular/material/dialog';
   styleUrls: ['./role-admin.scss']
 })
 export class RoleAdminComponent implements OnInit {
-  displayedColumns = ['name','email','created_at','updated_at','last_sign_in_at','is_online','status','role','actions'];
+  displayedColumns = ['name','email','created_at','updated_at','last_sign_in_at','status','role','actions'];
   rows: any[] = [];
   roles = ['admin','manager','staff','viewer'];
   statuses: Array<'active' | 'inactive'> = ['active','inactive'];
   loading = false;
   pending: Record<string, string> = {};
+  nameEdits: Record<string, string> = {};
   statusFilter: 'all' | 'active' | 'inactive' = 'all';
 
   constructor(private supabase: SupabaseService) {}
@@ -45,6 +46,10 @@ export class RoleAdminComponent implements OnInit {
     this.pending[row.id] = role;
   }
 
+  markName(row: any, name: string){
+    this.nameEdits[row.id] = name;
+  }
+
   async saveChanges() {
     const entries = Object.entries(this.pending);
     for (const [id, role] of entries) {
@@ -52,13 +57,19 @@ export class RoleAdminComponent implements OnInit {
       // 최종수정일시 업데이트
       await this.supabase.getClient().from('users').update({ updated_at: new Date().toISOString() }).eq('id', id);
     }
+    const nameEntries = Object.entries(this.nameEdits);
+    for (const [id, name] of nameEntries){
+      await this.supabase.updateUserName(id, name);
+      await this.supabase.getClient().from('users').update({ updated_at: new Date().toISOString() }).eq('id', id);
+    }
     this.pending = {};
+    this.nameEdits = {};
     await this.load();
     alert('저장이 완료되었습니다.');
   }
 
   get pendingCount() {
-    return Object.keys(this.pending).length;
+    return Object.keys(this.pending).length + Object.keys(this.nameEdits).length;
   }
 
   async resetPassword(row: any) {

@@ -26,7 +26,7 @@ begin
     select 1 from pg_policies
     where schemaname = 'public'
       and tablename  = 'ingredients'
-      and policyname = 'ingredients_read'
+      and policyname = 'ingredients_read' 
   ) then
     create policy "ingredients_read"
       on public.ingredients

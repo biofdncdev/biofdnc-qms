@@ -89,6 +89,9 @@ export class SupabaseService {
   async updateUserRole(id: string, role: string) {
     return this.ensureClient().from('users').update({ role }).eq('id', id);
   }
+  async updateUserName(id: string, name: string) {
+    return this.ensureClient().from('users').update({ name }).eq('id', id);
+  }
 
   async updateLoginState(id: string, isOnline: boolean) {
     return this.ensureClient()
@@ -623,17 +626,22 @@ export class SupabaseService {
 
   // RMD form metadata persistence
   async getFormMeta(form_id: string){
-    return this.ensureClient().from('rmd_form_meta').select('*').eq('form_id', form_id).maybeSingle();
+    return this.ensureClient().from('record_form_meta').select('*').eq('form_id', form_id).maybeSingle();
   }
-  async upsertFormMeta(row: { form_id: string; department?: string | null; owner?: string | null; method?: string | null; period?: string | null; standard?: string | null; standard_category?: string | null; }){
+  async upsertFormMeta(row: { form_id: string; department?: string | null; owner?: string | null; method?: string | null; period?: string | null; standard?: string | null; standard_category?: string | null; certs?: string[] | null; }){
     const client = this.ensureClient();
     const payload: any = { ...row };
     try{ const { data: u } = await client.auth.getUser(); payload.updated_by = u.user?.id || null; }catch{}
-    return client.from('rmd_form_meta').upsert(payload, { onConflict: 'form_id' }).select('*').maybeSingle();
+    return client.from('record_form_meta').upsert(payload, { onConflict: 'form_id' }).select('*').maybeSingle();
   }
   async listAllFormMeta(){
-    const { data } = await this.ensureClient().from('rmd_form_meta').select('*');
-    return Array.isArray(data) ? data : [];
+    try{
+      const { data } = await this.ensureClient().from('record_form_meta').select('*');
+      return Array.isArray(data) ? data : [];
+    }catch(e){
+      console.warn('[Supabase] listAllFormMeta failed; fallback to empty', e);
+      return [] as any[];
+    }
   }
 
   async getThRecord(formId: string, weekStart: string) {

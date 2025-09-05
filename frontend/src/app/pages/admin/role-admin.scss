@@ -8,5 +8,5 @@
 .role-admin ::ng-deep .mat-mdc-select { min-width: 120px; }
 .role-admin .toolbar { display: flex; align-items: center; gap: 12px; }
 .role-admin .status-filter label { margin-right: 6px; color: #666; font-size: 13px; }
-.role-admin .badge.ok { display:inline-flex; align-items:center; height: 26px; padding: 0 10px; border-radius: 999px; background: #e7f9ee; color:#065f46; font-weight:800; font-size:12px; border:1px solid #a7f3d0; }
+.role-admin .badge.ok { display:inline-flex; align-items:center; height: 26px; padding: 0 10px; border-radius: 999px; background: #e7f9ee; color:#065f46; font-weight:800; font-size:12px; border:1px solid #a7f3d0; white-space: nowrap; }
 .role-admin .btn-outline { display:inline-flex; align-items:center; height:28px; padding:0 12px; border-radius:999px; background:#ffffff; color:#1f2937; border:2px solid #f43f5e; font-weight:800; font-size:12px; }

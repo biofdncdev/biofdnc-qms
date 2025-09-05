@@ -16,7 +16,9 @@
   <table mat-table [dataSource]="rows" class="mat-elevation-z1">
     <ng-container matColumnDef="name">
       <th mat-header-cell *matHeaderCellDef>이름</th>
-      <td mat-cell *matCellDef="let r">{{ r.name }}</td>
+      <td mat-cell *matCellDef="let r">
+        <input type="text" [value]="nameEdits[r.id] || r.name" (input)="markName(r, $any($event.target).value)" placeholder="이름" style="width: 120px;">
+      </td>
     </ng-container>
 
     <ng-container matColumnDef="email">
@@ -39,10 +41,7 @@
       <td mat-cell *matCellDef="let r">{{ r.last_sign_in_at ? (r.last_sign_in_at | date:'yyyy-MM-dd HH:mm') : '-' }}</td>
     </ng-container>
 
-    <ng-container matColumnDef="is_online">
-      <th mat-header-cell *matHeaderCellDef>온라인</th>
-      <td mat-cell *matCellDef="let r">{{ r.is_online ? 'Yes' : 'No' }}</td>
-    </ng-container>
+    
 
     <ng-container matColumnDef="status">
       <th mat-header-cell *matHeaderCellDef>상태</th>
