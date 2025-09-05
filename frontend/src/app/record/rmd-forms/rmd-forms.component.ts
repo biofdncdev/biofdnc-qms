@@ -110,21 +110,26 @@ import { SupabaseService } from '../../services/supabase.service';
             <button class="seg" *ngFor="let p of periods" [class.on]="period()===p" (click)="setPeriod(p)">{{ p }}</button>
           </div>
           <label class="inline"><input type="checkbox" [ngModel]="overdueOnly()" (ngModelChange)="overdueOnly.set($event); onFiltersChanged()"> 기록주기가 지난 것만</label>
-          <!-- 규정 검색 팝업 제거 요청으로 임시 비활성화 -->
+          <!-- 규정 카테고리 드롭다운 -->
           <label class="f-title">규정 카테고리로 검색</label>
-          <div class="btn-group wrap">
-            <button class="seg" [class.on]="standardCategory()===''" (click)="setStdCat('')">전체</button>
-            <button class="seg" *ngFor="let c of categoriesNoISO" [class.on]="standardCategory()===c" (click)="setStdCat(c)">{{ c }}</button>
-          </div>
+          <select [ngModel]="standardCategory()" (ngModelChange)="setStdCat($event)">
+            <option value="">전체</option>
+            <option *ngFor="let c of categoriesNoISO" [value]="c">{{ c }}</option>
+          </select>
 
           <label class="f-title" style="margin-top:8px;">인증 체계로 검색</label>
-          <div class="btn-group wrap">
-            <button class="seg" [class.on]="cert()===''" (click)="setCert('')">전체</button>
-            <button class="seg" [class.on]="cert()==='ISO9001'" (click)="setCert('ISO9001')">ISO9001</button>
-            <button class="seg" [class.on]="cert()==='ISO22716'" (click)="setCert('ISO22716')">ISO22716</button>
-            <button class="seg" [class.on]="cert()==='ISO14001'" (click)="setCert('ISO14001')">ISO14001</button>
-            <button class="seg" [class.on]="cert()==='HALAL'" (click)="setCert('HALAL')">HALAL</button>
-          </div>
+          <select [ngModel]="cert()" (ngModelChange)="setCert($event)">
+            <option value="">전체</option>
+            <option value="ISO9001">ISO9001</option>
+            <option value="ISO22716">ISO22716</option>
+            <option value="ISO14001">ISO14001</option>
+            <option value="HALAL">HALAL</option>
+          </select>
+          <label class="f-title" style="margin-top:8px;">Audit 업체로 검색</label>
+          <select [ngModel]="auditCompany()" (ngModelChange)="auditCompany.set($event); onFiltersChanged()">
+            <option value="">전체</option>
+            <option *ngFor="let c of auditCompanies" [value]="c">{{ c }}</option>
+          </select>
         </div>
       </div>
     </aside>
@@ -343,6 +348,9 @@ export class RmdFormsComponent {
   overdueOnly = signal<boolean>(false);
   standard = signal<string>('');
   standardCategory = signal<string>('');
+  // Audit companies for filter
+  auditCompanies: string[] = [];
+  auditCompany = signal<string>('');
   // user options for typeahead
   users: string[] = [];
   userPairs: Array<{ name: string; email: string }> = [];
@@ -364,6 +372,11 @@ export class RmdFormsComponent {
   infoOpen = signal<boolean>(false);
   constructor(private supabase: SupabaseService){}
 
+  // preload audit companies when component constructed
+  private async preloadCompanies(){
+    try{ this.auditCompanies = (await this.supabase.listAuditCompanies()).map((r:any)=> r.name).filter(Boolean); }catch{}
+  }
+
   filtered = computed(() => {
     const q = this.query().trim().toLowerCase();
     const base = this.categories.map(cat => ({
@@ -375,11 +388,12 @@ export class RmdFormsComponent {
         const byMethod = !this.method() || (i as any).method === this.method();
         const byPeriod = !this.period() || (i as any).period === this.period();
         const byStandard = !this.standard() || ((i as any).standard || '').toLowerCase().includes(this.standard().toLowerCase());
+        const byCompany = !this.auditCompany() || (((i as any).companies || []).includes(this.auditCompany()));
         const stdCat = ((i as any).standardCategory || cat.category) as string;
         const byStdCat = !this.standardCategory() || stdCat.toLowerCase() === this.standardCategory().toLowerCase();
         // overdueOnly flag is placeholder; in real data you'd check due dates
         const byOverdue = !this.overdueOnly() || !!(i as any).overdue;
-        return byKeyword && byDept && byOwner && byMethod && byPeriod && byStandard && byStdCat && byOverdue;
+        return byKeyword && byDept && byOwner && byMethod && byPeriod && byStandard && byStdCat && byCompany && byOverdue;
       })
     })).filter(cat => cat.items.length > 0);
     return base;
@@ -535,6 +549,7 @@ export class RmdFormsComponent {
   }
 
   ngOnInit(){
+    this.preloadCompanies();
     // Load meta from DB; fallback to localStorage
     queueMicrotask(async ()=>{
       try{
