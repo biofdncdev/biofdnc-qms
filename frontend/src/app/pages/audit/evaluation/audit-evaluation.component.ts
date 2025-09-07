@@ -215,7 +215,7 @@ interface AuditDate { value: string; label: string; }
   <div class="preview-backdrop" *ngIf="linkPopup" (click)="linkPopup=null">
     <div class="preview" (click)="$event.stopPropagation()">
       <header>
-        <div class="name">{{ linkPopup?.id }} · {{ linkPopup?.title }}</div>
+        <div class="name">{{ linkPopup.id }} · {{ linkPopup.title }}</div>
         <button (click)="linkPopup=null">×</button>
       </header>
       <div class="body">

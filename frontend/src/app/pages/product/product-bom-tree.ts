@@ -24,7 +24,7 @@ export class ChildrenComponent { nodes?: BomNode[]; }
 @Component({
   standalone: true,
   selector: 'app-product-bom-tree',
-  imports: [CommonModule, FormsModule, ChildrenComponent],
+  imports: [CommonModule, FormsModule],
   template: `
   <div class="page">
     <header class="top"><h2><span class="title-main">Product</span> <span class="sub">BOM Tree</span></h2>
