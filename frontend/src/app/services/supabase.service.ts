@@ -90,7 +90,10 @@ export class SupabaseService {
     return this.ensureClient().from('users').update({ role }).eq('id', id);
   }
   async updateUserName(id: string, name: string) {
-    return this.ensureClient().from('users').update({ name }).eq('id', id);
+    const client = this.ensureClient();
+    // Keep auth metadata in sync so server trigger won't overwrite profile name later
+    try { await client.auth.updateUser({ data: { name } }); } catch {}
+    return client.from('users').update({ name }).eq('id', id);
   }
 
   async updateLoginState(id: string, isOnline: boolean) {
