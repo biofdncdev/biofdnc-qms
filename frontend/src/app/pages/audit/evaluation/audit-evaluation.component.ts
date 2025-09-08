@@ -476,8 +476,24 @@ export class AuditEvaluationComponent {
   private preHydrated: boolean = false;
   uiHydrated: boolean = false;
   private initialScrollTop: number = 0;
+  // pending target to open (from deep-link or record page)
+  private pendingOpenId: number | null = null;
   async ngOnInit(){
     try{
+      // Deep-link (?open=ID) or session flag from Record → remember target
+      try{
+        const params = new URLSearchParams(location.search);
+        const open = Number(params.get('open') || '');
+        if (Number.isFinite(open)) this.pendingOpenId = open;
+      }catch{}
+      try{
+        const raw = sessionStorage.getItem('audit.eval.forceOpen');
+        if (raw && !this.pendingOpenId){
+          const n = Number(raw); if (Number.isFinite(n)) this.pendingOpenId = n;
+        }
+        sessionStorage.removeItem('audit.eval.forceOpen');
+        sessionStorage.removeItem('audit.eval.forceOpenTitle');
+      }catch{}
       const u = await this.supabase.getCurrentUser();
       if(u){
         const { data } = await this.supabase.getUserProfile(u.id);
@@ -515,13 +531,9 @@ export class AuditEvaluationComponent {
           if (dateReady) {
             if (usedCache) { this.loadByDate(); } else { await this.loadByDate(); }
           }
-          // Restore open item and scroll after data renders
+          // Restore scroll after data renders (selection is handled by pending open)
           setTimeout(()=>{
             try{
-              if (openId){
-                const it = this.items().find(x => (x as any).id === openId);
-                if (it) this.toggleDetails(it as any);
-              }
               this.initialScrollTop = s.scrollTop || 0;
               if(this.listRef) this.listRef.nativeElement.scrollTop = this.initialScrollTop;
             }catch{}
@@ -763,6 +775,7 @@ export class AuditEvaluationComponent {
       this.savedSelectedDate = d;
       this.setDate(d);
       await this.loadByDate();
+      await this.openFromPending();
     } finally {
       this.loadingSaved.set(false);
     }
@@ -805,6 +818,7 @@ export class AuditEvaluationComponent {
         try{ await this.applyTitlesFromJsonOrExcel(); }catch{}
       }
     }catch{ this.resetItems(); }
+    await this.openFromPending();
   }
   resetItems(){
     const blank = Array.from({ length: 214 }, (_, i) => {
@@ -1627,5 +1641,18 @@ export class AuditEvaluationComponent {
       '기보단': 'GIVAUDAN',
     };
     return (alias[raw] || raw).toUpperCase();
+  }
+
+  // Center and select the item specified by pendingOpenId (if any)
+  private async openFromPending(){
+    try{
+      const id = this.pendingOpenId || null;
+      if (!id) return;
+      const target = this.items().find(x => (x as any).id === id);
+      if (!target) return;
+      await this.selectItem(target as any);
+      setTimeout(()=> this.centerRow(id), 0);
+    }catch{}
+    this.pendingOpenId = null;
   }
 }
