@@ -1181,11 +1181,11 @@ export class AuditEvaluationComponent {
       return;
     }
     // Open/replace a single 'Standard' tab
-    const stdTab = '/tabs/standard';
+    const stdTab = 'standard:rmd';
     const stdUrl = `/app/standard/rmd?open=${encodeURIComponent(l.id)}&ts=${Date.now()}`;
     try{ sessionStorage.setItem('standard.forceOpen', String(l.id)); }catch{}
     this.persistUi();
-    this.tabBus.requestOpen('Standard 원료제조팀 규정', stdTab, stdUrl);
+    this.tabBus.requestOpen('원료제조팀 규정', stdTab, stdUrl);
   }
   removeSelectedLink(it: any, l: { id: string }){
     if(!it?.selectedLinks) return; it.selectedLinks = (it.selectedLinks as any[]).filter(x => x.id !== l.id); this.saveProgress(it);
@@ -1280,6 +1280,8 @@ export class AuditEvaluationComponent {
   }
 
   async selectItem(it: any){
+    // 105번 이후 항목은 사용하지 않음
+    if (it && Number(it.id) > 104) return;
     // 단일 선택: 기존 임시 열림을 모두 닫고 선택 항목만 열림 상태 유지
     this.openItemId = it.id;
     this.openExtra.clear();
@@ -1430,7 +1432,7 @@ export class AuditEvaluationComponent {
   }
 
   visibleItems(){
-    const arr = this.items();
+    const arr = this.items().filter((it:any)=> Number(it.id) <= 104);
     // 키워드 필터 (제목/비고 포함)
     const kw = (this.keyword||'').trim().toLowerCase();
     const byKw = kw ? arr.filter((it:any)=>{
@@ -1708,7 +1710,7 @@ export class AuditEvaluationComponent {
   private async openFromPending(){
     try{
       const id = this.pendingOpenId || null;
-      if (!id) return;
+      if (!id || id > 104) return;
       const target = this.items().find(x => (x as any).id === id);
       if (!target) return;
       await this.selectItem(target as any);

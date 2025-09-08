@@ -254,10 +254,15 @@ export class AppShellComponent {
   private openOrNavigateTab(title: string, tabPath: string, navUrl: string){
     const idx = this.tabs.findIndex(t => t.path === tabPath);
     if (idx === -1) {
-      this.tabs.push({ title, path: tabPath, lastUrl: navUrl });
+      // Normalize title by reusing existing tab title for the same path if any (defensive)
+      const existing = this.tabs.find(t => t.path === tabPath);
+      const finalTitle = existing ? existing.title : title;
+      this.tabs.push({ title: finalTitle, path: tabPath, lastUrl: navUrl });
       this.activeTabIndex = this.tabs.length - 1;
     } else {
       this.activeTabIndex = idx;
+      // Also normalize title to the first-set one to avoid visual duplicates with slightly different names
+      this.tabs[idx].title = this.tabs[idx].title || title;
       this.tabs[idx].lastUrl = navUrl; // remember last visited URL for this tab
     }
     this.router.navigateByUrl(navUrl);
