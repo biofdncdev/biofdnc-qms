@@ -215,6 +215,22 @@ export class RmdPageComponent {
       const el = this.contentPane?.nativeElement; if(!el) return;
       el.addEventListener('scroll', () => this.persistUiState(), { passive: true });
     });
+    // Deep link: if ?open=ID or sessionStorage.standard.forceOpen exists, select that doc immediately
+    setTimeout(()=>{
+      try{
+        const params = new URLSearchParams(location.search);
+        const fromQuery = params.get('open');
+        const fromSession = sessionStorage.getItem('standard.forceOpen');
+        const target = (fromQuery || fromSession || '').trim();
+        if (target){
+          for(const cat of this.categories){
+            const it = cat.items.find((i:any)=> i.id === target);
+            if (it){ this.select(it, { resetScroll: false }); break; }
+          }
+        }
+        sessionStorage.removeItem('standard.forceOpen');
+      }catch{}
+    }, 0);
     // also persist on visibility change (e.g., before switching tabs)
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') this.persistUiState();
