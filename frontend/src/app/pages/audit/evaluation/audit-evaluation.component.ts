@@ -1229,6 +1229,13 @@ export class AuditEvaluationComponent {
   @HostListener('document:copy', ['$event'])
   onCopy(ev: ClipboardEvent){
     try{
+      // If user has selected text explicitly, copy the selection only
+      const sel = window.getSelection?.();
+      const selectedText = sel ? sel.toString() : '';
+      if (selectedText && selectedText.trim().length > 0){
+        // Let the browser handle default text copy
+        return; // do not preventDefault
+      }
       const id = this.openItemId || this.hoverItemId;
       if (!id) return;
       const it: any = this.items().find(x => (x as any).id === id);
