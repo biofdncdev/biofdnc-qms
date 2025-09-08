@@ -45,8 +45,8 @@ import { SupabaseService } from '../../services/supabase.service';
      :host .record-head{ display:flex; gap:12px; align-items:center; }
      :host .record-id{ font-family:monospace; font-size:12px; color:#475569; }
      :host .record-title{ font-weight:600; }
-     :host .meta{ margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; }
-     :host .chip{ font-size:12px; padding:4px 10px; border-radius:999px; background:#ffffff; color:#111827; border:1px solid #e5e7eb; margin-right:8px; margin-bottom:8px; display:inline-flex; align-items:center; gap:6px; }
+     :host .meta{ margin-top:6px; display:flex; gap:4px; flex-wrap:wrap; }
+     :host .chip{ font-size:12px; padding:4px 10px; border-radius:999px; background:#ffffff; color:#111827; border:1px solid #e5e7eb; margin-right:4px; margin-bottom:4px; display:inline-flex; align-items:center; gap:4px; }
      :host .chips.owners .chip{ padding:2px 8px; height:26px; }
      :host .chips.owners .chip .remove{ background:transparent; border:0; cursor:pointer; color:#64748b; }
      :host .chips.owners{ margin-top:8px; }
@@ -80,6 +80,8 @@ import { SupabaseService } from '../../services/supabase.service';
      :host .file-pill{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; background:#e2e8f0; }
      :host .std-row{ display:flex; gap:12px; align-items:flex-start; }
      :host .file-pill button{ border:0; background:transparent; color:#ef4444; cursor:pointer; }
+     :host .muted{ color:#6b7280; }
+     :host .eval-items{ font-size:12px; }
     `
   ],
   template: `
@@ -229,6 +231,32 @@ import { SupabaseService } from '../../services/supabase.service';
                 <button class="seg" *ngFor="let c of categoriesNoISO" [class.on]="sel.standardCategory===c" (click)="sel.standardCategory=c; persistMeta(sel)">{{ c }}</button>
               </div>
             </div>
+            <!-- 4행 1열: 연결된 규정 (읽기 전용 표시) -->
+            <div>
+              <label>연결된 규정</label>
+              <div class="chips">
+                <span class="chip" *ngIf="sel.standard; else noStd">{{ sel.standard }}</span>
+                <ng-template #noStd><span class="muted">없음</span></ng-template>
+              </div>
+            </div>
+            <!-- 5행 1열: 연결된 Audit (업체명) -->
+            <div>
+              <label>연결된 Audit</label>
+              <div class="chips">
+                <span class="chip" *ngFor="let c of linkedCompanies()">{{ c }}</span>
+                <span class="muted" *ngIf="!linkedCompanies().length">없음</span>
+              </div>
+            </div>
+            <!-- 5행 2열: 연결된 평가항목 (질문 텍스트) -->
+            <div style="grid-column:2;">
+              <label>연결된 평가항목</label>
+              <ng-container *ngIf="linkedAuditItems().length; else noEval">
+                <div class="eval-items" style="padding:10px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; display:flex; flex-direction:column; gap:6px;">
+                  <div *ngFor="let a of linkedAuditItems()">{{ a.number }}. {{ a.title || ('항목 ' + a.number) }}</div>
+                </div>
+              </ng-container>
+              <ng-template #noEval><span class="muted">없음</span></ng-template>
+            </div>
           </div>
           </ng-container>
           <ng-template #infoSummary>
@@ -360,6 +388,54 @@ export class RmdFormsComponent {
   // preload audit companies when component constructed
   private async preloadCompanies(){
     try{ this.auditCompanies = (await this.supabase.listAuditCompanies()).map((r:any)=> r.name).filter(Boolean); }catch{}
+  }
+
+  // ===== Audit 연결 맵 =====
+  private recordToAuditMap: Record<string, Array<{ number: number; company?: string | null }>> = {};
+  private auditTitleMap: Record<number, string> = {};
+  linkedAuditItems = signal<Array<{ number: number; title: string; company?: string | null }>>([]);
+  linkedCompanies = signal<string[]>([]);
+
+  private updateLinkedForSelected(){
+    const sel = this.selected();
+    if(!sel){ this.linkedAuditItems.set([]); this.linkedCompanies.set([]); return; }
+    const arr = this.recordToAuditMap[sel.id] || [];
+    const items = arr.map(a => ({ number: a.number, title: this.auditTitleMap[a.number] || '', company: a.company || undefined }));
+    this.linkedAuditItems.set(items);
+    const companies = Array.from(new Set(items.map(i => (i.company||'').toString().trim()).filter(Boolean)));
+    this.linkedCompanies.set(companies);
+  }
+
+  private async buildAuditLinkMap(){
+    try{
+      const prog = await this.supabase.listAllGivaudanProgress();
+      const map: Record<string, Array<{ number: number; company?: string | null }>> = {};
+      const rows = (prog as any)?.data || [];
+      for(const row of rows){
+        const num = row?.number as number;
+        const company = (row?.company ?? null) as string | null;
+        const comments = Array.isArray(row?.comments) ? row.comments : [];
+        const fb = comments.find((c:any)=> c && c.type==='fields');
+        const links = Array.isArray(fb?.links) ? fb.links : [];
+        for(const l of links){
+          const id = l?.id; const kind = l?.kind || 'record';
+          if (!id || kind !== 'record') continue;
+          if (!map[id]) map[id] = [];
+          if (!map[id].some(x => x.number === num)) map[id].push({ number: num, company });
+        }
+      }
+      this.recordToAuditMap = map;
+      // Load titles
+      try{
+        const items = await this.supabase.listAuditItems();
+        const tmap: Record<number, string> = {};
+        for(const it of (items as any[] || [])){
+          tmap[(it as any).number] = (it as any).title_ko || (it as any).title_en || '';
+        }
+        this.auditTitleMap = tmap;
+      }catch{}
+    }catch{}
+    this.updateLinkedForSelected();
   }
 
   filtered = computed(() => {
@@ -535,6 +611,8 @@ export class RmdFormsComponent {
 
   ngOnInit(){
     this.preloadCompanies();
+    // Build audit link map used for 5행 정보 표시
+    this.buildAuditLinkMap();
     // Load meta from DB; fallback to localStorage
     queueMicrotask(async ()=>{
       try{
@@ -730,6 +808,8 @@ export class RmdFormsComponent {
   async open(it: RmdFormItem){
     this.selected.set(it);
     await this.refreshPdfList();
+    // 선택한 항목에 대한 Audit 연결 업데이트
+    this.updateLinkedForSelected();
     if (it.id === 'BF-RMD-PM-IR-07'){
       try{
         const today = new Date().toISOString().slice(0,10);
