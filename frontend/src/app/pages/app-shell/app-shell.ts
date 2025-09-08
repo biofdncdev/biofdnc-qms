@@ -119,9 +119,6 @@ export class AppShellComponent {
           ]
         },
       );
-      if (this.isAdmin) {
-        this.menus.push({ key: 'sale', icon: 'payments', label: 'Sale', submenu: [ { label: 'Rice Bran Water H', path: '/app/sale/rice-bran-water-h' } ] });
-      }
     }
     // Alerts: visible to staff and above (admin/manager/staff)
     if ((this.isAdmin || this.isManager || this.isStaff) && !this.isViewer) {
