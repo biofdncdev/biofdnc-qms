@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RMD_FORM_CATEGORIES, RmdFormCategory, RmdFormItem } from './rmd-forms-data';
 import { RMD_STANDARDS } from '../../standard/rmd/rmd-standards';
 import { SupabaseService } from '../../services/supabase.service';
+import { TabService } from '../../services/tab.service';
 
 @Component({
   selector: 'app-rmd-forms',
@@ -252,7 +253,7 @@ import { SupabaseService } from '../../services/supabase.service';
               <label>연결된 평가항목</label>
               <ng-container *ngIf="linkedAuditItems().length; else noEval">
                 <div class="eval-items" style="padding:10px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; display:flex; flex-direction:column; gap:6px;">
-                  <div *ngFor="let a of linkedAuditItems()">{{ a.number }}. {{ a.title || ('항목 ' + a.number) }}</div>
+                  <div *ngFor="let a of linkedAuditItems()" (click)="openAuditItemTab(a.number)" style="cursor:pointer;">{{ a.number }}. {{ a.title || ('항목 ' + a.number) }}</div>
                 </div>
               </ng-container>
               <ng-template #noEval><span class="muted">없음</span></ng-template>
@@ -382,8 +383,8 @@ export class RmdFormsComponent {
   @ViewChild('ownerInput') ownerInputRef?: ElementRef<HTMLInputElement>;
   private pickerTargetItem: any = null;
   @ViewChild('stdPortal') stdPortal?: ElementRef<HTMLDivElement>;
-  infoOpen = signal<boolean>(false);
-  constructor(private supabase: SupabaseService){}
+  infoOpen = signal<boolean>(true);
+  constructor(private supabase: SupabaseService, private tabs: TabService){}
 
   // preload audit companies when component constructed
   private async preloadCompanies(){
@@ -404,6 +405,14 @@ export class RmdFormsComponent {
     this.linkedAuditItems.set(items);
     const companies = Array.from(new Set(items.map(i => (i.company||'').toString().trim()).filter(Boolean)));
     this.linkedCompanies.set(companies);
+  }
+
+  openAuditItemTab(num: number){
+    try{
+      // Persist preferred date/filters via query; audit page will restore last-used state
+      const url = `/app/audit/givaudan?open=${encodeURIComponent(String(num))}`;
+      this.tabs.requestOpen('Audit 평가 항목', 'audit:givaudan', url);
+    }catch{}
   }
 
   private async buildAuditLinkMap(){
