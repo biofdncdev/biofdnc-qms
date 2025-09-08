@@ -55,7 +55,7 @@
 
   <main class="right" #rightPane>
     <div class="toolbar">
-      <h3 *ngIf="selected(); else choose"> {{ selected()?.title }} </h3>
+      <h2 *ngIf="selected(); else choose"> {{ selected()?.title }} </h2>
       <div class="spacer"></div>
       <button class="primary" (click)="print()" [disabled]="!selected()">출력</button>
     </div>

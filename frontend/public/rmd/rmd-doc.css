@@ -9,7 +9,7 @@ html,body{marin:0;padding:0;background:var(--bg);color:var(--fg);font-family:Int
 /* Headings (golden-ratio-ish spacing) */
 .doc h1{ font-size:1.35rem; font-weight:700; margin:calc(var(--space-lg) - .3em) 0 .8em; }
 .doc h2{ font-size:1.35rem; font-weight:700; margin:var(--space-lg) 0 .7em; }
-.doc h3{ font-size:1.15rem; font-weight:700; margin:1.1em 0 .55em; }
+.doc h3{ font-size:1.35rem; font-weight:700; margin:1.1em 0 .55em; }
 .doc h4{ font-size:1.02rem; font-weight:700; margin:1em 0 .5em; }
 
 /* Paragraphs & lists */

@@ -209,6 +209,7 @@ export class RmdPageComponent {
     this.linkedRecords.set([ ...arr ]);
     // expanded by default whenever standard changes
     this.linkedExpanded.set(true);
+    try{ setTimeout(()=>{ const el = document.querySelector('section.linked-records .chips') as HTMLElement; if(el){ el.style.maxHeight = '2000px'; } }, 0); }catch{}
   }
   // open picker modal
   openRecordPicker(){ this.recPickerOpen.set(true); setTimeout(()=>{ try{ (document.getElementById('rec-picker-input') as HTMLInputElement)?.focus(); }catch{} }, 0); }
@@ -225,7 +226,12 @@ export class RmdPageComponent {
     else if (ev.key==='Enter'){ ev.preventDefault(); const i = this.recIndex(); if (i>=0 && list[i]) this.chooseLink(list[i]); this.closeRecordPicker(); }
     else if (ev.key==='Escape'){ ev.preventDefault(); this.closeRecordPicker(); }
   }
-  toggleExpand(){ this.linkedExpanded.set(!this.linkedExpanded()); try{ document.querySelector('section.linked-records')?.scrollIntoView({ behavior:'smooth', block:'nearest' }); }catch{} }
+  toggleExpand(){
+    const exp = !this.linkedExpanded();
+    this.linkedExpanded.set(exp);
+    try{ const el = document.querySelector('section.linked-records .chips') as HTMLElement; if(el){ el.style.maxHeight = exp ? '2000px' : '32px'; } }catch{}
+    this.persistUiState();
+  }
 
   // ===== UI state persistence =====
   private persistUiState(){
