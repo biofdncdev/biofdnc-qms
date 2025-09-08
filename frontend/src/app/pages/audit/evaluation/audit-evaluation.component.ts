@@ -8,7 +8,7 @@ import { RMD_FORM_CATEGORIES, RmdFormItem } from '../../../record/rmd-forms/rmd-
 import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
 import * as XLSX from 'xlsx';
 
-interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; companies?: string[]; comments?: Array<{ user: string; time: string; text: string; ownerTag?: boolean }>; owners?: string[]; company?: string | null; doneBy?: string; doneAt?: string; col1Text?: string; col3Text?: string; selectedLinks?: Array<{ id: string; title: string; kind: 'record'|'standard' }>; }
+interface AuditItem { id: number; titleKo: string; titleEn: string; done: boolean; status: 'pending'|'on-hold'|'na'|'impossible'|'in-progress'|'done'; note: string; departments: string[]; companies?: string[]; comments?: Array<{ user: string; time: string; text: string; ownerTag?: boolean }>; owners?: string[]; company?: string | null; doneBy?: string; doneAt?: string; col1Text?: string; col3Text?: string; selectedLinks?: Array<{ id: string; title: string; kind: 'record'|'standard' }>; __h1?: number; __h3?: number; }
 interface ResourceItem { id?: string; number?: number; name: string; type?: string; url?: string | null; file_url?: string | null; done?: boolean; }
 interface AuditDate { value: string; label: string; }
 
@@ -124,7 +124,7 @@ interface AuditDate { value: string; label: string; }
               <div class="details-inner comments-on">
                 <div class="assessment" *ngIf="false"></div>
                 <!-- 1열 1행: 상태 select 대신 입력창으로 변경 (그리드 셀 가득 채움) -->
-                <textarea class="status-select slide-input" style="grid-row:1; grid-column:1; width:100%;" rows="5" spellcheck="false" [(ngModel)]="it.col1Text" (input)="autoResize($event)" (blur)="saveProgress(it)" placeholder="평가 항목 세부 사항"></textarea>
+                <textarea class="status-select slide-input" style="grid-row:1; grid-column:1; width:100%;" [style.height.px]="it.__h1 || 120" rows="5" spellcheck="false" [(ngModel)]="it.col1Text" (input)="autoResize($event, it, '__h1')" (blur)="saveProgress(it)" placeholder="평가 항목 세부 사항"></textarea>
                 <div class="link-cell" style="grid-row:1; grid-column:2; display:flex; flex-direction:column; gap:6px; width:100%;">
                   <button class="btn mini pick-btn" style="align-self:flex-start; margin:4px 0;" (click)="openRecordPicker(it)">규정/기록 선택</button>
                   <div class="link-list" style="display:flex; flex-direction:column; gap:6px; width:100%;">
@@ -132,7 +132,7 @@ interface AuditDate { value: string; label: string; }
                   </div>
                 </div>
                 <!-- 3열 1행으로 이동 -->
-                <textarea class="owner-select slide-input" style="grid-row:1; grid-column:3; width:100%;" rows="5" spellcheck="false" [(ngModel)]="it.col3Text" (input)="autoResize($event)" (blur)="saveProgress(it)" placeholder="평가 항목 진행 현황"></textarea>
+                <textarea class="owner-select slide-input" style="grid-row:1; grid-column:3; width:100%;" [style.height.px]="it.__h3 || 120" rows="5" spellcheck="false" [(ngModel)]="it.col3Text" (input)="autoResize($event, it, '__h3')" (blur)="saveProgress(it)" placeholder="평가 항목 진행 현황"></textarea>
                 <div class="comments">
                   <div class="new">
                     <textarea [(ngModel)]="newComment[it.id]" id="comment-input-{{it.id}}" (keydown)="onCommentKeydown($event, it)" placeholder="댓글을 입력..." [disabled]="!isDateCreated()"></textarea>
@@ -1289,6 +1289,8 @@ export class AuditEvaluationComponent {
     // Load resources
     const { data: res } = await this.supabase.listGivaudanResources(it.id);
     this.resources = res || [];
+    // 내용 길이만큼 입력창이 처음부터 보이도록 즉시 측정/캐시
+    setTimeout(()=> this.measureAndCacheSlideHeights(it), 0);
   }
 
   isOpen(it: any){ return this.openItemId === it.id || this.openExtra.has(it.id); }
@@ -1320,6 +1322,8 @@ export class AuditEvaluationComponent {
     }
     const { data: res } = await this.supabase.listGivaudanResources(it.id);
     this.resources = res || [];
+    // 슬라이드가 열릴 때도 동일하게 높이 측정/캐시
+    setTimeout(()=> this.measureAndCacheSlideHeights(it), 0);
   }
 
   private centerRow(id: number){
@@ -1536,15 +1540,46 @@ export class AuditEvaluationComponent {
     this.uploadFor(r, fake);
   }
   toggleResourceDone(r: any){ r.done = !r.done; this.saveResource(r); }
-  autoResize(ev: any){
+  autoResize(ev: any, it?: any, key?: string){
     const ta = ev?.target as HTMLTextAreaElement; if(!ta) return;
-    const lineBreaks = (ta.value.match(/\n/g) || []).length;
-    if (lineBreaks === 0){
-      ta.style.height = '32px';
+    // 슬라이드 입력창(평가 항목 세부/진행 현황)일 때: 내용 높이에 맞춰 즉시 확장하고 캐시
+    if (key && it){
+      ta.style.height = 'auto';
+      const base = 120; const cap = 480;
+      const text = (ta.value||'').trim();
+      const contentH = Math.max(ta.scrollHeight, 32);
+      const finalH = text ? Math.min(cap, Math.max(base, contentH)) : base;
+      ta.style.overflowY = 'hidden';
+      ta.style.height = finalH + 'px';
+      try{ (it as any)[key] = finalH; }catch{}
       return;
     }
+    // 비고 입력창: 줄바꿈이 없으면 한 줄(32px), 있으면 최대 120px까지 확장
+    const lineBreaks = (ta.value.match(/\n/g) || []).length;
+    if (lineBreaks === 0){ ta.style.height = '32px'; return; }
     ta.style.height = 'auto';
     ta.style.height = Math.min(120, Math.max(ta.scrollHeight, 32)) + 'px';
+  }
+
+  private measureAndCacheSlideHeights(it: any){
+    try{
+      const container = this.listRef?.nativeElement as HTMLElement | undefined; if(!container) return;
+      const row = container.querySelector(`.item[data-id="${it.id}"]`) as HTMLElement | null; if(!row) return;
+      const tas = row.querySelectorAll('textarea.slide-input');
+      const base = 120; const cap = 480;
+      if (tas[0]){
+        const ta = tas[0] as HTMLTextAreaElement; ta.style.height = 'auto';
+        const text = (ta.value||'').trim();
+        const h = text ? Math.min(cap, Math.max(base, Math.max(ta.scrollHeight, 32))) : base;
+        (it as any).__h1 = h; ta.style.height = h + 'px'; ta.style.overflowY = 'hidden';
+      }
+      if (tas[1]){
+        const ta = tas[1] as HTMLTextAreaElement; ta.style.height = 'auto';
+        const text = (ta.value||'').trim();
+        const h = text ? Math.min(cap, Math.max(base, Math.max(ta.scrollHeight, 32))) : base;
+        (it as any).__h3 = h; ta.style.height = h + 'px'; ta.style.overflowY = 'hidden';
+      }
+    }catch{}
   }
   getFileName(r: any){ try{ const url = (r?.file_url||'').split('?')[0]; return url.substring(url.lastIndexOf('/')+1); }catch{return '파일 열기';} }
 
