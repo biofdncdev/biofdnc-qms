@@ -41,8 +41,9 @@ import { TabService } from '../../services/tab.service';
      :host .picker-item{ padding:10px 12px; display:flex; gap:12px; align-items:center; cursor:pointer; }
      :host .picker-item.hover{ background:#f8fafc; }
      :host .picker-item.active{ background:#eef2ff; box-shadow: inset 0 0 0 2px #6366f1; }
-     :host .record-item{ padding:12px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; cursor:pointer; }
+     :host .record-item{ padding:12px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; cursor:pointer; transition: box-shadow .16s ease, border-color .16s ease, background-color .16s ease; }
      :host .record-item:hover{ border-color:#cbd5e1; background:#f8fafc; box-shadow:0 8px 18px rgba(2,6,23,.06); }
+     :host .record-item.selected{ border-color:#c7d2fe; background:#eef2ff; box-shadow:0 12px 28px rgba(99,102,241,.18), inset 0 0 0 1px rgba(99,102,241,.25); }
      :host .record-head{ display:flex; gap:12px; align-items:center; }
      :host .record-id{ font-family:monospace; font-size:12px; color:#475569; }
      :host .record-title{ font-weight:600; }
@@ -141,7 +142,7 @@ import { TabService } from '../../services/tab.service';
 
     <section class="center" #centerPane>
       <section class="results">
-        <div class="record-item" *ngFor="let r of filteredFlat()" (click)="open(r)">
+        <div class="record-item" *ngFor="let r of filteredFlat()" (click)="open(r)" [class.selected]="selected()?.id===r.id">
           <div class="record-head">
             <span class="record-id">{{ r.id }}</span>
             <span class="record-title">{{ r.title }}</span>
