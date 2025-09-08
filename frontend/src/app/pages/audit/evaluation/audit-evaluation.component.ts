@@ -275,7 +275,7 @@ interface AuditDate { value: string; label: string; }
     .item{ display:grid; grid-template-columns: 54px 1fr 1.6fr; gap:12px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; align-items:start; min-width:0; transition: box-shadow .18s ease, transform .18s ease; }
     .item.selected{ box-shadow: 0 10px 28px rgba(2,6,23,.10), inset 0 0 0 1px rgba(99,102,241,.22); transform: translateZ(0); }
     .item.selected::after{ content:''; position:absolute; left:8px; right:8px; bottom:-2px; height:4px; border-radius:999px; background:linear-gradient(90deg,rgba(99,102,241,.22),rgba(99,102,241,.08)); }
-    .id{ font-weight:700; color:#475569; display:flex; align-items:center; justify-content:center; }
+    .id{ font-weight:500; color:#cbd5e1; opacity:.6; display:flex; align-items:center; justify-content:center; }
     .ko{ font-weight:600; margin-bottom:2px; }
     .en{ color:#64748b; font-size:.92em; }
     /* 4열 x 2행 레이아웃 */
