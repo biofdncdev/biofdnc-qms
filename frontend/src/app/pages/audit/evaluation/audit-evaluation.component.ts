@@ -171,7 +171,7 @@ interface AuditDate { value: string; label: string; }
   
   <!-- Record picker modal -->
   <div class="preview-backdrop" *ngIf="recordPickerOpen" (click)="closeRecordPicker()">
-    <div class="preview draggable" [ngStyle]="pickerDragStyle()" (click)="$event.stopPropagation()" (keydown)="onPickerKeydown($event)" tabindex="0">
+    <div class="preview draggable" #pickerRoot (click)="$event.stopPropagation()" (keydown)="onPickerKeydown($event)" tabindex="0">
       <header (mousedown)="startPickerDrag($event)">
         <div class="name">규정/기록 선택</div>
         <button (click)="closeRecordPicker()">×</button>
@@ -407,6 +407,7 @@ interface AuditDate { value: string; label: string; }
 
     .preview-backdrop{ position:fixed; inset:0; background:rgba(2,6,23,.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
     .preview{ width:min(880px,92vw); max-height:80vh; background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.2); overflow:hidden; display:flex; flex-direction:column; }
+    .preview.draggable{ will-change: transform; }
     .preview header{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee; font-weight:700; }
     .preview .body{ padding:16px; overflow:auto; }
     .copy-modal .form{ display:flex; flex-direction:column; gap:12px; }
@@ -1050,15 +1051,27 @@ export class AuditEvaluationComponent {
   preview(r: any){ this.previewItem = r; this.previewing = true; }
   linkPopup: { id: string; title: string } | null = null;
   // drag state for picker
-  private pickerDrag = { active: false, startX: 0, startY: 0, offsetX: 0, offsetY: 0 };
+  @ViewChild('pickerRoot') pickerRoot?: ElementRef<HTMLDivElement>;
+  private pickerDrag = { active: false, startX: 0, startY: 0, offsetX: 0, offsetY: 0, raf: 0, needsPaint: false };
   startPickerDrag(ev: MouseEvent){
     this.pickerDrag.active = true; this.pickerDrag.startX = ev.clientX; this.pickerDrag.startY = ev.clientY;
     const move = (e: MouseEvent)=>{
-      if(!this.pickerDrag.active) return; this.pickerDrag.offsetX += (e.clientX - this.pickerDrag.startX); this.pickerDrag.offsetY += (e.clientY - this.pickerDrag.startY); this.pickerDrag.startX = e.clientX; this.pickerDrag.startY = e.clientY; };
-    const up = ()=>{ this.pickerDrag.active = false; window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+      if(!this.pickerDrag.active) return;
+      this.pickerDrag.offsetX += (e.clientX - this.pickerDrag.startX);
+      this.pickerDrag.offsetY += (e.clientY - this.pickerDrag.startY);
+      this.pickerDrag.startX = e.clientX; this.pickerDrag.startY = e.clientY;
+      if (!this.pickerDrag.raf){ this.pickerDrag.raf = requestAnimationFrame(this.paintPickerTransform); }
+    };
+    const up = ()=>{ this.pickerDrag.active = false; window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); cancelAnimationFrame(this.pickerDrag.raf); this.pickerDrag.raf = 0; };
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
   }
-  pickerDragStyle(){ return { transform: `translate(${this.pickerDrag.offsetX}px, ${this.pickerDrag.offsetY}px)` } as any; }
+  paintPickerTransform = ()=>{
+    this.pickerDrag.raf = 0;
+    try{
+      const el = this.pickerRoot?.nativeElement; if(!el) return;
+      el.style.transform = `translate(${this.pickerDrag.offsetX}px, ${this.pickerDrag.offsetY}px)`;
+    }finally{}
+  }
 
   // Slide open state and assessment/progress
   openItemId: number | null = null;
