@@ -204,9 +204,7 @@ interface AuditDate { value: string; label: string; }
           </div>
           <div *ngIf="!pickerResults().length" style="padding:12px; color:#94a3b8;">결과가 없습니다.</div>
         </div>
-        <div style="margin-top:10px; text-align:right;">
-          <button class="btn" (click)="closeRecordPicker()">닫기</button>
-        </div>
+        <!-- 하단 닫기 버튼 제거 -->
       </div>
     </div>
   </div>
@@ -1175,15 +1173,17 @@ export class AuditEvaluationComponent {
     if ((l.kind||'record') === 'record'){
       // Open/replace a single 'Record' tab instead of replacing current Audit view
       const tabPath = '/tabs/record';
-      const navUrl = `/app/record/rmd-forms?open=${encodeURIComponent(l.id)}`;
+      const navUrl = `/app/record/rmd-forms?open=${encodeURIComponent(l.id)}&ts=${Date.now()}`;
       // Use TabService to request/activate the shared Record tab
+      try{ sessionStorage.setItem('record.forceOpen', String(l.id)); }catch{}
       this.persistUi();
       this.tabBus.requestOpen('Record 원료제조팀', tabPath, navUrl);
       return;
     }
     // Open/replace a single 'Standard' tab
     const stdTab = '/tabs/standard';
-    const stdUrl = `/app/standard/rmd?open=${encodeURIComponent(l.id)}`;
+    const stdUrl = `/app/standard/rmd?open=${encodeURIComponent(l.id)}&ts=${Date.now()}`;
+    try{ sessionStorage.setItem('standard.forceOpen', String(l.id)); }catch{}
     this.persistUi();
     this.tabBus.requestOpen('Standard 원료제조팀 규정', stdTab, stdUrl);
   }
