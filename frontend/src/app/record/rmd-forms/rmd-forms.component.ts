@@ -229,21 +229,6 @@ import { SupabaseService } from '../../services/supabase.service';
                 <button class="seg" *ngFor="let c of categoriesNoISO" [class.on]="sel.standardCategory===c" (click)="sel.standardCategory=c; persistMeta(sel)">{{ c }}</button>
               </div>
             </div>
-            <div>
-              <label>연결된 규정</label>
-              <div class="std-row">
-                <div class="search" style="flex:1;">
-                  <input type="search" placeholder="규정 ID/제목 검색" readonly (click)="openStandardPicker(sel)">
-                </div>
-                <div class="std-chips" style="flex:1;">
-                  <div class="chips" *ngIf="(sel.selectedLinks||[]).length">
-                    <span class="chip" *ngFor="let l of sel.selectedLinks">{{ l.id }} / {{ l.title }}
-                      <button class="remove" (click)="removeStandardChip(sel, l)">×</button>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
           </ng-container>
           <ng-template #infoSummary>

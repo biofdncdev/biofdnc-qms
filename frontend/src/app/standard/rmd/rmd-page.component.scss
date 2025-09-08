@@ -6,7 +6,7 @@
   .search input.disabled{ opacity:.5; pointer-events:none; }
   .search .loader{ width:16px; height:16px; border:2px solid #ddd; border-top-color:#1b5fff; border-radius:50%; animation:spin 1s linear infinite; }
   .search .search-nav{ display:flex; align-items:center; gap:6px; margin-left:auto; }
-  .search .search-nav .nav{ border:0; background:#eee; width:22px; height:22px; border-radius:4px; cursor:pointer; }
+  .search .search-nav .nav{ border:0; background:#eee; width:22px; height:22px; border-radius:4px; cursor:pointer; display:grid; place-items:center; padding:0; line-height:1; text-align:center; box-sizing:border-box; }
   @keyframes spin{ to { transform:rotate(360deg)} }
   input[type=search] { flex: 1; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; }
   .clear { border: 0; background: #eee; width: 30px; height: 30px; border-radius: 6px; }
@@ -26,7 +26,7 @@
 .search input.disabled{ opacity:.5; pointer-events:none; }
 .search .loader{ width:16px; height:16px; border:2px solid #ddd; border-top-color:#1b5fff; border-radius:50%; animation:spin 1s linear infinite; }
 .search .search-nav{ display:flex; align-items:center; gap:6px; margin-left:auto; }
-.search .search-nav .nav{ border:0; background:#eee; width:22px; height:22px; border-radius:4px; cursor:pointer; }
+.search .search-nav .nav{ border:0; background:#eee; width:22px; height:22px; border-radius:4px; cursor:pointer; display:grid; place-items:center; padding:0; line-height:1; text-align:center; box-sizing:border-box; }
 @keyframes spin{ to { transform:rotate(360deg)} }
 .right {
   padding: 0 16px 0 24px; overflow: hidden; position: relative; background: #fff;
