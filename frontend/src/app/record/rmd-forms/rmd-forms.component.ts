@@ -83,6 +83,8 @@ import { TabService } from '../../services/tab.service';
      :host .file-pill button{ border:0; background:transparent; color:#ef4444; cursor:pointer; }
      :host .muted{ color:#6b7280; }
      :host .eval-items{ font-size:12px; }
+     :host .eval-item{ padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer; transition: box-shadow .12s ease, transform .12s ease; }
+     :host .eval-item:hover{ box-shadow:0 6px 16px rgba(2,6,23,.12); transform: translateY(-1px); }
     `
   ],
   template: `
@@ -137,7 +139,7 @@ import { TabService } from '../../services/tab.service';
       </div>
     </aside>
 
-    <section class="center">
+    <section class="center" #centerPane>
       <section class="results">
         <div class="record-item" *ngFor="let r of filteredFlat()" (click)="open(r)">
           <div class="record-head">
@@ -158,7 +160,7 @@ import { TabService } from '../../services/tab.service';
       </section>
     </section>
 
-    <main class="right">
+    <main class="right" #rightPane>
       <div class="toolbar">
         <ng-container *ngIf="selected() as sel; else choose">
           <div class="title-wrap">
@@ -237,8 +239,8 @@ import { TabService } from '../../services/tab.service';
             <div>
               <label>연결된 규정</label>
               <div class="chips">
-                <span class="chip" *ngIf="sel.standard; else noStd">{{ sel.standard }}</span>
-                <ng-template #noStd><span class="muted">없음</span></ng-template>
+                <span class="chip" *ngFor="let s of linkedStandards()" (click)="openStandardTab(s.id)" style="cursor:pointer;">{{ s.id }} · {{ s.title }}</span>
+                <span class="muted" *ngIf="!linkedStandards().length">없음</span>
               </div>
             </div>
             <!-- 5행 1열: 연결된 Audit (업체명) -->
@@ -253,8 +255,8 @@ import { TabService } from '../../services/tab.service';
             <div style="grid-column:2;">
               <label>연결된 평가항목</label>
               <ng-container *ngIf="linkedAuditItems().length; else noEval">
-                <div class="eval-items" style="padding:10px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; display:flex; flex-direction:column; gap:6px;">
-                  <div *ngFor="let a of linkedAuditItems()" (click)="openAuditItemTab(a.number)" style="cursor:pointer;">{{ a.number }}. {{ a.title || ('항목 ' + a.number) }}</div>
+                <div class="eval-items" style="padding:10px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; display:flex; flex-direction:column; gap:8px;">
+                  <div class="eval-item" *ngFor="let a of linkedAuditItems()" (click)="openAuditItemTab(a.number)">{{ a.number }}. {{ a.title || ('항목 ' + a.number) }}</div>
                 </div>
               </ng-container>
               <ng-template #noEval><span class="muted">없음</span></ng-template>
@@ -386,6 +388,8 @@ export class RmdFormsComponent {
   @ViewChild('stdPortal') stdPortal?: ElementRef<HTMLDivElement>;
   infoOpen = signal<boolean>(true);
   constructor(private supabase: SupabaseService, private tabs: TabService){}
+  @ViewChild('centerPane', { static: false }) centerPane?: ElementRef<HTMLElement>;
+  @ViewChild('rightPane', { static: false }) rightPane?: ElementRef<HTMLElement>;
 
   // preload audit companies when component constructed
   private async preloadCompanies(){
@@ -397,6 +401,13 @@ export class RmdFormsComponent {
   private auditTitleMap: Record<number, string> = {};
   linkedAuditItems = signal<Array<{ number: number; title: string; company?: string | null }>>([]);
   linkedCompanies = signal<string[]>([]);
+  // linked standards (from standards page -> localStorage map)
+  linkedStandards = signal<Array<{ id: string; title: string }>>([]);
+  private stdTitleById: Record<string, string> = (()=>{
+    const map: Record<string,string> = {};
+    try{ for(const c of RMD_STANDARDS){ for(const it of (c.items||[])){ map[it.id] = it.title; } } }catch{}
+    return map;
+  })();
 
   private updateLinkedForSelected(){
     const sel = this.selected();
@@ -406,6 +417,19 @@ export class RmdFormsComponent {
     this.linkedAuditItems.set(items);
     const companies = Array.from(new Set(items.map(i => (i.company||'').toString().trim()).filter(Boolean)));
     this.linkedCompanies.set(companies);
+    // compute linked standards from localStorage (rmd_standard_links)
+    try{
+      const raw = localStorage.getItem('rmd_standard_links');
+      const map = raw ? JSON.parse(raw) as Record<string, Array<{ id:string; title:string }>> : {};
+      const hits: Array<{ id:string; title:string }> = [];
+      for(const stdId of Object.keys(map||{})){
+        const list = map[stdId] || [];
+        if (list.some(x => x && x.id === sel.id)){
+          hits.push({ id: stdId, title: this.stdTitleById[stdId] || stdId });
+        }
+      }
+      this.linkedStandards.set(hits);
+    }catch{ this.linkedStandards.set([]); }
   }
 
   openAuditItemTab(num: number){
@@ -687,15 +711,17 @@ export class RmdFormsComponent {
         this.userPairs = (users||[]).map((u:any)=> ({ name: u?.name || '', email: u?.email || '' }));
         this.users = this.userPairs.map(p => p.name || p.email).filter(Boolean);
       }catch{}
-      // Deep-link open by id (e.g., ?open=ISO-9001)
+      // Restore UI state (selected & scroll) unless deep-link is present
+      let restored = false;
       try{
         const params = new URLSearchParams(location.search);
         const openId = params.get('open');
         if (openId){
           const target = this.filteredFlat().find(r => r.id === openId);
-          if (target){ this.open(target); }
+          if (target){ this.open(target); restored = true; }
         }
       }catch{}
+      if (!restored){ this.restoreUiState(); }
     });
   }
 
@@ -842,6 +868,14 @@ export class RmdFormsComponent {
         }, 0);
       }catch{}
     }
+    this.persistUiState();
+  }
+  openStandardTab(stdId: string){
+    try{
+      this.persistUiState();
+      const url = `/app/standard/rmd?open=${encodeURIComponent(stdId)}`;
+      this.tabs.requestOpen('원료제조팀 규정', 'standard:rmd', url);
+    }catch{}
   }
   // ===== Temperature/Humidity PDF Annotator =====
   @ViewChild('container', { static: false }) containerRef?: ElementRef<HTMLDivElement>;
@@ -927,6 +961,9 @@ export class RmdFormsComponent {
       this.periodStartSig.set(this.computePeriodStart(this.dateValue()));
       await this.renderPdf();
       await this.loadRecord();
+      // attach scroll listeners to persist UI positions
+      try{ this.centerPane?.nativeElement?.addEventListener('scroll', () => this.persistUiState(), { passive: true }); }catch{}
+      try{ this.rightPane?.nativeElement?.addEventListener('scroll', () => this.persistUiState(), { passive: true }); }catch{}
     });
   }
 
@@ -1157,5 +1194,32 @@ export class RmdFormsComponent {
     if (g.pdfjsLib) return g.pdfjsLib;
     await this.loadScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.js');
     return g.pdfjsLib;
+  }
+
+  // ===== UI state persistence (selected record + scroll) =====
+  private persistUiState(){
+    try{
+      const s = {
+        selectedId: this.selected()?.id || null,
+        centerScroll: this.centerPane?.nativeElement?.scrollTop || 0,
+        rightScroll: this.rightPane?.nativeElement?.scrollTop || 0,
+      } as any;
+      localStorage.setItem('rmd_forms_state', JSON.stringify(s));
+    }catch{}
+  }
+  private restoreUiState(){
+    try{
+      const raw = localStorage.getItem('rmd_forms_state'); if(!raw) return;
+      const s = JSON.parse(raw);
+      if(s?.selectedId){
+        const target = this.filteredFlat().find(r => r.id === s.selectedId);
+        if (target) this.selected.set(target);
+        // 링크 정보 표시 및 PDF 목록 업데이트
+        this.updateLinkedForSelected();
+        this.refreshPdfList();
+      }
+      setTimeout(()=>{ this.centerPane?.nativeElement?.scrollTo({ top: Number(s?.centerScroll||0), behavior:'auto' }); }, 30);
+      setTimeout(()=>{ this.rightPane?.nativeElement?.scrollTo({ top: Number(s?.rightScroll||0), behavior:'auto' }); }, 30);
+    }catch{}
   }
 }
