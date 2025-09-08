@@ -256,7 +256,7 @@ import { TabService } from '../../services/tab.service';
               <label>연결된 평가항목</label>
               <ng-container *ngIf="linkedAuditItems().length; else noEval">
                 <div class="eval-items" style="padding:10px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; display:flex; flex-direction:column; gap:8px;">
-                  <div class="eval-item" *ngFor="let a of linkedAuditItems()" (click)="openAuditItemTab(a.number)">{{ a.number }}. {{ a.title || ('항목 ' + a.number) }}</div>
+                  <div class="eval-item" *ngFor="let a of linkedAuditItems()" (click)="openAuditItemTab(a.number, a.title)">{{ a.number }}. {{ a.title || ('항목 ' + a.number) }}</div>
                 </div>
               </ng-container>
               <ng-template #noEval><span class="muted">없음</span></ng-template>
@@ -432,8 +432,12 @@ export class RmdFormsComponent {
     }catch{ this.linkedStandards.set([]); }
   }
 
-  openAuditItemTab(num: number){
+  openAuditItemTab(num: number, title?: string){
     try{
+      try{ 
+        sessionStorage.setItem('audit.eval.forceOpen', String(num)); 
+        if (title) sessionStorage.setItem('audit.eval.forceOpenTitle', String(title));
+      }catch{}
       // Persist preferred date/filters via query; audit page will restore last-used state
       const url = `/app/audit/givaudan?open=${encodeURIComponent(String(num))}`;
       this.tabs.requestOpen('Audit 평가 항목', 'audit:givaudan', url);
