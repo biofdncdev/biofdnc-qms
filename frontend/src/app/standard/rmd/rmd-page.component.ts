@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { RMD_STANDARDS, RegulationItem, RegulationCategory } from './rmd-standards';
 import { RMD_FORM_CATEGORIES, RmdFormItem } from '../../record/rmd-forms/rmd-forms-data';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { TabService } from '../../services/tab.service';
 
 interface SearchDoc { id: string; title: string; content: string; }
 
@@ -18,6 +19,7 @@ interface SearchDoc { id: string; title: string; content: string; }
 export class RmdPageComponent {
   private http = inject(HttpClient);
   private sanitizer = inject(DomSanitizer);
+  private tabs = inject(TabService);
 
   categories: RegulationCategory[] = RMD_STANDARDS;
 
@@ -51,6 +53,71 @@ export class RmdPageComponent {
   // collapse state for chips row (default: expanded)
   linkedExpanded = signal<boolean>(true);
 
+  // Toolbar dropdown states
+  addMenuOpen = signal<boolean>(false);
+  linksMenuOpen = signal<boolean>(false);
+  tQuery = signal<string>('');
+  tIndex = signal<number>(-1);
+  private addCloseTimer: any = null;
+  private linksCloseTimer: any = null;
+
+  openLinkedRecord(id: string){
+    try{
+      // persist current UI state (including scroll) before navigating away
+      this.persistUiState();
+      const url = `/app/record/rmd-forms?open=${encodeURIComponent(id)}`;
+      this.tabs.requestOpen('원료제조팀 기록', 'record:rmd-forms', url);
+    }catch{}
+  }
+
+  onMenuEnter(which: 'add'|'links'){
+    if (which==='add'){ clearTimeout(this.addCloseTimer); this.addMenuOpen.set(true); }
+    else { clearTimeout(this.linksCloseTimer); this.linksMenuOpen.set(true); }
+  }
+  onMenuLeave(which: 'add'|'links'){
+    const closer = () => { if (which==='add') this.addMenuOpen.set(false); else this.linksMenuOpen.set(false); };
+    const t = setTimeout(closer, 120);
+    if (which==='add') this.addCloseTimer = t; else this.linksCloseTimer = t;
+  }
+
+  toggleMenu(which: 'add'|'links'){
+    if (which==='add'){
+      this.addMenuOpen.set(!this.addMenuOpen());
+      if (this.addMenuOpen()){
+        this.linksMenuOpen.set(false);
+        setTimeout(()=>{
+          document.addEventListener('click', this.closeMenusOnOutside, { once: true });
+          try{
+            const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
+            const fd = frame?.contentWindow?.document; fd?.addEventListener('click', this.closeMenusOnOutside, { once: true });
+          }catch{}
+          // focus the toolbar search input if available
+          try{
+            const inp = document.querySelector('.toolbar-dropdown .menu input') as HTMLInputElement | null;
+            inp?.focus(); this.recIndex.set(-1);
+          }catch{}
+        }, 0);
+      }
+    }else{
+      this.linksMenuOpen.set(!this.linksMenuOpen());
+      if (this.linksMenuOpen()){
+        this.addMenuOpen.set(false);
+        setTimeout(()=>{
+          document.addEventListener('click', this.closeMenusOnOutside, { once: true });
+          try{
+            const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
+            const fd = frame?.contentWindow?.document; fd?.addEventListener('click', this.closeMenusOnOutside, { once: true });
+          }catch{}
+        }, 0);
+      }
+    }
+  }
+  private closeMenusOnOutside = (ev?: MouseEvent) => {
+    // if click originated inside the dropdown, ignore (we already stopPropagation on menu wrappers)
+    this.addMenuOpen.set(false);
+    this.linksMenuOpen.set(false);
+  };
+
   filtered = computed(() => {
     const q = this.query().trim().toLowerCase();
     if (!q) return this.categories;
@@ -61,6 +128,7 @@ export class RmdPageComponent {
   });
 
   @ViewChild('rightPane', { static: false }) rightPane?: ElementRef<HTMLElement>;
+  @ViewChild('contentPane', { static: false }) contentPane?: ElementRef<HTMLElement>;
 
   constructor(){
     this.buildIndex();
@@ -72,8 +140,7 @@ export class RmdPageComponent {
       const raw = localStorage.getItem('rmd_standard_links');
       if (raw) this.linksMap = JSON.parse(raw) || {};
     }catch{}
-    // try restore UI state (selected & scroll)
-    setTimeout(()=> this.restoreUiState(), 0);
+    // remove eager restore; will restore after view is ready
   }
 
   async buildIndex(){
@@ -96,7 +163,8 @@ export class RmdPageComponent {
     } catch { this.indexReady.set(true); }
   }
 
-  async select(item: RegulationItem) {
+  async select(item: RegulationItem, opts?: { resetScroll?: boolean }) {
+    const resetScroll = opts?.resetScroll !== false; // default true
     this.term.set(this.term());
     this.matchIndex.set(0);
     this.matchTotal.set(0);
@@ -106,7 +174,7 @@ export class RmdPageComponent {
       const q = this.term();
       const viewer = `/rmd/view.html?id=${encodeURIComponent(item.id)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
       this.docUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(viewer));
-      setTimeout(() => this.scrollTop(), 0);
+      if (resetScroll) setTimeout(() => { this.contentPane?.nativeElement?.scrollTo({ top: 0, behavior: 'auto' }); }, 0);
     } finally {
       this.loading.set(false);
     }
@@ -120,7 +188,7 @@ export class RmdPageComponent {
       if(raw){
         const s = JSON.parse(raw);
         if(s?.selectedId === item.id){
-          setTimeout(()=>{ this.rightPane?.nativeElement?.scrollTo({ top: Number(s.rightScroll||0), behavior:'auto' }); }, 0);
+          setTimeout(()=>{ this.contentPane?.nativeElement?.scrollTo({ top: Number(s.rightScroll||0), behavior:'auto' }); }, 0);
         }
       }
     }catch{}
@@ -197,6 +265,28 @@ export class RmdPageComponent {
       this.highlightPending.set(false);
     } else if (data.type === 'ready'){
       if (this.term()) this.postHighlight();
+      // when iframe signals ready, try to set its scrollTop from saved state
+      try{
+        const raw = localStorage.getItem('rmd_page_state');
+        if(raw){
+          const s = JSON.parse(raw);
+          if(s?.selectedId === this.selected()?.id){
+            const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
+            frame?.contentWindow?.postMessage({ type:'setScroll', top: Number(s.iframeTop||0) }, '*');
+          }
+        }
+      }catch{}
+    } else if (data.type === 'doc:scroll'){
+      // persist iframe's inner scroll position
+      try{
+        const raw = localStorage.getItem('rmd_page_state');
+        const s = raw ? JSON.parse(raw) : {};
+        s.selectedId = this.selected()?.id || null;
+        s.rightScroll = this.contentPane?.nativeElement?.scrollTop || 0;
+        s.expanded = this.linkedExpanded();
+        s.iframeTop = Number(data.top||0);
+        localStorage.setItem('rmd_page_state', JSON.stringify(s));
+      }catch{}
     }
   }
 
@@ -209,36 +299,66 @@ export class RmdPageComponent {
     this.linkedRecords.set([ ...arr ]);
     // expanded by default whenever standard changes
     this.linkedExpanded.set(true);
-    try{ setTimeout(()=>{ const el = document.querySelector('section.linked-records .chips') as HTMLElement; if(el){ el.style.maxHeight = '2000px'; } }, 0); }catch{}
+    try{ setTimeout(()=>{ const el = document.querySelector('section.linked-records .dock-window') as HTMLElement; if(el){ el.style.height = 'auto'; } }, 0); }catch{}
   }
   // open picker modal
   openRecordPicker(){ this.recPickerOpen.set(true); setTimeout(()=>{ try{ (document.getElementById('rec-picker-input') as HTMLInputElement)?.focus(); }catch{} }, 0); }
   closeRecordPicker(){ this.recPickerOpen.set(false); this.recQuery.set(''); this.recIndex.set(-1); }
   recResults(){
-    const q = (this.recQuery()||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const q = (this.recQuery()||'').trim().toLowerCase();
+    const words = q.split(/\s+/).filter(Boolean);
     const selIds = new Set(this.linkedRecords().map(x=>x.id));
-    return this.recordPool.filter(r => !selIds.has(r.id) && q.every(w => (`${r.id} ${r.title}`.toLowerCase().includes(w)))).slice(0, 300);
+    const hay = (r: { id:string; title:string }) => `${r.id} ${r.title}`.toLowerCase();
+    return this.recordPool
+      .filter(r => !selIds.has(r.id))
+      .filter(r => words.length ? words.every(w => hay(r).includes(w)) : true)
+      .slice(0, 300);
   }
+  setRecQuery(v: string){ this.recQuery.set(v); this.recIndex.set(-1); }
   onRecKeydown(ev: KeyboardEvent){
     const list = this.recResults();
-    if (ev.key==='ArrowDown'){ ev.preventDefault(); this.recIndex.set(Math.min((this.recIndex()<0?0:this.recIndex()+1), Math.max(0,list.length-1))); }
-    else if (ev.key==='ArrowUp'){ ev.preventDefault(); this.recIndex.set(Math.max(this.recIndex()-1, -1)); }
-    else if (ev.key==='Enter'){ ev.preventDefault(); const i = this.recIndex(); if (i>=0 && list[i]) this.chooseLink(list[i]); this.closeRecordPicker(); }
+    if (ev.key==='ArrowDown'){ ev.preventDefault(); this.recIndex.set(Math.min((this.recIndex()<0?0:this.recIndex()+1), Math.max(0,list.length-1))); this.scrollRecToIndex(); }
+    else if (ev.key==='ArrowUp'){ ev.preventDefault(); this.recIndex.set(Math.max(this.recIndex()-1, -1)); this.scrollRecToIndex(); }
+    else if (ev.key==='Enter'){
+      ev.preventDefault();
+      const i = this.recIndex();
+      if (i>=0 && list[i]){
+        this.chooseLink(list[i]);
+        // close toolbar dropdown if open
+        if (this.addMenuOpen()) this.addMenuOpen.set(false);
+        // close modal picker if open
+        if (this.recPickerOpen()) this.closeRecordPicker();
+        this.recIndex.set(-1);
+      }
+    }
     else if (ev.key==='Escape'){ ev.preventDefault(); this.closeRecordPicker(); }
+  }
+  private scrollRecToIndex(){
+    setTimeout(()=>{
+      const i = this.recIndex(); if (i<0) return;
+      let listEl: HTMLElement | null = null;
+      if (this.addMenuOpen()) listEl = document.querySelector('.toolbar-dropdown .menu .list') as HTMLElement;
+      else if (this.recPickerOpen()) listEl = document.querySelector('.picker-list') as HTMLElement;
+      if (!listEl) return;
+      const items = listEl.querySelectorAll('.item');
+      const el = items[i] as HTMLElement | undefined;
+      el?.scrollIntoView({ block: 'nearest' });
+    }, 0);
   }
   toggleExpand(){
     const exp = !this.linkedExpanded();
     this.linkedExpanded.set(exp);
-    try{ const el = document.querySelector('section.linked-records .chips') as HTMLElement; if(el){ el.style.maxHeight = exp ? '2000px' : '32px'; } }catch{}
+    try{ const el = document.querySelector('section.linked-records .dock-window') as HTMLElement; if(el){ el.style.height = exp ? 'auto' : '32px'; } }catch{}
     this.persistUiState();
   }
 
   // ===== UI state persistence =====
   private persistUiState(){
     try{
+      if (!this.selected() || !this.contentPane?.nativeElement) return; // avoid clobbering saved state when nothing selected
       const s = {
         selectedId: this.selected()?.id || null,
-        rightScroll: this.rightPane?.nativeElement?.scrollTop || 0,
+        rightScroll: this.contentPane?.nativeElement?.scrollTop || 0,
         expanded: this.linkedExpanded()
       } as any;
       localStorage.setItem('rmd_page_state', JSON.stringify(s));
@@ -250,23 +370,30 @@ export class RmdPageComponent {
       if(!raw) return;
       const s = JSON.parse(raw);
       if(s?.selectedId){
-        // find and select target doc
+        // find and select target doc without resetting scroll
         for(const cat of this.categories){
           const it = cat.items.find((i:any)=> i.id === s.selectedId);
-          if(it){ this.select(it); break; }
+          if(it){ this.select(it, { resetScroll: false }); break; }
         }
       }
       if(typeof s?.expanded === 'boolean') this.linkedExpanded.set(!!s.expanded);
-      setTimeout(()=>{ this.rightPane?.nativeElement?.scrollTo({ top: Number(s?.rightScroll||0), behavior:'auto' }); }, 50);
+      setTimeout(()=>{ this.contentPane?.nativeElement?.scrollTo({ top: Number(s?.rightScroll||0), behavior:'auto' }); }, 50);
     }catch{}
   }
 
   ngAfterViewInit(){
     // track right pane scroll to persist state
     queueMicrotask(()=>{
-      const el = this.rightPane?.nativeElement; if(!el) return;
+      const el = this.contentPane?.nativeElement; if(!el) return;
       el.addEventListener('scroll', () => this.persistUiState(), { passive: true });
     });
+    // also persist on visibility change (e.g., before switching tabs)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') this.persistUiState();
+    });
+    // restore after view exists
+    setTimeout(()=> this.restoreUiState(), 0);
+    setTimeout(()=> this.restoreUiState(), 200); // second pass to ensure after iframe/layout settles
   }
   chooseLink(r: { id: string; title: string }){
     const std = this.selected(); if(!std) return;
