@@ -531,6 +531,8 @@ export class AuditEvaluationComponent {
           if (dateReady) {
             if (usedCache) { this.loadByDate(); } else { await this.loadByDate(); }
           }
+          // 복귀 시 마지막 선택 항목도 함께 복원
+          if (openId && Number.isFinite(openId as any)) { this.pendingOpenId = openId as any; }
           // Restore scroll after data renders (selection is handled by pending open)
           setTimeout(()=>{
             try{
@@ -1221,6 +1223,8 @@ export class AuditEvaluationComponent {
     const next = arr[Math.max(0, idx)];
     if (next) {
       this.selectItem(next as any);
+      // 이동 직후에도 상태를 저장해 복귀 시 동일 항목이 열리도록 함
+      this.persistUi();
       // center selected row in viewport for keyboard navigation
       setTimeout(()=> this.centerRow((next as any).id), 0);
     }
@@ -1267,6 +1271,8 @@ export class AuditEvaluationComponent {
     this.openItemId = it.id;
     this.openExtra.clear();
     this.openExtra.add(it.id);
+    // 선택 즉시 UI 상태 저장해 탭 이동 후 복귀 시 동일 항목 복원
+    this.persistUi();
     // Load assessment master
     const { data } = await this.supabase.getGivaudanAssessment(it.id);
     this.assessment = data;
