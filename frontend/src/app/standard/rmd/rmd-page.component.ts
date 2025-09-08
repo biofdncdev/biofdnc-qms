@@ -163,203 +163,16 @@ export class RmdPageComponent {
     } catch { this.indexReady.set(true); }
   }
 
-  async select(item: RegulationItem, opts?: { resetScroll?: boolean }) {
-    const resetScroll = opts?.resetScroll !== false; // default true
-    this.term.set(this.term());
-    this.matchIndex.set(0);
-    this.matchTotal.set(0);
-    this.selected.set(item);
-    this.loading.set(true);
-    try {
-      const q = this.term();
-      const viewer = `/rmd/view.html?id=${encodeURIComponent(item.id)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
-      this.docUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(viewer));
-      if (resetScroll) setTimeout(() => { this.contentPane?.nativeElement?.scrollTo({ top: 0, behavior: 'auto' }); }, 0);
-    } finally {
-      this.loading.set(false);
-    }
-    // Load linked records for this standard
-    this.loadLinks(item.id);
-    // persist selected id
-    this.persistUiState();
-    // restore scroll position for this doc if state says so
-    try{
-      const raw = localStorage.getItem('rmd_page_state');
-      if(raw){
-        const s = JSON.parse(raw);
-        if(s?.selectedId === item.id){
-          setTimeout(()=>{ this.contentPane?.nativeElement?.scrollTo({ top: Number(s.rightScroll||0), behavior:'auto' }); }, 0);
-        }
-      }
-    }catch{}
-  }
-
-  clearSearch() {
-    this.query.set('');
-    this.term.set('');
-    this.searching.set(false);
-    this.results.set([]);
-    this.matchTotal.set(0);
-    this.matchIndex.set(0);
-    const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
-    if (frame?.contentWindow) frame.contentWindow.postMessage({ type:'highlight', term: '' }, '*');
-  }
-
-  scrollTop() { this.rightPane?.nativeElement?.scrollTo({ top: 0, behavior: 'smooth' }); }
-
-  print() {
-    const sel = this.selected();
-    if (!sel) return;
-    const url = `/rmd/view.html?id=${encodeURIComponent(sel.id)}`;
-    const win = window.open(url, '_blank');
-    if (!win) return;
-    win.onload = () => { try { win.focus(); win.print(); } finally {} };
-  }
-
-  runSearch(){
-    const q = this.query().trim().toLowerCase();
-    this.term.set(q);
-    if (!q){ this.searching.set(false); this.results.set([]); return; }
-    this.searching.set(true);
-    // rank simple contains
-    const filtered = this.docs
-      .filter((d: SearchDoc) => d.title.toLowerCase().includes(q) || d.content.includes(q))
-      .map((d: SearchDoc) => ({ id: d.id, title: this.findTitle(d.id) } as RegulationItem));
-    this.results.set(filtered);
-  }
-
-  openResult(it: RegulationItem){
-    this.highlightPending.set(true);
-    this.select(it);
-  }
-
-  private findTitle(id: string){
-    for (const c of this.categories){
-      const f = c.items.find((i: RegulationItem) => i.id === id);
-      if (f) return f.title;
-    }
-    return id;
-  }
-
-  onFrameLoad(){
-    // noop; rely on ready message from iframe
-  }
-
-  private postHighlight(){
-    const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
-    if (!frame?.contentWindow) return;
-    frame.contentWindow.postMessage({ type:'highlight', term: this.term() }, '*');
-  }
-
-  navigate(dir: 'prev'|'next'){
-    const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
-    if (!frame?.contentWindow) return;
-    frame.contentWindow.postMessage({ type:'nav', dir }, '*');
-  }
-
-  private onFrameMessage(e: MessageEvent){
-    const data = e.data || {};
-    if (data.type === 'highlight:result'){
-      this.matchTotal.set(data.total || 0);
-      this.matchIndex.set(data.index || 0);
-      this.highlightPending.set(false);
-    } else if (data.type === 'ready'){
-      if (this.term()) this.postHighlight();
-      // when iframe signals ready, try to set its scrollTop from saved state
-      try{
-        const raw = localStorage.getItem('rmd_page_state');
-        if(raw){
-          const s = JSON.parse(raw);
-          if(s?.selectedId === this.selected()?.id){
-            const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
-            frame?.contentWindow?.postMessage({ type:'setScroll', top: Number(s.iframeTop||0) }, '*');
-          }
-        }
-      }catch{}
-    } else if (data.type === 'doc:scroll'){
-      // persist iframe's inner scroll position
-      try{
-        const raw = localStorage.getItem('rmd_page_state');
-        const s = raw ? JSON.parse(raw) : {};
-        s.selectedId = this.selected()?.id || null;
-        s.rightScroll = this.contentPane?.nativeElement?.scrollTop || 0;
-        s.expanded = this.linkedExpanded();
-        s.iframeTop = Number(data.top||0);
-        localStorage.setItem('rmd_page_state', JSON.stringify(s));
-      }catch{}
-    }
-  }
-
-  // ===== Linked records helpers =====
-  private persistLinks(){
-    try{ localStorage.setItem('rmd_standard_links', JSON.stringify(this.linksMap)); }catch{}
-  }
-  private loadLinks(stdId: string){
-    const arr = this.linksMap[stdId] || [];
-    this.linkedRecords.set([ ...arr ]);
-    // expanded by default whenever standard changes
-    this.linkedExpanded.set(true);
-    try{ setTimeout(()=>{ const el = document.querySelector('section.linked-records .dock-window') as HTMLElement; if(el){ el.style.height = 'auto'; } }, 0); }catch{}
-  }
-  // open picker modal
-  openRecordPicker(){ this.recPickerOpen.set(true); setTimeout(()=>{ try{ (document.getElementById('rec-picker-input') as HTMLInputElement)?.focus(); }catch{} }, 0); }
-  closeRecordPicker(){ this.recPickerOpen.set(false); this.recQuery.set(''); this.recIndex.set(-1); }
-  recResults(){
-    const q = (this.recQuery()||'').trim().toLowerCase();
-    const words = q.split(/\s+/).filter(Boolean);
-    const selIds = new Set(this.linkedRecords().map(x=>x.id));
-    const hay = (r: { id:string; title:string }) => `${r.id} ${r.title}`.toLowerCase();
-    return this.recordPool
-      .filter(r => !selIds.has(r.id))
-      .filter(r => words.length ? words.every(w => hay(r).includes(w)) : true)
-      .slice(0, 300);
-  }
-  setRecQuery(v: string){ this.recQuery.set(v); this.recIndex.set(-1); }
-  onRecKeydown(ev: KeyboardEvent){
-    const list = this.recResults();
-    if (ev.key==='ArrowDown'){ ev.preventDefault(); this.recIndex.set(Math.min((this.recIndex()<0?0:this.recIndex()+1), Math.max(0,list.length-1))); this.scrollRecToIndex(); }
-    else if (ev.key==='ArrowUp'){ ev.preventDefault(); this.recIndex.set(Math.max(this.recIndex()-1, -1)); this.scrollRecToIndex(); }
-    else if (ev.key==='Enter'){
-      ev.preventDefault();
-      const i = this.recIndex();
-      if (i>=0 && list[i]){
-        this.chooseLink(list[i]);
-        // close toolbar dropdown if open
-        if (this.addMenuOpen()) this.addMenuOpen.set(false);
-        // close modal picker if open
-        if (this.recPickerOpen()) this.closeRecordPicker();
-        this.recIndex.set(-1);
-      }
-    }
-    else if (ev.key==='Escape'){ ev.preventDefault(); this.closeRecordPicker(); }
-  }
-  private scrollRecToIndex(){
-    setTimeout(()=>{
-      const i = this.recIndex(); if (i<0) return;
-      let listEl: HTMLElement | null = null;
-      if (this.addMenuOpen()) listEl = document.querySelector('.toolbar-dropdown .menu .list') as HTMLElement;
-      else if (this.recPickerOpen()) listEl = document.querySelector('.picker-list') as HTMLElement;
-      if (!listEl) return;
-      const items = listEl.querySelectorAll('.item');
-      const el = items[i] as HTMLElement | undefined;
-      el?.scrollIntoView({ block: 'nearest' });
-    }, 0);
-  }
-  toggleExpand(){
-    const exp = !this.linkedExpanded();
-    this.linkedExpanded.set(exp);
-    try{ const el = document.querySelector('section.linked-records .dock-window') as HTMLElement; if(el){ el.style.height = exp ? 'auto' : '32px'; } }catch{}
-    this.persistUiState();
-  }
-
-  // ===== UI state persistence =====
   private persistUiState(){
     try{
       if (!this.selected() || !this.contentPane?.nativeElement) return; // avoid clobbering saved state when nothing selected
+      const prevRaw = localStorage.getItem('rmd_page_state');
+      const prev = prevRaw ? JSON.parse(prevRaw) : {};
       const s = {
         selectedId: this.selected()?.id || null,
         rightScroll: this.contentPane?.nativeElement?.scrollTop || 0,
-        expanded: this.linkedExpanded()
+        expanded: this.linkedExpanded(),
+        iframeTop: typeof prev?.iframeTop === 'number' ? prev.iframeTop : 0
       } as any;
       localStorage.setItem('rmd_page_state', JSON.stringify(s));
     }catch{}
@@ -378,6 +191,21 @@ export class RmdPageComponent {
       }
       if(typeof s?.expanded === 'boolean') this.linkedExpanded.set(!!s.expanded);
       setTimeout(()=>{ this.contentPane?.nativeElement?.scrollTo({ top: Number(s?.rightScroll||0), behavior:'auto' }); }, 50);
+      // also try to push iframe saved scroll once after restore
+      setTimeout(()=> this.applySavedIframeScroll(), 120);
+    }catch{}
+  }
+
+  private applySavedIframeScroll(){
+    try{
+      const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
+      if(!frame?.contentWindow) return;
+      const raw = localStorage.getItem('rmd_page_state');
+      if(!raw) return;
+      const s = JSON.parse(raw);
+      if(s?.selectedId && s.selectedId === this.selected()?.id){
+        frame.contentWindow.postMessage({ type:'setScroll', top: Number(s.iframeTop||0) }, '*');
+      }
     }catch{}
   }
 
@@ -390,7 +218,9 @@ export class RmdPageComponent {
     // also persist on visibility change (e.g., before switching tabs)
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') this.persistUiState();
+      if (document.visibilityState === 'visible') setTimeout(()=> this.applySavedIframeScroll(), 50);
     });
+    window.addEventListener('focus', () => setTimeout(()=> this.applySavedIframeScroll(), 50));
     // restore after view exists
     setTimeout(()=> this.restoreUiState(), 0);
     setTimeout(()=> this.restoreUiState(), 200); // second pass to ensure after iframe/layout settles
@@ -400,16 +230,189 @@ export class RmdPageComponent {
     const list = this.linksMap[std.id] || [];
     if (!list.some(x=>x.id===r.id)) list.push({ id:r.id, title:r.title });
     this.linksMap[std.id] = list;
-    this.persistLinks();
+    try{ localStorage.setItem('rmd_standard_links', JSON.stringify(this.linksMap)); }catch{}
     this.linkQuery.set('');
     this.linkSuggest = [];
-    this.loadLinks(std.id);
+    // reflect to UI
+    const arr = this.linksMap[std.id] || [];
+    this.linkedRecords.set([ ...arr ]);
+    this.linkedExpanded.set(true);
   }
   removeLink(r: { id: string }){
     const std = this.selected(); if(!std) return;
     const list = (this.linksMap[std.id] || []).filter(x=>x.id!==r.id);
     this.linksMap[std.id] = list;
-    this.persistLinks();
-    this.loadLinks(std.id);
+    try{ localStorage.setItem('rmd_standard_links', JSON.stringify(this.linksMap)); }catch{}
+    const arr = this.linksMap[std.id] || [];
+    this.linkedRecords.set([ ...arr ]);
+  }
+
+  public runSearch(){
+    const q = this.query().trim().toLowerCase();
+    this.term.set(q);
+    if (!q){ this.searching.set(false); this.results.set([]); return; }
+    this.searching.set(true);
+    // rank simple contains
+    const filtered = this.docs
+      .filter((d: SearchDoc) => d.title.toLowerCase().includes(q) || d.content.includes(q))
+      .map((d: SearchDoc) => ({ id: d.id, title: this.findTitle(d.id) } as RegulationItem));
+    this.results.set(filtered);
+  }
+
+  public clearSearch() {
+    this.query.set('');
+    this.term.set('');
+    this.searching.set(false);
+    this.results.set([]);
+    this.matchTotal.set(0);
+    this.matchIndex.set(0);
+    const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
+    if (frame?.contentWindow) frame.contentWindow.postMessage({ type:'highlight', term: '' }, '*');
+  }
+
+  public navigate(dir: 'prev'|'next'){
+    const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
+    if (!frame?.contentWindow) return;
+    frame.contentWindow.postMessage({ type:'nav', dir }, '*');
+  }
+
+  public openResult(it: RegulationItem){
+    this.highlightPending.set(true);
+    this.select(it);
+  }
+
+  public async select(item: RegulationItem, opts?: { resetScroll?: boolean }) {
+    const resetScroll = opts?.resetScroll !== false; // default true
+    this.term.set(this.term());
+    this.matchIndex.set(0);
+    this.matchTotal.set(0);
+    this.selected.set(item);
+    this.loading.set(true);
+    try {
+      const q = this.term();
+      const viewer = `/rmd/view.html?id=${encodeURIComponent(item.id)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+      this.docUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(viewer));
+      if (resetScroll) setTimeout(() => { this.contentPane?.nativeElement?.scrollTo({ top: 0, behavior: 'auto' }); }, 0);
+      // proactively try to restore iframe scroll even if 'ready' races
+      setTimeout(()=> this.applySavedIframeScroll(), 150);
+      setTimeout(()=> this.applySavedIframeScroll(), 400);
+    } finally {
+      this.loading.set(false);
+    }
+    // Load linked records for this standard
+    this.loadLinksPublic(item.id);
+    // persist selected id
+    this.persistUiState();
+    // restore scroll position for this doc if state says so
+    try{
+      const raw = localStorage.getItem('rmd_page_state');
+      if(raw){
+        const s = JSON.parse(raw);
+        if(s?.selectedId === item.id){
+          setTimeout(()=>{ this.contentPane?.nativeElement?.scrollTo({ top: Number(s.rightScroll||0), behavior:'auto' }); }, 0);
+        }
+      }
+    }catch{}
+  }
+
+  // expose small wrapper for template calls if needed
+  private loadLinksPublic(stdId: string){
+    const arr = this.linksMap[stdId] || [];
+    this.linkedRecords.set([ ...arr ]);
+    this.linkedExpanded.set(true);
+  }
+
+  public setRecQuery(v: string){ this.recQuery.set(v); this.recIndex.set(-1); }
+  public onRecKeydown(ev: KeyboardEvent){
+    const list = this.recResults();
+    if (ev.key==='ArrowDown'){ ev.preventDefault(); this.recIndex.set(Math.min((this.recIndex()<0?0:this.recIndex()+1), Math.max(0,list.length-1))); this.scrollRecToIndex(); }
+    else if (ev.key==='ArrowUp'){ ev.preventDefault(); this.recIndex.set(Math.max(this.recIndex()-1, -1)); this.scrollRecToIndex(); }
+    else if (ev.key==='Enter'){
+      ev.preventDefault();
+      const i = this.recIndex();
+      if (i>=0 && list[i]){
+        this.chooseLink(list[i]);
+        // close toolbar dropdown if open
+        if (this.addMenuOpen()) this.addMenuOpen.set(false);
+        // close modal picker if open
+        if (this.recPickerOpen()) this.closeRecordPicker();
+        this.recIndex.set(-1);
+      }
+    }
+    else if (ev.key==='Escape'){ ev.preventDefault(); this.closeRecordPicker(); }
+  }
+  public recResults(){
+    const q = (this.recQuery()||'').trim().toLowerCase();
+    const words = q.split(/\s+/).filter(Boolean);
+    const selIds = new Set(this.linkedRecords().map(x=>x.id));
+    const hay = (r: { id:string; title:string }) => `${r.id} ${r.title}`.toLowerCase();
+    return this.recordPool
+      .filter(r => !selIds.has(r.id))
+      .filter(r => words.length ? words.every(w => hay(r).includes(w)) : true)
+      .slice(0, 300);
+  }
+
+  public print() {
+    const sel = this.selected();
+    if (!sel) return;
+    const url = `/rmd/view.html?id=${encodeURIComponent(sel.id)}`;
+    const win = window.open(url, '_blank');
+    if (!win) return;
+    win.onload = () => { try { win.focus(); win.print(); } finally {} };
+  }
+
+  private onFrameMessage(e: MessageEvent){
+    const data = e.data || {};
+    if (data.type === 'highlight:result'){
+      this.matchTotal.set(data.total || 0);
+      this.matchIndex.set(data.index || 0);
+      this.highlightPending.set(false);
+    } else if (data.type === 'ready'){
+      if (this.term()){
+        try{ this.postHighlight?.(); }catch{}
+      }
+      // when iframe signals ready, re-apply saved inner scroll
+      this.applySavedIframeScroll();
+    } else if (data.type === 'doc:scroll'){
+      // persist iframe inner scroll top alongside pane scroll
+      try{
+        const raw = localStorage.getItem('rmd_page_state');
+        const s = raw ? JSON.parse(raw) : {};
+        s.selectedId = this.selected()?.id || null;
+        s.rightScroll = this.contentPane?.nativeElement?.scrollTop || 0;
+        s.expanded = this.linkedExpanded();
+        s.iframeTop = Number(data.top||0);
+        localStorage.setItem('rmd_page_state', JSON.stringify(s));
+      }catch{}
+    }
+  }
+
+  private findTitle(id: string){
+    for (const c of this.categories){
+      const f = c.items.find((i: RegulationItem) => i.id === id);
+      if (f) return f.title;
+    }
+    return id;
+  }
+
+  private scrollRecToIndex(){
+    setTimeout(()=>{
+      const i = this.recIndex(); if (i<0) return;
+      let listEl: HTMLElement | null = null;
+      if (this.addMenuOpen()) listEl = document.querySelector('.toolbar-dropdown .menu .list') as HTMLElement;
+      else if (this.recPickerOpen()) listEl = document.querySelector('.picker-list') as HTMLElement;
+      if (!listEl) return;
+      const items = listEl.querySelectorAll('.item, .picker-item');
+      const el = items[i] as HTMLElement | undefined;
+      el?.scrollIntoView({ block: 'nearest' });
+    }, 0);
+  }
+
+  public closeRecordPicker(){ this.recPickerOpen.set(false); this.recQuery.set(''); this.recIndex.set(-1); }
+
+  private postHighlight(){
+    const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
+    if (!frame?.contentWindow) return;
+    frame.contentWindow.postMessage({ type:'highlight', term: this.term() }, '*');
   }
 }
