@@ -128,7 +128,7 @@ import { TabService } from '../../services/tab.service';
             <option value="ISO14001">ISO14001</option>
             <option value="HALAL">HALAL</option>
           </select>
-          <label class="f-title" style="margin-top:8px;">Audit 업체로 검색</label>
+          <label class="f-title" style="margin-top:8px;">연결된 Audit으로 검색</label>
           <select [ngModel]="auditCompany()" (ngModelChange)="auditCompany.set($event); onFiltersChanged()">
             <option value="">전체</option>
             <option *ngFor="let c of auditCompanies" [value]="c">{{ c }}</option>
@@ -150,6 +150,7 @@ import { TabService } from '../../services/tab.service';
             <span class="chip" *ngIf="r.method">{{ r.method }}</span>
             <span class="chip" *ngIf="r.period">{{ r.period }}</span>
             <span class="chip" *ngFor="let c of (r.certs||[])">{{ c }}</span>
+            <span class="chip" *ngFor="let comp of (r.companies||[])">{{ comp }}</span>
             <span class="chip" *ngIf="r.standard">규정: {{ r.standard }}</span>
             <span class="chip" *ngIf="r.standardCategory && r.standardCategory !== 'ISO'">{{ r.standardCategory }}</span>
           </div>
@@ -442,6 +443,17 @@ export class RmdFormsComponent {
           tmap[(it as any).number] = (it as any).title_ko || (it as any).title_en || '';
         }
         this.auditTitleMap = tmap;
+      }catch{}
+      // propagate company chips to list items so they can render
+      try{
+        for(const cat of this.categories){
+          for(const it of cat.items as any[]){
+            const recId = it.id;
+            const arr = map[recId] || [];
+            const comps = Array.from(new Set(arr.map(a => (a.company||'').toString().trim()).filter(Boolean)));
+            (it as any).companies = comps;
+          }
+        }
       }catch{}
     }catch{}
     this.updateLinkedForSelected();
