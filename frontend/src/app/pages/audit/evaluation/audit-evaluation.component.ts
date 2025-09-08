@@ -124,7 +124,7 @@ interface AuditDate { value: string; label: string; }
               <div class="details-inner comments-on">
                 <div class="assessment" *ngIf="false"></div>
                 <!-- 1열 1행: 상태 select 대신 입력창으로 변경 (그리드 셀 가득 채움) -->
-                <textarea class="status-select slide-input" style="grid-row:1; grid-column:1; width:100%;" rows="5" spellcheck="false" [(ngModel)]="it.col1Text" (input)="autoResize($event)" (blur)="saveProgress(it)" placeholder="입력..."></textarea>
+                <textarea class="status-select slide-input" style="grid-row:1; grid-column:1; width:100%;" rows="5" spellcheck="false" [(ngModel)]="it.col1Text" (input)="autoResize($event)" (blur)="saveProgress(it)" placeholder="평가 항목 세부 사항"></textarea>
                 <div class="link-cell" style="grid-row:1; grid-column:2; display:flex; flex-direction:column; gap:6px; width:100%;">
                   <button class="btn mini pick-btn" style="align-self:flex-start; margin:4px 0;" (click)="openRecordPicker(it)">규정/기록 선택</button>
                   <div class="link-list" style="display:flex; flex-direction:column; gap:6px; width:100%;">
@@ -132,7 +132,7 @@ interface AuditDate { value: string; label: string; }
                   </div>
                 </div>
                 <!-- 3열 1행으로 이동 -->
-                <textarea class="owner-select slide-input" style="grid-row:1; grid-column:3; width:100%;" rows="5" spellcheck="false" [(ngModel)]="it.col3Text" (input)="autoResize($event)" (blur)="saveProgress(it)" placeholder="입력..."></textarea>
+                <textarea class="owner-select slide-input" style="grid-row:1; grid-column:3; width:100%;" rows="5" spellcheck="false" [(ngModel)]="it.col3Text" (input)="autoResize($event)" (blur)="saveProgress(it)" placeholder="평가 항목 진행 현황"></textarea>
                 <div class="comments">
                   <div class="new">
                     <textarea [(ngModel)]="newComment[it.id]" id="comment-input-{{it.id}}" (keydown)="onCommentKeydown($event, it)" placeholder="댓글을 입력..." [disabled]="!isDateCreated()"></textarea>
