@@ -7,7 +7,7 @@ html,body{marin:0;padding:0;background:var(--bg);color:var(--fg);font-family:Int
 .doc{ max-width:980px; margin:0 auto; color:var(--fg); font-size:var(--fs); line-height:var(--lh); letter-spacing:.005em; word-break:keep-all; overflow-wrap:anywhere; }
 
 /* Headings (golden-ratio-ish spacing) */
-.doc h1{ font-size:1.6rem; font-weight:700; margin:calc(var(--space-lg) - .3em) 0 .8em; }
+.doc h1{ font-size:1.35rem; font-weight:700; margin:calc(var(--space-lg) - .3em) 0 .8em; }
 .doc h2{ font-size:1.35rem; font-weight:700; margin:var(--space-lg) 0 .7em; }
 .doc h3{ font-size:1.15rem; font-weight:700; margin:1.1em 0 .55em; }
 .doc h4{ font-size:1.02rem; font-weight:700; margin:1em 0 .5em; }

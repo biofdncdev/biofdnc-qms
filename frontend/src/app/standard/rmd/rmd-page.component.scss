@@ -1,4 +1,4 @@
-.page { display: grid; grid-template-columns: 38% 62%; gap: 0; padding: 16px 24px; height: calc(100vh - 96px); box-sizing: border-box; }
+.page { display: grid; grid-template-columns: 32% 68%; gap: 0; padding: 16px 24px; height: calc(100vh - 96px); box-sizing: border-box; }
 .left {
   padding: 0 24px 0 8px; overflow: auto; border-right: 1px solid #e5e7eb;
   h2 { margin: 8px 0 16px; font-size: 22px; font-weight: 700; }
@@ -33,7 +33,7 @@
   .toolbar { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; }
   .spacer { flex: 1; }
   .primary { padding: 8px 12px; background: #1b5fff; color: #fff; border: 0; border-radius: 6px; }
-  .content { height: calc(100vh - 140px); overflow: auto; }
+  .content { height: calc(100vh - 140px); overflow: auto; padding-bottom: 220px; }
   iframe { width: 100%; height: 100%; border: 0; background: #fff; }
 }
 
@@ -44,6 +44,40 @@
 .right th { background: #f3f4f6; }
 .hint{ color:#6b7280; font-size:.9em; margin:4px 0 10px; }
 .hint.right{ margin:4px 0 6px; }
+
+/* Linked Records panel */
+.linked-records{ border-top:1px solid #e5e7eb; padding:16px 0 32px; display:grid; grid-template-columns: max-content 1fr max-content; column-gap:16px; align-items:start; }
+.linked-records .col.left{ grid-column:1; }
+.linked-records .col.more-col{ grid-column:3; display:flex; align-items:flex-start; }
+.linked-records .col.left{ display:flex; align-items:center; }
+.linked-records .col.right{ grid-column:2; }
+.linked-records .link-btn{ padding:6px 12px; height:32px; border-radius:8px; border:1px solid #d1d5db; background:#f8fafc; cursor:pointer; font-size:13px; display:inline-flex; align-items:center; }
+.linked-records h4{ margin:8px 0; font-size:14px; font-weight:700; }
+.linked-records{ position: relative; }
+.linked-records .chips{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; max-height: 32px; overflow:hidden; transition:max-height .2s ease; align-items:center; }
+.linked-records.expanded .chips{ max-height: 800px; }
+.linked-records .more{ border:1px solid #d1d5db; background:#fff; border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer; height:32px; display:inline-flex; align-items:center; }
+.linked-records .chip{ font-size:12px; height:32px; padding:0 10px; border-radius:999px; background:#ffffff; color:#111827; border:1px solid #e5e7eb; display:inline-flex; align-items:center; gap:6px; transition: box-shadow .12s ease, transform .12s ease; }
+.linked-records .chip:hover{ box-shadow:0 6px 16px rgba(2,6,23,.12); transform: translateY(-1px); }
+.linked-records .chip .remove{ border:0; background:transparent; color:#64748b; cursor:pointer; }
+.linked-records .chip.empty{ color:#6b7280; background:#f8fafc; border-style:dashed; }
+.linked-records .typeahead{ position:relative; width:100%; }
+.linked-records .typeahead input{ width:100%; padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; }
+.linked-records .suggest{ position:absolute; left:0; top:100%; width:100%; background:#fff; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 8px 18px rgba(0,0,0,.06); max-height:240px; overflow:auto; }
+.linked-records .suggest .item{ padding:8px 10px; cursor:pointer; }
+.linked-records .suggest .item + .item{ border-top:1px solid #f1f5f9; }
+.linked-records .suggest .item:hover{ background:#f8fafc; }
+
+/* modal */
+.rec-picker .backdrop{ position:fixed; inset:0; background:rgba(2,6,23,.5); }
+.rec-picker .modal{ position:fixed; inset:0; margin:auto; width:min(720px,92vw); max-height:80vh; background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,.25); display:flex; flex-direction:column; overflow:hidden; }
+.rec-picker header{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #eee; }
+.rec-picker header .close{ border:0; background:transparent; font-size:20px; cursor:pointer; }
+.rec-picker .body{ padding:12px; display:flex; flex-direction:column; gap:10px; }
+.rec-picker .body input{ height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px; }
+.rec-picker .picker-list{ max-height:60vh; overflow:auto; border:1px solid #eee; border-radius:10px; }
+.rec-picker .picker-item{ padding:10px 12px; cursor:pointer; }
+.rec-picker .picker-item.active, .rec-picker .picker-item:hover{ background:#f8fafc; }
 
 /* PDF/이미지 주석용 캔버스 컨테이너 */
 .right .pdf-annotator{ position: relative; }
