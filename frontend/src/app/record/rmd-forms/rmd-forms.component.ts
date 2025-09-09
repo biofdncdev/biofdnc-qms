@@ -879,7 +879,7 @@ export class RmdFormsComponent {
     try{
       this.persistUiState();
       const url = `/app/standard/rmd?open=${encodeURIComponent(stdId)}`;
-      this.tabs.requestOpen('원료제조팀 규정', 'standard:rmd', url);
+      this.tabs.requestOpen('원료제조팀 규정', '/app/standard/rmd', url);
     }catch{}
   }
   // ===== Temperature/Humidity PDF Annotator =====

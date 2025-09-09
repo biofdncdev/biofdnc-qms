@@ -793,7 +793,11 @@ export class AuditEvaluationComponent {
           company: row?.company || null,
           col1Text: fieldBundle?.col1 || '',
           col3Text: fieldBundle?.col3 || '',
-          selectedLinks: fieldBundle?.links || []
+          selectedLinks: (fieldBundle?.links || []).map((link: any) => ({
+            id: link.id,
+            title: link.title,
+            kind: link.kind || link.type || 'record'  // kind 또는 type 속성 유지
+          }))
         } as any;
       });
       // in-place 업데이트로 참조를 유지하여 깜박임 최소화
@@ -1151,16 +1155,16 @@ export class AuditEvaluationComponent {
   openLinkPopup(l: { id: string; title: string; kind?: 'record'|'standard' }){
     if ((l.kind||'record') === 'record'){
       // Open/replace a single 'Record' tab instead of replacing current Audit view
-      const tabPath = '/tabs/record';
+      const tabPath = '/app/record/rmd-forms';
       const navUrl = `/app/record/rmd-forms?open=${encodeURIComponent(l.id)}&ts=${Date.now()}`;
       // Use TabService to request/activate the shared Record tab
       try{ sessionStorage.setItem('record.forceOpen', String(l.id)); }catch{}
       this.persistUi();
-      this.tabBus.requestOpen('Record 원료제조팀', tabPath, navUrl);
+      this.tabBus.requestOpen('원료제조팀 기록', tabPath, navUrl);
       return;
     }
     // Open/replace a single 'Standard' tab
-    const stdTab = 'standard:rmd';
+    const stdTab = '/app/standard/rmd';
     const stdUrl = `/app/standard/rmd?open=${encodeURIComponent(l.id)}&ts=${Date.now()}`;
     try{ sessionStorage.setItem('standard.forceOpen', String(l.id)); }catch{}
     this.persistUi();
@@ -1283,7 +1287,15 @@ export class AuditEvaluationComponent {
       if (Array.isArray(raw)){
         const fb = raw.find((c:any)=> c && c.type==='fields');
         it.comments = raw.filter((c:any)=> !(c && c.type==='fields'));
-        if (fb){ it.col1Text = fb.col1 || it.col1Text; it.col3Text = fb.col3 || it.col3Text; it.selectedLinks = fb.links || it.selectedLinks || []; }
+        if (fb){ 
+          it.col1Text = fb.col1 || it.col1Text; 
+          it.col3Text = fb.col3 || it.col3Text; 
+          it.selectedLinks = (fb.links || it.selectedLinks || []).map((link: any) => ({
+            id: link.id,
+            title: link.title,
+            kind: link.kind || link.type || 'record'
+          }));
+        }
       }
     }
     // Load resources
@@ -1317,7 +1329,15 @@ export class AuditEvaluationComponent {
       if (Array.isArray(raw)){
         const fb = raw.find((c:any)=> c && c.type==='fields');
         it.comments = raw.filter((c:any)=> !(c && c.type==='fields'));
-        if (fb){ it.col1Text = fb.col1 || it.col1Text; it.col3Text = fb.col3 || it.col3Text; it.selectedLinks = fb.links || it.selectedLinks || []; }
+        if (fb){ 
+          it.col1Text = fb.col1 || it.col1Text; 
+          it.col3Text = fb.col3 || it.col3Text; 
+          it.selectedLinks = (fb.links || it.selectedLinks || []).map((link: any) => ({
+            id: link.id,
+            title: link.title,
+            kind: link.kind || link.type || 'record'
+          }));
+        }
       }
     }
     const { data: res } = await this.supabase.listGivaudanResources(it.id);
@@ -1395,7 +1415,15 @@ export class AuditEvaluationComponent {
             if (Array.isArray(raw)){
               const fb = raw.find((c:any)=> c && c.type==='fields');
               it.comments = raw.filter((c:any)=> !(c && c.type==='fields'));
-              if (fb){ it.col1Text = fb.col1 || it.col1Text; it.col3Text = fb.col3 || it.col3Text; }
+              if (fb){ 
+                it.col1Text = fb.col1 || it.col1Text; 
+                it.col3Text = fb.col3 || it.col3Text;
+                it.selectedLinks = (fb.links || []).map((link: any) => ({
+                  id: link.id,
+                  title: link.title,
+                  kind: link.kind || link.type || 'record'
+                }));
+              }
             } else {
               it.comments = it.comments || [];
             }
