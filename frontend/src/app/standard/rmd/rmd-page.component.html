@@ -11,6 +11,7 @@
           [ngModel]="query()"
           (ngModelChange)="query.set($event)"
           (keydown.enter)="runSearch()"
+          (keydown)="onSearchKeydown($event)"
           (keyup.escape)="clearSearch()"
           [disabled]="!indexReady()"
           [class.disabled]="!indexReady()"

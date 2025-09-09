@@ -70,6 +70,25 @@ export class RmdPageComponent {
     }catch{}
   }
 
+  // 3) 키보드로 검색 결과 항목 이동 및 선택
+  public onSearchKeydown(ev: KeyboardEvent){
+    const key = ev.key;
+    if (key !== 'ArrowDown' && key !== 'ArrowUp' && key !== 'Enter') return;
+    ev.preventDefault();
+    const list = this.searching() ? this.results() : [];
+    if (!list || list.length === 0) return;
+    // focused index stored in matchIndex for reuse
+    let idx = this.matchIndex();
+    if (key === 'ArrowDown') idx = Math.min(list.length - 1, Math.max(0, idx + 1));
+    if (key === 'ArrowUp') idx = Math.max(0, Math.min(list.length - 1, idx - 1));
+    if (key === 'Enter'){
+      const item = list[Math.max(0, Math.min(list.length - 1, idx))];
+      if (item) this.openResult(item);
+      return;
+    }
+    this.matchIndex.set(idx);
+  }
+
   onMenuEnter(which: 'add'|'links'){
     if (which==='add'){ clearTimeout(this.addCloseTimer); this.addMenuOpen.set(true); }
     else { clearTimeout(this.linksCloseTimer); this.linksMenuOpen.set(true); }
