@@ -1007,31 +1007,24 @@ export class AuditEvaluationComponent {
   }
 
   onCommentKeydown(ev: KeyboardEvent, it: any){
-    // Ctrl+Enter: 등록만, Ctrl+Shift+Enter: 등록 후 다음 항목으로 이동
+    // Ctrl+Enter: 다음 항목 댓글 입력창으로 이동 (Shift+Ctrl+Enter: 이전 항목)
     if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter'){
       ev.preventDefault();
-      if (!this.isDateCreated()) return;
-      const moveNext = ev.shiftKey === true;
-      this.addComment(it);
-      if (moveNext){
-        const nextId = (it.id as number) + 1;
-        const nextItem = this.items().find(x => (x as any).id === nextId);
-        if (nextItem){
-          // Ensure next details are open so the textarea exists
-          if (this.openItemId !== nextId){
-            this.toggleDetails(nextItem as any);
-          }
-          setTimeout(()=>{
-            const el = document.getElementById(`comment-input-${nextId}`) as HTMLTextAreaElement | null;
-            if (el) el.focus();
-          }, 50);
-        }
-      } else {
-        // Keep focus on current input
+      // 입력한 댓글이 있으면 저장 시도(비어있으면 addComment는 무시됨)
+      try{ this.addComment(it); }catch{}
+
+      const goPrev = ev.shiftKey === true;
+      const targetId = (it.id as number) + (goPrev ? -1 : 1);
+      const targetItem = this.items().find(x => (x as any).id === targetId);
+      if (targetItem){
+        if (this.openItemId !== targetId){ this.toggleDetails(targetItem as any); }
+        this.openItemId = targetId;
         setTimeout(()=>{
-          const curr = document.getElementById(`comment-input-${it.id}`) as HTMLTextAreaElement | null;
-          if (curr) curr.focus();
-        }, 0);
+          this.centerRow(targetId);
+          try{ requestAnimationFrame(()=> this.centerRow(targetId)); }catch{}
+          const el = document.getElementById(`comment-input-${targetId}`) as HTMLTextAreaElement | null;
+          if (el){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+        }, 40);
       }
     }
   }
