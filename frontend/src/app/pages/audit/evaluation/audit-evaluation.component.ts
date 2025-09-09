@@ -179,22 +179,6 @@ interface AuditDate { value: string; label: string; }
       <div class="body" (keydown)="onPickerKeydown($event)">
         <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
           <input #pickerInput type="text" placeholder="규정/기록 (공백=AND)" [(ngModel)]="pickerQuery" (keydown)="onPickerKeydown($event); $event.stopPropagation()" style="flex:1; height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px; background:rgba(255,255,255,.65); backdrop-filter: blur(6px);" />
-          <select [(ngModel)]="pickerStdCat" style="height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px;">
-            <option value="">카테고리 전체</option>
-            <option *ngFor="let c of recordCategories" [value]="c">{{ c }}</option>
-          </select>
-          <select [(ngModel)]="pickerDept" style="height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px;">
-            <option value="">부서 전체</option>
-            <option *ngFor="let d of departments" [value]="d">{{ d }}</option>
-          </select>
-          <select [(ngModel)]="pickerMethod" style="height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px;">
-            <option value="">방법 전체</option>
-            <option *ngFor="let m of methods" [value]="m">{{ m }}</option>
-          </select>
-          <select [(ngModel)]="pickerPeriod" style="height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px;">
-            <option value="">주기 전체</option>
-            <option *ngFor="let p of periods" [value]="p">{{ p }}</option>
-          </select>
         </div>
         <div class="picker-list" style="max-height:55vh; overflow:auto; border:1px solid #eee; border-radius:12px;">
           <div *ngFor="let r of pickerResults(); let i = index" (mouseenter)="hoverPickerIndex=i" (mouseleave)="hoverPickerIndex=-1" (click)="chooseRecord(r)" [class.active]="i===pickerIndex" [class.hovered]="i===hoverPickerIndex" [id]="'picker-item-'+i" class="picker-item" style="padding:10px 12px; cursor:pointer; display:flex; gap:12px; align-items:center;">

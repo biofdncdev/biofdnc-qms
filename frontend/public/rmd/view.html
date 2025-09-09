@@ -11,11 +11,13 @@
   </style>
 </head>
 <body>
+  <h1 id="doc-title" style="font-size:20px; margin: 0 0 12px 0;"></h1>
   <main id="content" class="doc-container"></main>
   <script>
     (function(){
       const qs = new URLSearchParams(location.search);
       const id = qs.get('id');
+      const title = (qs.get('title')||'').trim();
       const initialQ = (qs.get('q')||'').trim();
       const host = window.parent;
       const content = document.getElementById('content');
@@ -57,6 +59,8 @@
 
       function setCurrent(){ matches.forEach(x => x.classList.remove('__cur')); if(matches[cur]){ matches[cur].classList.add('__cur'); matches[cur].scrollIntoView({behavior:'smooth', block:'center'});} }
       function nav(dir){ if(!matches.length) return; cur = (dir==='next')? (cur+1)%matches.length : (cur-1+matches.length)%matches.length; setCurrent(); postStatus(); }
+
+      if(title){ try{ document.getElementById('doc-title').textContent = title; }catch{} }
 
       fetch(path)
         .then(r => r.text())

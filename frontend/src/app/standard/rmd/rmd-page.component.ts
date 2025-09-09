@@ -390,7 +390,7 @@ export class RmdPageComponent {
   public print() {
     const sel = this.selected();
     if (!sel) return;
-    const url = `/rmd/view.html?id=${encodeURIComponent(sel.id)}`;
+    const url = `/rmd/view.html?id=${encodeURIComponent(sel.id)}&title=${encodeURIComponent(sel.title)}`;
     const win = window.open(url, '_blank');
     if (!win) return;
     win.onload = () => { try { win.focus(); win.print(); } finally {} };
