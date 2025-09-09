@@ -354,6 +354,7 @@ interface AuditDate { value: string; label: string; }
     .chip.team-qc{ background:#cffafe; color:#155e75; border-color:#a5f3fc; } /* 품질팀: Cyan */
     .chip.team-rnd{ background:#ede9fe; color:#6d28d9; border-color:#ddd6fe; } /* 연구팀: Violet */
     .chip.team-admin{ background:#fef3c7; color:#b45309; border-color:#fde68a; } /* 경영지원팀: Amber */
+    .chip.team-logi{ background:#cff7e6; color:#0f766e; border-color:#99f6e4; } /* 물류팀: Teal */
     /* 내부 resources 편집 섹션 제거로 관련 스타일 삭제 */
 
     .link-button{ width:100%; text-align:left; padding:8px 10px; border-radius:10px; border:1px solid #e5e7eb; background:#ffffff; font-weight:600; color:#0f172a; display:flex; align-items:center; justify-content:space-between; }
@@ -1068,7 +1069,7 @@ export class AuditEvaluationComponent {
   openItemId: number | null = null;
   private openExtra = new Set<number>();
   assessment: any = null;
-  departments = ['원료제조팀','식물세포배양팀','품질팀','연구팀','경영지원팀'];
+  departments = ['원료제조팀','식물세포배양팀','품질팀','연구팀','경영지원팀','물류팀'];
   filterDept: 'ALL' | string = 'ALL';
   filterOwner: 'ALL' | string = 'ALL';
   keyword: string = '';
@@ -1426,7 +1427,7 @@ export class AuditEvaluationComponent {
 
   visibleItems(){
     // 1) 기본 제한(105번 이상 숨김)
-    const base = this.items().filter((it:any)=> Number(it.id) <= 104);
+    const base = this.items().filter((it:any)=> Number(it.id) <= 104 && Number((it as any).id) !== 25);
     // 2) 중복 ID 방지: 같은 번호가 두 번 있을 경우 첫 번째만 유지
     const uniqMap = new Map<number, any>();
     for (const it of base){ if (!uniqMap.has((it as any).id)) uniqMap.set((it as any).id, it); }
@@ -1690,6 +1691,7 @@ export class AuditEvaluationComponent {
       'team-qc': team==='품질팀',
       'team-rnd': team==='연구팀',
       'team-admin': team==='경영지원팀',
+      'team-logi': team==='물류팀',
     } as any;
   }
   statusColor(status: string){
