@@ -124,7 +124,7 @@ interface AuditDate { value: string; label: string; }
               <div class="details-inner comments-on">
                 <div class="assessment" *ngIf="false"></div>
                 <!-- 1열 1행: 상태 select 대신 입력창으로 변경 (그리드 셀 가득 채움) -->
-                <textarea class="status-select slide-input" style="grid-row:1; grid-column:1; width:100%;" [style.height.px]="it.__h1 || 120" rows="5" spellcheck="false" [(ngModel)]="it.col1Text" (input)="autoResize($event, it, '__h1')" (blur)="saveProgress(it)" placeholder="평가 항목 세부 사항"></textarea>
+                <textarea class="status-select slide-input" style="grid-row:1; grid-column:1; width:100%;" [attr.id]="'input-'+it.id+'-1'" [attr.data-col]="1" [style.height.px]="it.__h1 || 120" rows="5" spellcheck="false" [(ngModel)]="it.col1Text" (input)="autoResize($event, it, '__h1')" (blur)="saveProgress(it)" placeholder="평가 항목 세부 사항" (keydown)="onTextareaKeydown($event, it)"></textarea>
                 <div class="link-cell" style="grid-row:1; grid-column:2; display:flex; flex-direction:column; gap:6px; width:100%;">
                   <button class="btn mini pick-btn" style="align-self:flex-start; margin:4px 0;" (click)="openRecordPicker(it)">규정/기록 선택</button>
                   <div class="link-list" style="display:flex; flex-direction:column; gap:6px; width:100%;">
@@ -132,7 +132,7 @@ interface AuditDate { value: string; label: string; }
                   </div>
                 </div>
                 <!-- 3열 1행으로 이동 -->
-                <textarea class="owner-select slide-input" style="grid-row:1; grid-column:3; width:100%;" [style.height.px]="it.__h3 || 120" rows="5" spellcheck="false" [(ngModel)]="it.col3Text" (input)="autoResize($event, it, '__h3')" (blur)="saveProgress(it)" placeholder="평가 항목 진행 현황"></textarea>
+                <textarea class="owner-select slide-input" style="grid-row:1; grid-column:3; width:100%;" [attr.id]="'input-'+it.id+'-3'" [attr.data-col]="3" [style.height.px]="it.__h3 || 120" rows="5" spellcheck="false" [(ngModel)]="it.col3Text" (input)="autoResize($event, it, '__h3')" (blur)="saveProgress(it)" placeholder="평가 항목 진행 현황" (keydown)="onTextareaKeydown($event, it)"></textarea>
                 <div class="comments">
                   <div class="new">
                     <textarea [(ngModel)]="newComment[it.id]" id="comment-input-{{it.id}}" (keydown)="onCommentKeydown($event, it)" placeholder="댓글을 입력..." [disabled]="!isDateCreated()"></textarea>
@@ -1432,7 +1432,12 @@ export class AuditEvaluationComponent {
   }
 
   visibleItems(){
-    const arr = this.items().filter((it:any)=> Number(it.id) <= 104);
+    // 1) 기본 제한(105번 이상 숨김)
+    const base = this.items().filter((it:any)=> Number(it.id) <= 104);
+    // 2) 중복 ID 방지: 같은 번호가 두 번 있을 경우 첫 번째만 유지
+    const uniqMap = new Map<number, any>();
+    for (const it of base){ if (!uniqMap.has((it as any).id)) uniqMap.set((it as any).id, it); }
+    const arr = Array.from(uniqMap.values());
     // 키워드 필터 (제목/비고 포함)
     const kw = (this.keyword||'').trim().toLowerCase();
     const byKw = kw ? arr.filter((it:any)=>{
@@ -1457,6 +1462,34 @@ export class AuditEvaluationComponent {
   }
 
   onFilterChange(){}
+
+  onTextareaKeydown(ev: KeyboardEvent, it: any){
+    // Ctrl+Enter → 다음 항목의 동일 입력창으로, Shift+Ctrl+Enter → 이전 항목으로
+    if (!ev || !(ev.ctrlKey || (ev as any).metaKey) || ev.key !== 'Enter') return;
+    ev.preventDefault();
+    const target = ev.target as HTMLElement | null;
+    const col = Number(target?.getAttribute('data-col') || 1); // 1 or 3
+    const arr = this.visibleItems(); if(!arr.length) return;
+    const idx = arr.findIndex(x => (x as any).id === it.id);
+    if (idx < 0) return;
+    const nextIdx = ev.shiftKey ? Math.max(0, idx - 1) : Math.min(arr.length - 1, idx + 1);
+    const next = arr[nextIdx]; if(!next) return;
+    const nextId = (next as any).id;
+    // 슬라이드를 열고 선택 항목 업데이트 + 스크롤 보정
+    this.openExtra.add(nextId);
+    this.openItemId = nextId;
+    // 렌더가 반영된 뒤 중앙으로 스크롤 (두 번 보정)
+    setTimeout(()=>{
+      this.centerRow(nextId);
+      try{ requestAnimationFrame(()=> this.centerRow(nextId)); }catch{}
+    }, 30);
+    setTimeout(()=>{
+      try{
+        const el = document.getElementById(`input-${nextId}-${col}`) as HTMLTextAreaElement | null;
+        if (el){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+      }catch{}
+    }, 0);
+  }
 
   addDept(it: any, dept: string){
     if(!dept) return;
