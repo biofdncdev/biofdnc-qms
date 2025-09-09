@@ -250,7 +250,8 @@ interface AuditDate { value: string; label: string; }
   </div>
   `,
   styles: [`
-    .audit-page{ padding:16px; }
+    /* Viewport-fitting container: reserve space for global headers/footers (~100px) */
+    .audit-page{ padding:16px; height:calc(100vh - 100px); overflow:hidden; box-sizing:border-box; display:flex; flex-direction:column; }
     .audit-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
     .title{ font-weight:800; font-size:20px; }
     .title .sub{ font-weight:500; color:#64748b; margin-left:6px; font-size:.85em; }
@@ -263,11 +264,11 @@ interface AuditDate { value: string; label: string; }
     .controls .btn.info:disabled{ background:#e5e7eb !important; color:#9ca3af !important; border-color:#e5e7eb !important; }
     .controls .btn:disabled:hover{ filter:none; }
 
-    .layout{ display:grid; grid-template-rows: auto 1fr; gap:8px; }
+    .layout{ display:grid; grid-template-rows: auto 1fr; gap:8px; height:100%; min-height:0; }
     .filters{ position:sticky; top:0; z-index:8; background:#fff; }
     .checklist{ min-width:0; }
 
-    .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: calc(100vh - 180px); overflow-y:auto; overflow-x:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
+    .checklist{ background:#fff; border:1px solid #eee; border-radius:12px; padding:10px; height: 100%; min-height:0; overflow-y:auto; overflow-x:auto; box-shadow:0 8px 22px rgba(2,6,23,.06); }
     .group h3{ margin:8px 6px 12px; }
     .filterbar{ display:flex; align-items:center; gap:10px; margin:0; padding:8px 10px; flex-wrap:wrap; background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 4px 10px rgba(2,6,23,.04); transition: filter .15s ease; }
     .audit-page.modal-open .filterbar{ filter: grayscale(1) brightness(.92); }
