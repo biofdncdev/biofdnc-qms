@@ -387,13 +387,83 @@ export class RmdPageComponent {
       .slice(0, 300);
   }
 
-  public print() {
+  public async print() {
     const sel = this.selected();
     if (!sel) return;
-    const url = `/rmd/view.html?id=${encodeURIComponent(sel.id)}&title=${encodeURIComponent(sel.title)}`;
-    const win = window.open(url, '_blank');
-    if (!win) return;
-    win.onload = () => { try { win.focus(); win.print(); } finally {} };
+    
+    try {
+      // HTML 파일 내용 가져오기
+      const response = await fetch(`/rmd/${sel.id}.html`);
+      if (!response.ok) {
+        console.error('문서를 불러올 수 없습니다.');
+        return;
+      }
+      
+      const htmlContent = await response.text();
+      
+      // 출력용 iframe 생성
+      const printFrame = document.createElement('iframe');
+      printFrame.style.position = 'absolute';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = 'none';
+      printFrame.style.left = '-9999px';
+      
+      document.body.appendChild(printFrame);
+      
+      const printDoc = printFrame.contentDocument || printFrame.contentWindow?.document;
+      if (!printDoc) {
+        document.body.removeChild(printFrame);
+        return;
+      }
+      
+      // 출력용 HTML 작성
+      printDoc.open();
+      printDoc.write(`
+        <!DOCTYPE html>
+        <html lang="ko">
+        <head>
+          <meta charset="utf-8">
+          <title>${sel.title}</title>
+          <link rel="stylesheet" href="/rmd/rmd-doc.css">
+          <style>
+            @media print {
+              body { margin: 20px; }
+              h1 { font-size: 20px; margin-bottom: 20px; page-break-after: avoid; }
+              table { page-break-inside: avoid; }
+              tr { page-break-inside: avoid; }
+            }
+            h1 { font-size: 20px; margin: 0 0 20px 0; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <h1>${sel.title}</h1>
+          <div class="doc-container">
+            ${htmlContent}
+          </div>
+        </body>
+        </html>
+      `);
+      printDoc.close();
+      
+      // iframe 내용이 로드될 때까지 잠시 대기
+      printFrame.onload = () => {
+        setTimeout(() => {
+          try {
+            printFrame.contentWindow?.focus();
+            printFrame.contentWindow?.print();
+          } finally {
+            // 출력 완료 후 iframe 제거
+            setTimeout(() => {
+              document.body.removeChild(printFrame);
+            }, 1000);
+          }
+        }, 250);
+      };
+      
+    } catch (error) {
+      console.error('출력 중 오류가 발생했습니다:', error);
+    }
   }
 
   private onFrameMessage(e: MessageEvent){

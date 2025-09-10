@@ -409,9 +409,9 @@
           #searchInput
           type="text" 
           [(ngModel)]="standardSearchQuery" 
-          placeholder="규정 ID 또는 제목으로 검색..."
+          placeholder="규정 ID 또는 제목으로 검색... (Enter키로 검색)"
           class="search-input"
-          (input)="standardSearchQuery.set($any($event.target).value); selectedStandardIndex = -1"
+          (input)="standardSearchQuery.set($any($event.target).value)"
           (keydown)="onStandardSearchKeydown($event)"
           autofocus>
       </div>

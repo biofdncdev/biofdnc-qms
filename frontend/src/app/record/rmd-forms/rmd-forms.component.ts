@@ -50,6 +50,7 @@ export class RmdFormsComponent {
   // Standard search modal
   showStandardSearchModal = signal(false);
   standardSearchQuery = signal('');
+  standardSearchFilter = signal('');  // 실제 필터링에 사용될 검색어
   allStandards: Array<{ id: string; title: string; category: string }> = [];
   selectedStandardIndex = -1;
   
@@ -387,6 +388,7 @@ export class RmdFormsComponent {
   openStandardSearchModal() {
     this.showStandardSearchModal.set(true);
     this.standardSearchQuery.set('');
+    this.standardSearchFilter.set('');  // 필터도 초기화
     this.selectedStandardIndex = -1;
     
     // Focus search input after modal opens
@@ -398,6 +400,7 @@ export class RmdFormsComponent {
   closeStandardSearchModal() {
     this.showStandardSearchModal.set(false);
     this.standardSearchQuery.set('');
+    this.standardSearchFilter.set('');  // 필터도 초기화
     this.selectedStandardIndex = -1;
   }
   
@@ -416,8 +419,13 @@ export class RmdFormsComponent {
       this.scrollToSelected();
     } else if (event.key === 'Enter') {
       event.preventDefault();
+      // 선택된 항목이 있으면 연결, 없으면 검색 실행
       if (this.selectedStandardIndex >= 0 && this.selectedStandardIndex < filtered.length) {
         this.linkStandard(filtered[this.selectedStandardIndex]);
+      } else {
+        // 검색 실행
+        this.standardSearchFilter.set(this.standardSearchQuery());
+        this.selectedStandardIndex = -1;
       }
     } else if (event.key === 'Escape') {
       event.preventDefault();
@@ -444,7 +452,7 @@ export class RmdFormsComponent {
   }
   
   get filteredStandards() {
-    const query = this.standardSearchQuery().toLowerCase();
+    const query = this.standardSearchFilter().toLowerCase();
     if (!query) return this.allStandards;
     
     return this.allStandards.filter(std => 
