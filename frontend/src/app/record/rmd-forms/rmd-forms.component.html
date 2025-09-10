@@ -1,0 +1,391 @@
+<div class="page">
+  <!-- Left Sidebar - Filters -->
+  <aside class="left" style="flex:0 0 280px; max-width:280px;">
+    <div class="sticky">
+      <div class="page-head"><h2>Record <span class="sub">원료제조팀</span></h2></div>
+      <div class="search">
+        <input type="search" placeholder="키워드로 검색" [ngModel]="filterService.query()" (ngModelChange)="filterService.query.set($event)">
+        <button class="clear" *ngIf="filterService.query()" (click)="filterService.query.set('')">×</button>
+      </div>
+      <div class="filters">
+        <label class="f-title">담당부서로 검색</label>
+        <select [ngModel]="filterService.dept()" (ngModelChange)="filterService.dept.set($event); filterService.onFiltersChanged()">
+          <option value="">전체</option>
+          <option *ngFor="let d of filterService.departments" [value]="d">{{ d }}</option>
+        </select>
+        <label class="f-title">담당자로 검색</label>
+        <input type="text" [ngModel]="filterService.ownerFilter()" (ngModelChange)="filterService.ownerFilter.set($event); filterService.onFiltersChanged()" placeholder="이름/이메일">
+        <label class="f-title">기록방법으로 검색</label>
+        <div class="btn-group">
+          <button class="seg" [class.on]="filterService.method()===''" (click)="filterService.setMethod('')">전체</button>
+          <button class="seg" *ngFor="let m of filterService.methods" [class.on]="filterService.method()===m" (click)="filterService.setMethod(m)">{{ m }}</button>
+        </div>
+        <label class="f-title">기록주기로 검색</label>
+        <div class="btn-group">
+          <button class="seg" [class.on]="filterService.period()===''" (click)="filterService.setPeriod('')">전체</button>
+          <button class="seg" *ngFor="let p of filterService.periods" [class.on]="filterService.period()===p" (click)="filterService.setPeriod(p)">{{ p }}</button>
+        </div>
+        <label class="inline"><input type="checkbox" [ngModel]="filterService.overdueOnly()" (ngModelChange)="filterService.overdueOnly.set($event); filterService.onFiltersChanged()"> 기록주기가 지난 것만</label>
+        <!-- 규정 카테고리 드롭다운 -->
+        <label class="f-title">규정 카테고리로 검색</label>
+        <select [ngModel]="filterService.standardCategory()" (ngModelChange)="filterService.setStdCat($event)">
+          <option value="">전체</option>
+          <option *ngFor="let c of categoriesNoISO" [value]="c">{{ c }}</option>
+        </select>
+
+        <label class="f-title" style="margin-top:8px;">인증 체계로 검색</label>
+        <select [ngModel]="filterService.cert()" (ngModelChange)="filterService.setCert($event)">
+          <option value="">전체</option>
+          <option value="ISO9001">ISO9001</option>
+          <option value="ISO22716">ISO22716</option>
+          <option value="ISO14001">ISO14001</option>
+          <option value="HALAL">HALAL</option>
+        </select>
+        <label class="f-title" style="margin-top:8px;">연결된 Audit으로 검색</label>
+        <select [ngModel]="filterService.auditCompany()" (ngModelChange)="filterService.auditCompany.set($event); filterService.onFiltersChanged()">
+          <option value="">전체</option>
+          <option *ngFor="let c of auditCompanies" [value]="c">{{ c }}</option>
+        </select>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Center Pane - Results List -->
+  <section class="center" #centerPane>
+    <section class="results">
+      <div class="record-item" *ngFor="let r of filterService.filteredFlat()" (click)="open(r)" [class.selected]="selected()?.id===r.id">
+        <div class="record-head">
+          <span class="record-id">{{ r.id }}</span>
+          <span class="record-title">{{ r.title }}</span>
+        </div>
+        <div class="meta">
+          <span class="chip">{{ r.department || '원료제조팀' }}</span>
+          <span class="chip" *ngIf="r.owner">{{ r.owner }}</span>
+          <span class="chip" *ngIf="r.method">{{ r.method }}</span>
+          <span class="chip" *ngIf="r.period">{{ r.period }}</span>
+          <span class="chip" *ngFor="let c of (r.certs||[])">{{ c }}</span>
+          <span class="chip" *ngFor="let comp of (r.companies||[])">{{ comp }}</span>
+          <span class="chip" *ngIf="r.standard">규정: {{ r.standard }}</span>
+          <span class="chip" *ngIf="r.standardCategory && r.standardCategory !== 'ISO'">{{ r.standardCategory }}</span>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <!-- Right Pane - Details -->
+  <main class="right" #rightPane style="display: flex; flex-direction: column;">
+    <div class="toolbar" style="flex-shrink: 0;">
+      <ng-container *ngIf="selected() as sel; else choose">
+        <div class="title-wrap">
+          <h3 class="doc-title">{{ sel.title }}</h3>
+          <div class="doc-meta">문서번호: {{ sel.id }}</div>
+        </div>
+      </ng-container>
+      <div class="spacer"></div>
+    </div>
+    <ng-template #choose><h3 style="padding: 16px;">좌측에서 항목을 선택하세요.</h3></ng-template>
+    
+    <section class="content" style="flex: 1; overflow-y: auto; padding: 16px;">
+      <div *ngIf="selected() as sel">
+        <!-- Metadata Section -->
+        <ng-container *ngTemplateOutlet="metadataSection; context: { sel: sel }"></ng-container>
+        
+        <!-- Content Based on Selection -->
+        <ng-container *ngIf="sel.id==='BF-RMD-PM-IR-07'; else genericInfo">
+          <ng-container *ngTemplateOutlet="thRecordSection; context: { sel: sel }"></ng-container>
+        </ng-container>
+        
+        <ng-template #genericInfo>
+          <!-- ISO14001 PDF Upload Section -->
+          <ng-container *ngIf="sel.id === 'ISO-14001'">
+            <ng-container *ngTemplateOutlet="pdfUploadSection; context: { sel: sel }"></ng-container>
+          </ng-container>
+        </ng-template>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Metadata Template -->
+<ng-template #metadataSection let-sel="sel">
+  <div class="section-row toolbar-line">
+    <div class="section-title">기록 정보</div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span class="saved-badge" *ngIf="metadataService.metaJustSaved()">저장됨</span>
+      <button class="action" (click)="metadataService.toggleInfo()">{{ metadataService.infoOpen() ? '간략히 보기' : '자세히 보기' }}</button>
+      <button class="action primary" [disabled]="metadataService.isSavingMeta()" (click)="metadataService.saveMeta(sel)">저장</button>
+    </div>
+  </div>
+  
+  <ng-container *ngIf="metadataService.infoOpen(); else infoSummary">
+    <div class="detail-form" (ngModelChange)="metadataService.persistMeta(sel)">
+      <div>
+        <label>담당부서</label>
+        <select [(ngModel)]="sel.department" (ngModelChange)="metadataService.persistMeta(sel)">
+          <option *ngFor="let d of filterService.departments" [value]="d">{{ d }}</option>
+        </select>
+      </div>
+      <div>
+        <label>담당자</label>
+        <div class="typeahead">
+          <input #ownerInput type="text" [ngModel]="ownerTyping" (ngModelChange)="onOwnerInputText($event)" (keydown)="onOwnerKeydown($event, sel)" placeholder="이름/이메일" spellcheck="false">
+          <div class="suggest" *ngIf="ownerSuggest.length">
+            <div class="item" *ngFor="let u of ownerSuggest; let i = index"
+              tabindex="-1" role="option"
+              [id]="'owner-sg-'+i" [class.active]="i===ownerIndex"
+              (click)="chooseOwner(sel,u)"
+              (keydown)="onOwnerItemKeydown($event, sel, i)">{{ u }}</div>
+          </div>
+        </div>
+        <div class="chips owners" *ngIf="getOwnerList(sel).length">
+          <span class="chip" *ngFor="let n of getOwnerList(sel)">{{ n }}
+            <button class="remove" (click)="removeOwnerChip(sel,n)" title="삭제">×</button>
+          </span>
+        </div>
+      </div>
+      <div>
+        <label>기록방법</label>
+        <div class="btn-group">
+          <button class="seg" *ngFor="let m of filterService.methods" [class.on]="sel.method===m" (click)="sel.method=m; metadataService.persistMeta(sel)">{{ m }}</button>
+        </div>
+      </div>
+      <div>
+        <label>기록주기</label>
+        <div class="btn-group">
+          <button class="seg" *ngFor="let p of filterService.periods" [class.on]="sel.period===p" (click)="sel.period=p; metadataService.persistMeta(sel)">{{ p }}</button>
+        </div>
+      </div>
+      <div>
+        <label>인증 체계</label>
+        <div class="btn-group wrap">
+          <button class="seg" [class.on]="metadataService.isCert(sel,'ISO9001')" (click)="metadataService.toggleCert(sel,'ISO9001')">ISO9001</button>
+          <button class="seg" [class.on]="metadataService.isCert(sel,'ISO22716')" (click)="metadataService.toggleCert(sel,'ISO22716')">ISO22716</button>
+          <button class="seg" [class.on]="metadataService.isCert(sel,'ISO14001')" (click)="metadataService.toggleCert(sel,'ISO14001')">ISO14001</button>
+          <button class="seg" [class.on]="metadataService.isCert(sel,'HALAL')" (click)="metadataService.toggleCert(sel,'HALAL')">HALAL</button>
+        </div>
+      </div>
+      <div>
+        <label>규정 카테고리</label>
+        <div class="btn-group wrap">
+          <button class="seg" *ngFor="let c of categoriesNoISO" [class.on]="sel.standardCategory===c" (click)="sel.standardCategory=c; metadataService.persistMeta(sel)">{{ c }}</button>
+        </div>
+      </div>
+      <div>
+        <label>연결된 규정</label>
+        <div class="chips">
+          <span class="chip" *ngFor="let s of linkedStandards()" (click)="openStandardTab(s.id)" style="cursor:pointer;">{{ s.id }} · {{ s.title }}</span>
+          <span class="muted" *ngIf="!linkedStandards().length">없음</span>
+        </div>
+      </div>
+      <div>
+        <label>연결된 Audit</label>
+        <div class="chips">
+          <span class="chip" *ngFor="let c of linkedCompanies()">{{ c }}</span>
+          <span class="muted" *ngIf="!linkedCompanies().length">없음</span>
+        </div>
+      </div>
+      <div style="grid-column:2;">
+        <label>연결된 평가항목</label>
+        <ng-container *ngIf="linkedAuditItems().length; else noEval">
+          <div class="eval-items" style="padding:10px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; display:flex; flex-direction:column; gap:8px;">
+            <div class="eval-item" *ngFor="let a of linkedAuditItems()" (click)="openAuditItemTab(a.number, a.title)">{{ a.number }}. {{ a.title || ('항목 ' + a.number) }}</div>
+          </div>
+        </ng-container>
+        <ng-template #noEval><span class="muted">없음</span></ng-template>
+      </div>
+    </div>
+  </ng-container>
+  
+  <ng-template #infoSummary>
+    <div class="summary-chips">
+      <span class="chip">{{ sel.department || '부서 미지정' }}</span>
+      <span class="chip" *ngIf="sel.owner">{{ sel.owner }}</span>
+      <span class="chip" *ngIf="sel.method">{{ sel.method }}</span>
+      <span class="chip" *ngIf="sel.period">{{ sel.period }}</span>
+      <span class="chip" *ngIf="sel.standardCategory && sel.standardCategory !== 'ISO'">{{ sel.standardCategory }}</span>
+    </div>
+  </ng-template>
+</ng-template>
+
+<!-- Temperature/Humidity Record Template -->
+<ng-template #thRecordSection let-sel="sel">
+  <div class="th-toolbar">
+    <div class="group">
+      <button class="nav pill" title="이전 월" (click)="nudgeDate(-1,'month')"><span class="chev">‹</span><span class="lab">월</span></button>
+      <button class="nav pill" title="이전 주" (click)="nudgeDate(-1,'week')"><span class="chev">‹</span><span class="lab">주</span></button>
+      <button class="nav pill" title="이전 일" (click)="nudgeDate(-1,'day')"><span class="chev">‹</span><span class="lab">일</span></button>
+      <input class="date" type="date" [ngModel]="thService.dateValue()" (ngModelChange)="setDate($event)" />
+      <button class="nav pill" title="다음 일" (click)="nudgeDate(1,'day')"><span class="lab">일</span><span class="chev">›</span></button>
+      <button class="nav pill" title="다음 주" (click)="nudgeDate(1,'week')"><span class="lab">주</span><span class="chev">›</span></button>
+      <button class="nav pill" title="다음 월" (click)="nudgeDate(1,'month')"><span class="lab">월</span><span class="chev">›</span></button>
+    </div>
+    <div class="group admin">
+      <label class="label">기록주기</label>
+      <select class="gran" [ngModel]="thService.granularity()" (ngModelChange)="setGranularity($event)" [disabled]="!thService.isAdmin">
+        <option value="month">월</option>
+        <option value="week">주</option>
+        <option value="day">일</option>
+      </select>
+    </div>
+    <div class="group buttons">
+      <div class="group tools">
+        <button class="secondary" [class.active]="thService.tool()==='pen'" (click)="thService.togglePenMenu()">펜</button>
+        <div class="tool-menu" *ngIf="thService.showPenMenu()">
+          <div class="row">
+            <span>색상</span>
+            <button class="swatch" *ngFor="let c of thService.penColors"
+              [style.background]="c"
+              (click)="thService.setPenColor(c)"
+              [style.boxShadow]="thService.penColor()===c ? ('0 0 0 4px ' + c + '55') : 'none'"
+              [style.transform]="thService.penColor()===c ? 'scale(1.08)' : 'scale(1)'"
+              [attr.aria-label]="c"></button>
+          </div>
+          <div class="row">
+            <span>굵기</span>
+            <select [ngModel]="thService.penWidth()" (ngModelChange)="thService.setPenWidth($event)">
+              <option *ngFor="let w of thService.penWidths" [value]="w">{{w}}px</option>
+            </select>
+          </div>
+        </div>
+        <button class="secondary" [class.active]="thService.tool()==='eraser'" (click)="thService.toggleEraserMenu()">지우개</button>
+        <div class="tool-menu" *ngIf="thService.showEraserMenu()">
+          <div class="row">
+            <span>굵기</span>
+            <select [ngModel]="thService.eraserWidth()" (ngModelChange)="thService.setEraserWidth($event)">
+              <option *ngFor="let w of thService.eraserWidths" [value]="w">{{w}}px</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <button class="secondary" (click)="thService.closeToolMenus(); clearToday()">지우기</button>
+      <button class="secondary" (click)="thService.closeToolMenus(); loadRecord()">불러오기</button>
+      <button class="primary" (click)="thService.closeToolMenus(); saveRecord()">저장</button>
+      <button class="secondary" (click)="thService.closeToolMenus(); printRecord()">인쇄</button>
+      <button class="secondary" (click)="toggleFullscreen()">전체화면</button>
+    </div>
+  </div>
+  <div class="pdf-annotator" #container [class.fullscreen]="thService.fullscreen()">
+    <button *ngIf="thService.fullscreen()" class="fs-exit" (click)="toggleFullscreen()">닫기</button>
+    <canvas #pdfCanvas></canvas>
+    <canvas #drawCanvas
+      (pointerdown)="onPointerDown($event)" 
+      (pointermove)="onPointerMove($event)" 
+      (pointerup)="onPointerUp()" 
+      (pointercancel)="onPointerUp()"
+      (touchstart)="$event.preventDefault()" 
+      (touchmove)="$event.preventDefault()" 
+      (touchend)="$event.preventDefault()"></canvas>
+  </div>
+</ng-template>
+
+<!-- PDF Upload Section Template -->
+<ng-template #pdfUploadSection let-sel="sel">
+  <div class="section-row toolbar-line" style="margin-top: 20px;">
+    <div class="section-title">ISO14001 환경경영시스템 기록 문서</div>
+  </div>
+  
+  <!-- PDF 드래그앤드롭 업로드 박스 -->
+  <div class="pdf-upload-section">
+    <div 
+      class="dropbox"
+      [class.dragover]="pdfService.dragOver()"
+      [class.disabled]="pdfService.isUploadingPdf()"
+      (dragover)="!pdfService.isUploadingPdf() && pdfService.handleDragOver($event)"
+      (dragleave)="!pdfService.isUploadingPdf() && pdfService.handleDragLeave($event)"
+      (drop)="!pdfService.isUploadingPdf() && pdfService.handleDrop($event, sel.id)"
+      (click)="!pdfService.isUploadingPdf() && fileInput.click()"
+      style="min-height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;">
+      
+      <ng-container *ngIf="!pdfService.pendingPdfFile()">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
+          <path d="M12 15V3m0 0l-4 4m4-4l4 4M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17"/>
+        </svg>
+        <div style="text-align: center;">
+          <div style="font-size: 14px; font-weight: 600; color: #475569;">PDF 파일을 드래그하여 놓거나 클릭하여 선택</div>
+          <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">PDF 파일만 업로드 가능합니다</div>
+        </div>
+      </ng-container>
+      
+      <ng-container *ngIf="pdfService.pendingPdfFile()">
+        <div class="file-pill" style="background: #dbeafe; padding: 8px 16px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#dc2626">
+            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+          </svg>
+          <span style="font-weight: 500;">{{ pdfService.pendingPdfFile()!.name }}</span>
+          <button type="button" (click)="pdfService.removePendingPdf(); $event.stopPropagation()" style="margin-left: 8px; color: #ef4444; font-weight: bold;">×</button>
+        </div>
+      </ng-container>
+      
+      <input #fileInput type="file" accept="application/pdf" style="display: none;" (change)="onPdfPick($event)">
+    </div>
+    
+    <div *ngIf="pdfService.pdfUploadError()" style="color: #ef4444; font-size: 13px; margin-top: 8px;">{{ pdfService.pdfUploadError() }}</div>
+    
+    <button 
+      *ngIf="pdfService.pendingPdfFile()" 
+      class="action primary" 
+      style="margin-top: 12px; min-width: 120px; display: flex; align-items: center; justify-content: center; gap: 8px;"
+      [disabled]="pdfService.isUploadingPdf()"
+      (click)="pdfService.savePdf(sel.id)">
+      <svg *ngIf="pdfService.isUploadingPdf()" class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" opacity="0.25"/>
+        <path d="M12 2a10 10 0 0 1 0 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      {{ pdfService.isUploadingPdf() ? '업로드 중...' : '저장' }}
+    </button>
+  </div>
+  
+  <!-- 저장된 PDF 파일 목록 -->
+  <div class="saved-pdfs-section" *ngIf="pdfService.recordPdfs().length > 0" style="margin-top: 24px; margin-bottom: 40px;">
+    <div class="section-title" style="margin-bottom: 12px;">저장된 문서</div>
+    <div class="pdf-list" style="display: flex; flex-direction: column; gap: 8px;">
+      <div 
+        *ngFor="let pdf of pdfService.recordPdfs()" 
+        class="pdf-item"
+        style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; transition: all 0.2s;">
+        
+        <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="#dc2626">
+            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+          </svg>
+          
+          <div style="flex: 1;">
+            <div 
+              style="font-weight: 500; color: #1e40af; cursor: pointer; text-decoration: underline;"
+              (click)="pdfService.openPdf(pdf.url)">
+              {{ pdf.originalName || pdf.name }}
+            </div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
+              {{ pdf.uploadedBy }} · {{ pdf.uploadedAt | date:'yyyy-MM-dd HH:mm' }}
+            </div>
+          </div>
+        </div>
+        
+        <div style="display: flex; gap: 8px;">
+          <button 
+            type="button"
+            class="action download"
+            style="padding: 6px 12px; display: flex; align-items: center; gap: 6px;"
+            (click)="pdfService.downloadPdf(pdf)"
+            title="다운로드">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            다운로드
+          </button>
+          
+          <button 
+            type="button"
+            class="action"
+            style="width: 30px; height: 30px; padding: 0; display: flex; align-items: center; justify-content: center; border-color: #ef4444; color: #ef4444;"
+            (click)="pdfService.removePdf(pdf, sel.id)"
+            title="삭제">
+            ×
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</ng-template>
