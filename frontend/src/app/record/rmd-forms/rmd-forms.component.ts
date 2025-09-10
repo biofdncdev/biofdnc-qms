@@ -15,7 +15,7 @@ import { TabService } from '../../services/tab.service';
     `:host .page{ display:grid; grid-template-columns: 280px 0.9fr minmax(420px, 46%); gap:16px; align-items:start; }
      :host aside.left{ grid-column:1; position:sticky; top:12px; align-self:start; }
      :host section.center{ grid-column:2; min-width:0; max-height: calc(100vh - 96px); overflow-y:auto; padding-right:8px; }
-     :host main.right{ grid-column:3; min-width:0; max-height: calc(100vh - 96px); overflow-y:auto; padding-right:8px; }
+     :host main.right{ grid-column:3; min-width:0; max-height: calc(100vh - 96px); overflow-y:auto; padding-right:8px; padding-bottom:20px; }
      :host .filters{ display:flex; flex-direction:column; gap:10px; }
      :host .filters .f-title{ display:block; margin:0; font-weight:600; color:#334155; font-size:13px; }
      :host .filters .group{ display:flex; flex-wrap:wrap; gap:6px; }
@@ -65,9 +65,6 @@ import { TabService } from '../../services/tab.service';
      :host .action:active{ transform: translateY(1px); }
      :host .action.primary{ background:#2563eb; border-color:#2563eb; color:#fff; }
      :host .action.primary:hover{ background:#1d4ed8; }
-     :host .doc-title{ font-size:22px; font-weight:800; margin:0; }
-     :host .title-wrap{ display:flex; align-items:baseline; gap:12px; }
-     :host .doc-meta{ color:#6b7280; font-size:12px; }
      /* typeahead user suggestions */
      :host .typeahead{ position:relative; width:100%; }
      :host .typeahead input[type='text']{ width:100%; }
@@ -77,8 +74,9 @@ import { TabService } from '../../services/tab.service';
      :host .suggest .item.active{ background:#eef2ff; box-shadow:inset 0 0 0 2px rgba(99,102,241,.25); }
      :host .suggest .item:hover{ background:#eef2ff; }
      :host .suggest .item:focus{ outline:0; box-shadow:inset 0 0 0 2px rgba(99,102,241,.25); }
-     :host .dropbox{ margin-top:8px; border:2px dashed #cbd5e1; border-radius:10px; padding:12px; display:flex; align-items:center; gap:8px; cursor:pointer; background:#f8fafc; }
-     :host .dropbox.dragover{ background:#eef2ff; border-color:#93c5fd; }
+     :host .dropbox{ margin-top:8px; border:2px dashed #cbd5e1; border-radius:10px; padding:12px; display:flex; align-items:center; gap:8px; cursor:pointer; background:#f8fafc; transition: all 0.3s ease; }
+     :host .dropbox:hover{ background:#f1f5f9; border-color:#94a3b8; }
+     :host .dropbox.dragover{ background:#eef2ff; border-color:#6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); }
      :host .file-pill{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; background:#e2e8f0; }
      :host .std-row{ display:flex; gap:12px; align-items:flex-start; }
      :host .file-pill button{ border:0; background:transparent; color:#ef4444; cursor:pointer; }
@@ -86,6 +84,14 @@ import { TabService } from '../../services/tab.service';
      :host .eval-items{ font-size:12px; }
      :host .eval-item{ padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer; transition: box-shadow .12s ease, transform .12s ease; }
      :host .eval-item:hover{ box-shadow:0 6px 16px rgba(2,6,23,.12); transform: translateY(-1px); }
+     :host .pdf-item:hover{ background:#f8fafc !important; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+     :host .pdf-upload-section{ margin-top: 16px; }
+     :host .saved-pdfs-section{ background: #f9fafb; padding: 16px; border-radius: 12px; margin-bottom: 20px; }
+     :host .content{ flex: 1; overflow-y: auto; }
+     :host .toolbar{ padding: 12px 16px; border-bottom: 1px solid #e5e7eb; background: #ffffff; flex-shrink: 0; }
+     :host .title-wrap{ display: flex; align-items: baseline; gap: 12px; }
+     :host .doc-title{ font-size: 20px; font-weight: 700; margin: 0; }
+     :host .doc-meta{ color: #6b7280; font-size: 12px; }
     `
   ],
   template: `
@@ -161,8 +167,8 @@ import { TabService } from '../../services/tab.service';
       </section>
     </section>
 
-    <main class="right" #rightPane>
-      <div class="toolbar">
+    <main class="right" #rightPane style="display: flex; flex-direction: column;">
+      <div class="toolbar" style="flex-shrink: 0;">
         <ng-container *ngIf="selected() as sel; else choose">
           <div class="title-wrap">
             <h3 class="doc-title">{{ sel.title }}</h3>
@@ -171,8 +177,8 @@ import { TabService } from '../../services/tab.service';
         </ng-container>
         <div class="spacer"></div>
       </div>
-      <ng-template #choose><h3>좌측에서 항목을 선택하세요.</h3></ng-template>
-      <section class="content">
+      <ng-template #choose><h3 style="padding: 16px;">좌측에서 항목을 선택하세요.</h3></ng-template>
+      <section class="content" style="flex: 1; overflow-y: auto; padding: 16px;">
         <div *ngIf="selected() as sel">
           <div class="section-row toolbar-line">
             <div class="section-title">기록 정보</div>
@@ -337,7 +343,98 @@ import { TabService } from '../../services/tab.service';
                 (touchstart)="$event.preventDefault()" (touchmove)="$event.preventDefault()" (touchend)="$event.preventDefault()"></canvas>
             </div>
           </ng-container>
-          <ng-template #genericInfo></ng-template>
+          <ng-template #genericInfo>
+            <!-- ISO14001 환경경영시스템 선택 시 PDF 업로드 UI 표시 -->
+            <ng-container *ngIf="sel.id === 'ISO-14001'">
+              <div class="section-row toolbar-line" style="margin-top: 20px;">
+                <div class="section-title">ISO14001 환경경영시스템 기록 문서</div>
+              </div>
+              
+              <!-- PDF 드래그앤드롭 업로드 박스 -->
+              <div class="pdf-upload-section">
+                <div 
+                  class="dropbox"
+                  [class.dragover]="dragOver"
+                  (dragover)="onDragOver($event)"
+                  (dragleave)="onDragLeave($event)"
+                  (drop)="onDrop($event)"
+                  (click)="fileInput.click()"
+                  style="min-height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;">
+                  
+                  <ng-container *ngIf="!pendingPdfFile">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
+                      <path d="M12 15V3m0 0l-4 4m4-4l4 4M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17"/>
+                    </svg>
+                    <div style="text-align: center;">
+                      <div style="font-size: 14px; font-weight: 600; color: #475569;">PDF 파일을 드래그하여 놓거나 클릭하여 선택</div>
+                      <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">PDF 파일만 업로드 가능합니다</div>
+                    </div>
+                  </ng-container>
+                  
+                  <ng-container *ngIf="pendingPdfFile">
+                    <div class="file-pill" style="background: #dbeafe; padding: 8px 16px;">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="#dc2626">
+                        <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                      </svg>
+                      <span style="font-weight: 500;">{{ pendingPdfFile.name }}</span>
+                      <button type="button" (click)="removePendingPdf(); $event.stopPropagation()" style="margin-left: 8px; color: #ef4444; font-weight: bold;">×</button>
+                    </div>
+                  </ng-container>
+                  
+                  <input #fileInput type="file" accept="application/pdf" style="display: none;" (change)="onPdfPick($event)">
+                </div>
+                
+                <div *ngIf="pdfUploadError" style="color: #ef4444; font-size: 13px; margin-top: 8px;">{{ pdfUploadError }}</div>
+                
+                <button 
+                  *ngIf="pendingPdfFile" 
+                  class="action primary" 
+                  style="margin-top: 12px; width: 100px;"
+                  [disabled]="isUploadingPdf"
+                  (click)="savePdf()">
+                  {{ isUploadingPdf ? '저장 중...' : '저장' }}
+                </button>
+              </div>
+              
+              <!-- 저장된 PDF 파일 목록 -->
+              <div class="saved-pdfs-section" *ngIf="recordPdfs.length > 0" style="margin-top: 24px; margin-bottom: 40px;">
+                <div class="section-title" style="margin-bottom: 12px;">저장된 문서</div>
+                <div class="pdf-list" style="display: flex; flex-direction: column; gap: 8px;">
+                  <div 
+                    *ngFor="let pdf of recordPdfs" 
+                    class="pdf-item"
+                    style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; transition: all 0.2s;">
+                    
+                    <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="#dc2626">
+                        <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                      </svg>
+                      
+                      <div style="flex: 1;">
+                        <div 
+                          style="font-weight: 500; color: #1e40af; cursor: pointer; text-decoration: underline;"
+                          (click)="openPdf(pdf.url)">
+                          {{ pdf.name }}
+                        </div>
+                        <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
+                          {{ pdf.uploadedBy }} · {{ pdf.uploadedAt | date:'yyyy-MM-dd HH:mm' }}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <button 
+                      type="button"
+                      class="action"
+                      style="width: 30px; height: 30px; padding: 0; display: flex; align-items: center; justify-content: center; border-color: #ef4444; color: #ef4444;"
+                      (click)="removePdf(pdf)"
+                      title="삭제">
+                      ×
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </ng-container>
+          </ng-template>
         </div>
       </section>
     </main>
@@ -761,11 +858,14 @@ export class RmdFormsComponent {
   }
 
   // ===== PDF handling =====
-  recordPdfs: Array<{ name: string; path: string; url: string }> = [];
+  recordPdfs: Array<{ name: string; path: string; url: string; uploadedBy?: string; uploadedAt?: string; bucket?: string }> = [];
   selectedPdfPath: string = '';
   isSavingMeta = false;
   metaJustSaved = false;
   dragOver = false;
+  pendingPdfFile: File | null = null;
+  isUploadingPdf = false;
+  pdfUploadError = '';
 
   async saveMeta(sel: any){
     try{
@@ -823,23 +923,146 @@ export class RmdFormsComponent {
 
   private async refreshPdfList(){
     const sel = this.selected(); if(!sel) return;
-    this.recordPdfs = await this.supabase.listRecordPdfs(sel.id);
-    if (this.recordPdfs.length && !this.selectedPdfPath){ this.selectedPdfPath = this.recordPdfs[0].url; }
+    try {
+      const pdfs = await this.supabase.listRecordPdfs(sel.id);
+      // 저장된 PDF 목록에 업로드 정보 추가 (localStorage에서 가져오기)
+      const uploadInfo = this.getPdfUploadInfo(sel.id);
+      this.recordPdfs = pdfs.map((pdf: any, index: number) => {
+        const info = uploadInfo[pdf.path] || {};
+        return {
+          ...pdf,
+          uploadedBy: info.uploadedBy || '알 수 없음',
+          uploadedAt: info.uploadedAt || new Date().toISOString()
+        };
+      }).reverse(); // 최신 파일이 위에 오도록
+      if (this.recordPdfs.length && !this.selectedPdfPath){ 
+        this.selectedPdfPath = this.recordPdfs[0].url; 
+      }
+    } catch(error) {
+      console.error('PDF 목록 불러오기 실패:', error);
+      this.recordPdfs = [];
+    }
   }
   async onPdfPick(ev: Event){
-    const input = ev.target as HTMLInputElement; const f = input?.files?.[0]; if(!f || !this.selected()) return;
-    await this.supabase.uploadRecordPdf(f, this.selected()!.id);
-    await this.refreshPdfList();
+    const input = ev.target as HTMLInputElement; 
+    const f = input?.files?.[0]; 
+    if(!f || !this.selected()) return;
+    
+    if (f.type !== 'application/pdf') {
+      this.pdfUploadError = 'PDF 파일만 업로드 가능합니다.';
+      return;
+    }
+    
+    this.pendingPdfFile = f;
+    this.pdfUploadError = '';
+    input.value = ''; // 같은 파일 재선택 가능하도록
   }
   async onDrop(ev: DragEvent){
-    ev.preventDefault(); this.dragOver = false; const file = ev.dataTransfer?.files?.[0]; if(!file || !this.selected()) return;
-    if (file.type !== 'application/pdf') return;
-    await this.supabase.uploadRecordPdf(file, this.selected()!.id);
+    ev.preventDefault(); 
+    this.dragOver = false; 
+    const file = ev.dataTransfer?.files?.[0]; 
+    if(!file || !this.selected()) return;
+    
+    if (file.type !== 'application/pdf') {
+      this.pdfUploadError = 'PDF 파일만 업로드 가능합니다.';
+      return;
+    }
+    
+    this.pendingPdfFile = file;
+    this.pdfUploadError = '';
+  }
+  
+  onDragOver(ev: DragEvent) {
+    ev.preventDefault();
+    this.dragOver = true;
+  }
+  
+  onDragLeave(ev: DragEvent) {
+    ev.preventDefault();
+    this.dragOver = false;
+  }
+  async removePdf(p: { path: string; bucket?: string }){
+    if (!confirm('이 PDF 파일을 삭제하시겠습니까?')) return;
+    try{ 
+      await this.supabase.deleteRecordPdf(p.path, p.bucket); 
+      // localStorage에서도 업로드 정보 삭제
+      const sel = this.selected();
+      if (sel) {
+        const uploadInfo = this.getPdfUploadInfo(sel.id);
+        delete uploadInfo[p.path];
+        this.savePdfUploadInfo(sel.id, uploadInfo);
+      }
+    }catch(error){
+      console.error('PDF 삭제 실패:', error);
+      alert('PDF 삭제에 실패했습니다.');
+    }
     await this.refreshPdfList();
   }
-  async removePdf(p: { path: string }){
-    try{ await this.supabase.deleteRecordPdf(p.path); }catch{}
-    await this.refreshPdfList();
+  
+  removePendingPdf() {
+    this.pendingPdfFile = null;
+    this.pdfUploadError = '';
+  }
+  
+  async savePdf() {
+    if (!this.pendingPdfFile || !this.selected()) return;
+    
+    this.isUploadingPdf = true;
+    this.pdfUploadError = '';
+    
+    try {
+      const result = await this.supabase.uploadRecordPdf(this.pendingPdfFile, this.selected()!.id);
+      
+      // 업로드 정보를 localStorage에 저장
+      const user = await this.supabase.getCurrentUser();
+      const uploadInfo = this.getPdfUploadInfo(this.selected()!.id);
+      uploadInfo[result.path] = {
+        uploadedBy: user?.email || '알 수 없음',
+        uploadedAt: new Date().toISOString()
+      };
+      this.savePdfUploadInfo(this.selected()!.id, uploadInfo);
+      
+      this.pendingPdfFile = null;
+      await this.refreshPdfList();
+    } catch(error: any) {
+      console.error('PDF 업로드 실패:', error);
+      // 더 자세한 에러 메시지 표시
+      if (error?.message?.includes('Row level security')) {
+        this.pdfUploadError = '권한이 없습니다. 로그인 상태를 확인하세요.';
+      } else if (error?.message?.includes('size')) {
+        this.pdfUploadError = '파일 크기가 너무 큽니다. (최대 50MB)';
+      } else if (error?.message?.includes('not found') || error?.message?.includes('does not exist')) {
+        // 버킷이 없을 경우 자동으로 fallback 사용을 알림
+        this.pdfUploadError = '업로드 처리 중... (대체 저장소 사용)';
+        // fallback 처리는 서비스에서 자동으로 됨
+      } else {
+        this.pdfUploadError = `PDF 업로드 실패: ${error?.message || '알 수 없는 오류'}`;
+      }
+    } finally {
+      this.isUploadingPdf = false;
+    }
+  }
+  
+  openPdf(url: string) {
+    window.open(url, '_blank');
+  }
+  
+  // localStorage에 PDF 업로드 정보 저장/조회
+  private getPdfUploadInfo(formId: string): Record<string, any> {
+    try {
+      const key = `pdf_upload_info_${formId}`;
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : {};
+    } catch {
+      return {};
+    }
+  }
+  
+  private savePdfUploadInfo(formId: string, info: Record<string, any>) {
+    try {
+      const key = `pdf_upload_info_${formId}`;
+      localStorage.setItem(key, JSON.stringify(info));
+    } catch {}
   }
 
   filteredFlat = computed<RmdFormItem[]>(() => {

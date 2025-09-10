@@ -591,6 +591,7 @@ export class SupabaseService {
   // Record PDFs storage (per form)
   async uploadRecordPdf(file: File, form_id: string){
     const client = this.ensureClient();
+    
     // Sanitize filename: keep only safe ascii chars, preserve extension
     const original = file.name || 'document.pdf';
     const extMatch = original.toLowerCase().endsWith('.pdf') ? '.pdf' : (original.split('.').pop()?.toLowerCase() || 'pdf');
@@ -600,30 +601,84 @@ export class SupabaseService {
     const safeBase = normalized.replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'');
     const name = `${Date.now()}_${safeBase}${ext}`;
     const safeFolder = String(form_id).replace(/[^a-zA-Z0-9._-]/g,'-');
-    const path = `${safeFolder}/${name}`;
-    const { error, data } = await client.storage.from('rmd_pdfs').upload(path, file, { upsert: true, contentType: 'application/pdf' });
-    if (error) throw error;
+    
+    // 먼저 rmd_records 버킷 사용 (현재 작동하는 버킷)
+    const recordsPath = `pdfs/${safeFolder}/${name}`;
+    const { error: recordsError, data: recordsData } = await client.storage
+      .from('rmd_records')
+      .upload(recordsPath, file, { upsert: true, contentType: 'application/pdf' });
+    
+    if (!recordsError && recordsData) {
+      const { data: pub } = client.storage.from('rmd_records').getPublicUrl(recordsData.path);
+      return { path: recordsData.path, publicUrl: pub.publicUrl, bucket: 'rmd_records' } as any;
+    }
+    
+    // rmd_records 실패시 rmd_pdfs 시도 (미래를 위한 준비)
+    const pdfsPath = `${safeFolder}/${name}`;
+    const { error, data } = await client.storage.from('rmd_pdfs').upload(pdfsPath, file, { upsert: true, contentType: 'application/pdf' });
+    
+    if (error) {
+      console.error('모든 버킷 업로드 실패:', recordsError, error);
+      throw recordsError || error; // 첫 번째 에러를 우선 반환
+    }
+    
     const { data: pub } = client.storage.from('rmd_pdfs').getPublicUrl(data.path);
-    return { path: data.path, publicUrl: pub.publicUrl } as any;
+    return { path: data.path, publicUrl: pub.publicUrl, bucket: 'rmd_pdfs' } as any;
   }
+  
   async listRecordPdfs(form_id: string){
     const client = this.ensureClient();
+    const results: any[] = [];
+    
+    // rmd_pdfs 버킷에서 먼저 시도
     try{
-      const { data: list } = await client.storage.from('rmd_pdfs').list(form_id, { limit: 100 });
-      const items = (Array.isArray(list)? list: []).filter((o:any)=> (o?.name||'').toLowerCase().endsWith('.pdf'));
-      return await Promise.all(items.map(async (o:any)=>{
-        const full = `${form_id}/${o.name}`;
-        const { data } = client.storage.from('rmd_pdfs').getPublicUrl(full);
-        return { name: o.name, path: full, url: data.publicUrl };
-      }));
-    }catch{
-      return [] as any[];
+      const { data: list, error } = await client.storage.from('rmd_pdfs').list(form_id, { limit: 100 });
+      if (!error && list) {
+        const items = (Array.isArray(list)? list: []).filter((o:any)=> (o?.name||'').toLowerCase().endsWith('.pdf'));
+        const pdfItems = await Promise.all(items.map(async (o:any)=>{
+          const full = `${form_id}/${o.name}`;
+          const { data } = client.storage.from('rmd_pdfs').getPublicUrl(full);
+          return { name: o.name, path: full, url: data.publicUrl, bucket: 'rmd_pdfs' };
+        }));
+        results.push(...pdfItems);
+      }
+    }catch(e){
+      console.warn('rmd_pdfs 버킷 접근 실패:', e);
     }
+    
+    // rmd_records 버킷의 pdfs 폴더에서도 확인 (fallback)
+    try{
+      const { data: list, error } = await client.storage.from('rmd_records').list(`pdfs/${form_id}`, { limit: 100 });
+      if (!error && list) {
+        const items = (Array.isArray(list)? list: []).filter((o:any)=> (o?.name||'').toLowerCase().endsWith('.pdf'));
+        const pdfItems = await Promise.all(items.map(async (o:any)=>{
+          const full = `pdfs/${form_id}/${o.name}`;
+          const { data } = client.storage.from('rmd_records').getPublicUrl(full);
+          return { name: o.name, path: full, url: data.publicUrl, bucket: 'rmd_records' };
+        }));
+        results.push(...pdfItems);
+      }
+    }catch(e){
+      console.warn('rmd_records 버킷 접근 실패:', e);
+    }
+    
+    return results;
   }
-  async deleteRecordPdf(path: string){
+  async deleteRecordPdf(path: string, bucket?: string){
     const client = this.ensureClient();
-    const { error } = await client.storage.from('rmd_pdfs').remove([path]);
-    if (error) throw error;
+    
+    // 버킷이 명시되지 않은 경우 경로에서 추론
+    const targetBucket = bucket || (path.startsWith('pdfs/') ? 'rmd_records' : 'rmd_pdfs');
+    
+    const { error } = await client.storage.from(targetBucket).remove([path]);
+    if (error) {
+      // 첫 번째 버킷에서 실패하면 다른 버킷 시도
+      const alternateBucket = targetBucket === 'rmd_pdfs' ? 'rmd_records' : 'rmd_pdfs';
+      const alternatePath = targetBucket === 'rmd_pdfs' ? `pdfs/${path}` : path.replace('pdfs/', '');
+      
+      const { error: altError } = await client.storage.from(alternateBucket).remove([alternatePath]);
+      if (altError) throw error; // 원래 에러를 throw
+    }
     return { ok: true } as any;
   }
 
