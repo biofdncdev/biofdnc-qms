@@ -22,7 +22,7 @@ CREATE POLICY "Allow authenticated users to upload PDF files"
 ON storage.objects
 FOR INSERT
 TO authenticated
-WITH CHECK (bucket_id = 'rmd_pdfs');
+WITH CHECK (bucket_id = 'rmd_pdfs');y
 ```
 
 #### 업데이트 정책
