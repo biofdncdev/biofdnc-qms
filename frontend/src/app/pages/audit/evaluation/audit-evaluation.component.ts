@@ -1,5 +1,5 @@
 import { Component, HostListener, ViewChild, ElementRef, signal, ChangeDetectionStrategy } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, NavigationEnd } from '@angular/router';
 import { TabService } from '../../../services/tab.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -427,6 +427,36 @@ export class AuditEvaluationComponent {
   constructor(private supabase: SupabaseService, private router: Router, private tabBus: TabService){
     // Pre-hydrate UI from sessionStorage to avoid initial flicker on tab switching
     this.prehydrateFromSession();
+    
+    // Listen for route changes to handle navigation from Record page
+    this.router.events.subscribe(async (event) => {
+      if (event instanceof NavigationEnd) {
+        // Check if we're on the audit page
+        if (event.url.includes('/audit/')) {
+          // Parse the URL for the open parameter
+          try {
+            const urlParts = event.url.split('?');
+            if (urlParts.length > 1) {
+              const params = new URLSearchParams(urlParts[1]);
+              const openParam = params.get('open');
+              if (openParam && openParam.trim()) {
+                const open = Number(openParam);
+                if (Number.isFinite(open) && open > 0 && open <= 214) {
+                  console.log('[Audit] Route changed, opening item:', open);
+                  this.pendingOpenId = open;
+                  // Wait for items to be loaded if needed
+                  if (this.items().length > 0) {
+                    await this.openFromPending();
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.error('[Audit] Error parsing route params:', e);
+          }
+        }
+      }
+    });
   }
 
   private prehydrateFromSession(){
@@ -468,13 +498,21 @@ export class AuditEvaluationComponent {
       // Deep-link (?open=ID) or session flag from Record → remember target
       try{
         const params = new URLSearchParams(location.search);
-        const open = Number(params.get('open') || '');
-        if (Number.isFinite(open)) this.pendingOpenId = open;
+        const openParam = params.get('open');
+        if (openParam && openParam.trim()) {
+          const open = Number(openParam);
+          if (Number.isFinite(open) && open > 0 && open <= 214) {
+            this.pendingOpenId = open;
+          }
+        }
       }catch{}
       try{
         const raw = sessionStorage.getItem('audit.eval.forceOpen');
         if (raw && !this.pendingOpenId){
-          const n = Number(raw); if (Number.isFinite(n)) this.pendingOpenId = n;
+          const n = Number(raw); 
+          if (Number.isFinite(n) && n > 0 && n <= 214) {
+            this.pendingOpenId = n;
+          }
         }
         sessionStorage.removeItem('audit.eval.forceOpen');
         sessionStorage.removeItem('audit.eval.forceOpenTitle');
@@ -1751,12 +1789,24 @@ export class AuditEvaluationComponent {
   private async openFromPending(){
     try{
       const id = this.pendingOpenId || null;
-      if (!id || id > 104) return;
+      console.log('[Audit] openFromPending - pendingOpenId:', id);
+      if (!id || id > 214) return;
+      
+      // 디버깅: 현재 items의 id 목록 출력
+      const itemIds = this.items().map(x => (x as any).id);
+      console.log('[Audit] Available item IDs:', itemIds.slice(0, 10), '...');
+      
       const target = this.items().find(x => (x as any).id === id);
-      if (!target) return;
+      if (!target) {
+        console.warn('[Audit] Could not find item with id:', id);
+        return;
+      }
+      console.log('[Audit] Found target item:', target);
       await this.selectItem(target as any);
       setTimeout(()=> this.centerRow(id), 0);
-    }catch{}
+    }catch(e){
+      console.error('[Audit] Error in openFromPending:', e);
+    }
     this.pendingOpenId = null;
   }
 }

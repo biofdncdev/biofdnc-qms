@@ -348,13 +348,17 @@ export class RmdFormsComponent {
 
   openAuditItemTab(num: number, title?: string) {
     try {
+      console.log('[Record] Opening audit item:', num, title);
       try {
         sessionStorage.setItem('audit.eval.forceOpen', String(num));
         if (title) sessionStorage.setItem('audit.eval.forceOpenTitle', String(title));
       } catch {}
       const url = `/app/audit/givaudan?open=${encodeURIComponent(String(num))}`;
+      console.log('[Record] Opening URL:', url);
       this.tabs.requestOpen('Audit 평가 항목', 'audit:givaudan', url);
-    } catch {}
+    } catch (e) {
+      console.error('[Record] Error opening audit item:', e);
+    }
   }
 
   openStandardTab(stdId: string) {
