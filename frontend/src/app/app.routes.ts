@@ -64,6 +64,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/organization').then(m => m.OrgChartComponent),
       },
       {
+        path: 'organization/chart2',
+        loadComponent: () => import('./pages/organization').then(m => m.OrgChartV2Component),
+      },
+      {
         path: 'organization/roles',
         loadComponent: () => import('./pages/organization').then(m => m.OrgRolesComponent),
       },

@@ -105,6 +105,7 @@ export class AppShellComponent {
           key: 'organization', icon: 'groups', label: 'Organization',
           submenu: [
             { label: '조직도', path: '/app/organization/chart' },
+            { label: '조직도2', path: '/app/organization/chart2' },
             { label: '업무분장 · 원료제조', path: '/app/organization/roles?dept=rm' },
             { label: '업무분장 · 품질보증', path: '/app/organization/roles?dept=qa' },
           ]

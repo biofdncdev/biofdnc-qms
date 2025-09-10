@@ -75,15 +75,26 @@ export class SupabaseService {
   }
 
   async listUsers() {
-    // Prefer admin view including email confirmation
+    // Try admin RPC first
     try {
       const { data, error } = await this.ensureClient().rpc('admin_list_users_with_confirm');
       if (!error && data) return { data, error: null } as any;
-    } catch {}
-    return this.ensureClient()
+    } catch (e) {
+      console.log('admin_list_users_with_confirm failed, falling back to users table', e);
+    }
+    
+    // Fallback to direct users table query
+    const { data, error } = await this.ensureClient()
       .from('users')
       .select('id,name,email,role,status,created_at,updated_at,last_sign_in_at,is_online')
       .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      return { data, error: null };
+    }
+    
+    // If still no data, return empty array
+    return { data: [], error };
   }
 
   async updateUserRole(id: string, role: string) {
