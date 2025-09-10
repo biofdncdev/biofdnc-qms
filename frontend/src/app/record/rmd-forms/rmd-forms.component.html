@@ -96,8 +96,8 @@
         </ng-container>
         
         <ng-template #genericInfo>
-          <!-- ISO14001 PDF Upload Section -->
-          <ng-container *ngIf="sel.id === 'ISO-14001'">
+          <!-- ISO PDF Upload Sections -->
+          <ng-container *ngIf="sel.id === 'ISO-14001' || sel.id === 'ISO-9001' || sel.id === 'ISO-22716'">
             <ng-container *ngTemplateOutlet="pdfUploadSection; context: { sel: sel }"></ng-container>
           </ng-container>
         </ng-template>
@@ -281,7 +281,7 @@
 <!-- PDF Upload Section Template -->
 <ng-template #pdfUploadSection let-sel="sel">
   <div class="section-row toolbar-line" style="margin-top: 20px;">
-    <div class="section-title">ISO14001 환경경영시스템 기록 문서</div>
+    <div class="section-title">{{ sel.title }} 기록 문서</div>
   </div>
   
   <!-- PDF 드래그앤드롭 업로드 박스 -->
