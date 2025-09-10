@@ -552,3 +552,207 @@
 :host .spinner { 
   animation: spin 1s linear infinite; 
 }
+
+// Standard Search Modal
+:host .modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+:host .modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+:host .modal-content * {
+  box-sizing: border-box;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+:host .modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  border-radius: 12px 12px 0 0;
+}
+
+:host .modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.025em;
+}
+
+:host .close-btn {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+:host .close-btn:hover {
+  background-color: #f3f4f6;
+}
+
+:host .modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-width: 0;
+}
+
+:host .search-box {
+  margin-bottom: 16px;
+}
+
+:host .search-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: box-shadow .15s ease, border-color .15s ease, background-color .15s ease;
+  background: #ffffff;
+}
+
+:host .search-input::placeholder{
+  color: #94a3b8;
+}
+
+:host .search-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+  background: #ffffff;
+}
+
+:host .standards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 420px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: calc(100% + 20px);
+  padding-right: 20px;
+  margin-right: -20px;
+  padding-top: 8px;
+}
+
+:host .standards-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+:host .standards-list::-webkit-scrollbar-track {
+  background: #f9fafb;
+  border-radius: 4px;
+}
+
+:host .standards-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+:host .standards-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+:host .standard-item {
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: box-shadow .15s ease, border-color .15s ease, background-color .15s ease;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #ffffff;
+  min-height: 48px;
+}
+
+:host .standard-item:hover {
+  background-color: #f9fafb;
+  border-color: #c7d2fe;
+  box-shadow: 0 4px 12px rgba(2,6,23,.06);
+}
+
+:host .standard-item.selected {
+  background-color: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+:host .standard-item .standard-id {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 13px;
+  color: #4f46e5;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-right: 14px;
+  min-width: 120px;
+}
+
+:host .standard-item .standard-title {
+  font-size: 14px;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+:host .standard-item .standard-category {
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
+  font-weight: 500;
+}
+
+:host .no-results {
+  text-align: center;
+  padding: 60px 20px;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 500;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 2px dashed #e2e8f0;
+}

@@ -47,6 +47,12 @@ export class RmdFormsComponent {
   linkedCompanies = signal<string[]>([]);
   linkedStandards = signal<StandardLink[]>([]);
   
+  // Standard search modal
+  showStandardSearchModal = signal(false);
+  standardSearchQuery = signal('');
+  allStandards: Array<{ id: string; title: string; category: string }> = [];
+  selectedStandardIndex = -1;
+  
   // Standard title map
   private stdTitleById: Record<string, string> = (() => {
     const map: Record<string, string> = {};
@@ -59,10 +65,11 @@ export class RmdFormsComponent {
     } catch {}
     return map;
   })();
-  
+
   @ViewChild('centerPane', { static: false }) centerPane?: ElementRef<HTMLElement>;
   @ViewChild('rightPane', { static: false }) rightPane?: ElementRef<HTMLElement>;
   @ViewChild('ownerInput') ownerInputRef?: ElementRef<HTMLInputElement>;
+  @ViewChild('searchInput') searchInputRef?: ElementRef<HTMLInputElement>;
   
   // Temperature/Humidity specific ViewChildren
   @ViewChild('container', { static: false }) containerRef?: ElementRef<HTMLDivElement>;
@@ -79,6 +86,17 @@ export class RmdFormsComponent {
   ) {
     // Initialize filter service with categories
     this.filterService.setCategories(this.categories);
+    
+    // Initialize all standards for search
+    for (const category of RMD_STANDARDS) {
+      for (const item of category.items) {
+        this.allStandards.push({
+          id: item.id,
+          title: item.title,
+          category: category.category
+        });
+      }
+    }
   }
 
   ngOnInit() {
@@ -363,6 +381,141 @@ export class RmdFormsComponent {
       const url = `/app/standard/rmd?open=${encodeURIComponent(stdId)}`;
       this.tabs.requestOpen('원료제조팀 규정', '/app/standard/rmd', url);
     } catch {}
+  }
+  
+  // Standard search modal methods
+  openStandardSearchModal() {
+    this.showStandardSearchModal.set(true);
+    this.standardSearchQuery.set('');
+    this.selectedStandardIndex = -1;
+    
+    // Focus search input after modal opens
+    setTimeout(() => {
+      this.searchInputRef?.nativeElement?.focus();
+    }, 100);
+  }
+  
+  closeStandardSearchModal() {
+    this.showStandardSearchModal.set(false);
+    this.standardSearchQuery.set('');
+    this.selectedStandardIndex = -1;
+  }
+  
+  onStandardSearchKeydown(event: KeyboardEvent) {
+    const filtered = this.filteredStandards;
+    
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.selectedStandardIndex = Math.min(this.selectedStandardIndex + 1, filtered.length - 1);
+      this.scrollToSelected();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (this.selectedStandardIndex > -1) {
+        this.selectedStandardIndex--;
+      }
+      this.scrollToSelected();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (this.selectedStandardIndex >= 0 && this.selectedStandardIndex < filtered.length) {
+        this.linkStandard(filtered[this.selectedStandardIndex]);
+      }
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.closeStandardSearchModal();
+    }
+  }
+  
+  private scrollToSelected() {
+    setTimeout(() => {
+      const container = document.querySelector('.standards-list');
+      const selected = container?.querySelectorAll('.standard-item')[this.selectedStandardIndex] as HTMLElement;
+      
+      if (selected && container) {
+        const containerRect = container.getBoundingClientRect();
+        const selectedRect = selected.getBoundingClientRect();
+        
+        if (selectedRect.bottom > containerRect.bottom) {
+          container.scrollTop += selectedRect.bottom - containerRect.bottom + 10;
+        } else if (selectedRect.top < containerRect.top) {
+          container.scrollTop -= containerRect.top - selectedRect.top + 10;
+        }
+      }
+    }, 0);
+  }
+  
+  get filteredStandards() {
+    const query = this.standardSearchQuery().toLowerCase();
+    if (!query) return this.allStandards;
+    
+    return this.allStandards.filter(std => 
+      std.id.toLowerCase().includes(query) || 
+      std.title.toLowerCase().includes(query) ||
+      std.category.toLowerCase().includes(query)
+    );
+  }
+  
+  linkStandard(std: { id: string; title: string }) {
+    const selected = this.selected();
+    if (!selected) return;
+    
+    try {
+      // Load existing links from localStorage
+      const raw = localStorage.getItem('rmd_standard_links');
+      const map = raw ? JSON.parse(raw) as Record<string, Array<{ id: string; title: string }>> : {};
+      
+      // Add the selected item to this standard's list
+      if (!map[std.id]) {
+        map[std.id] = [];
+      }
+      
+      // Check if already linked
+      if (!map[std.id].some(x => x.id === selected.id)) {
+        map[std.id].push({
+          id: selected.id,
+          title: selected.title
+        });
+        
+        // Save back to localStorage
+        localStorage.setItem('rmd_standard_links', JSON.stringify(map));
+        
+        // Update the display
+        this.updateLinkedForSelected();
+        
+        // Show success message
+        alert(`${std.title} 규정이 연결되었습니다.`);
+    } else {
+        alert('이미 연결된 규정입니다.');
+      }
+    } catch (e) {
+      console.error('Failed to link standard:', e);
+      alert('규정 연결에 실패했습니다.');
+    }
+    
+    this.closeStandardSearchModal();
+  }
+  
+  unlinkStandard(stdId: string) {
+    const selected = this.selected();
+    if (!selected) return;
+    
+    if (!confirm('이 규정 연결을 해제하시겠습니까?')) return;
+    
+    try {
+      const raw = localStorage.getItem('rmd_standard_links');
+      const map = raw ? JSON.parse(raw) as Record<string, Array<{ id: string; title: string }>> : {};
+      
+      if (map[stdId]) {
+        map[stdId] = map[stdId].filter(x => x.id !== selected.id);
+        if (map[stdId].length === 0) {
+          delete map[stdId];
+        }
+        
+        localStorage.setItem('rmd_standard_links', JSON.stringify(map));
+        this.updateLinkedForSelected();
+      }
+    } catch (e) {
+      console.error('Failed to unlink standard:', e);
+    }
   }
 
   // === Initial data loading ===

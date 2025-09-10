@@ -171,9 +171,14 @@
         </div>
       </div>
       <div>
-        <label>연결된 규정</label>
+        <label>연결된 규정 
+          <button class="btn mini" style="margin-left: 10px; font-size: 11px; padding: 4px 8px;" (click)="openStandardSearchModal()">규정 연결</button>
+        </label>
         <div class="chips">
-          <span class="chip" *ngFor="let s of linkedStandards()" (click)="openStandardTab(s.id)" style="cursor:pointer;">{{ s.id }} · {{ s.title }}</span>
+          <span class="chip" *ngFor="let s of linkedStandards()" style="position: relative; padding-right: 28px;">
+            <span (click)="openStandardTab(s.id)" style="cursor:pointer;">{{ s.id }} · {{ s.title }}</span>
+            <button class="close-x" style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; border: none; background: transparent; cursor: pointer; color: #6b7280; font-weight: bold;" (click)="unlinkStandard(s.id); $event.stopPropagation()">×</button>
+          </span>
           <span class="muted" *ngIf="!linkedStandards().length">없음</span>
         </div>
       </div>
@@ -389,3 +394,44 @@
     </div>
   </div>
 </ng-template>
+
+<!-- Standard Search Modal -->
+<div class="modal-overlay" *ngIf="showStandardSearchModal()" (click)="closeStandardSearchModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>규정 검색 및 연결</h3>
+      <button class="close-btn" (click)="closeStandardSearchModal()">×</button>
+    </div>
+    
+    <div class="modal-body">
+      <div class="search-box">
+        <input 
+          #searchInput
+          type="text" 
+          [(ngModel)]="standardSearchQuery" 
+          placeholder="규정 ID 또는 제목으로 검색..."
+          class="search-input"
+          (input)="standardSearchQuery.set($any($event.target).value); selectedStandardIndex = -1"
+          (keydown)="onStandardSearchKeydown($event)"
+          autofocus>
+      </div>
+      
+      <div class="standards-list">
+        <div 
+          *ngFor="let std of filteredStandards; let i = index" 
+          class="standard-item"
+          [class.selected]="selectedStandardIndex === i"
+          (click)="linkStandard(std)"
+          (mouseenter)="selectedStandardIndex = i">
+          <span class="standard-id">{{ std.id }}</span>
+          <span class="standard-title">{{ std.title }}</span>
+          <span class="standard-category">{{ std.category }}</span>
+        </div>
+        
+        <div *ngIf="filteredStandards.length === 0" class="no-results">
+          검색 결과가 없습니다.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
