@@ -442,7 +442,6 @@ export class AuditEvaluationComponent {
               if (openParam && openParam.trim()) {
                 const open = Number(openParam);
                 if (Number.isFinite(open) && open > 0 && open <= 214) {
-                  console.log('[Audit] Route changed, opening item:', open);
                   this.pendingOpenId = open;
                   // Wait for items to be loaded if needed
                   if (this.items().length > 0) {
@@ -451,9 +450,7 @@ export class AuditEvaluationComponent {
                 }
               }
             }
-          } catch (e) {
-            console.error('[Audit] Error parsing route params:', e);
-          }
+          } catch (e) {}
         }
       }
     });
@@ -815,6 +812,10 @@ export class AuditEvaluationComponent {
       // 생성일(최초 저장 시간) 표시
       try{ this.createdAt = (await this.supabase.getAuditDateCreatedAt(date)) || null; }catch{ this.createdAt = null; }
       const next = this.items().map(it => {
+        // 높이 캐시 초기화
+        delete (it as any).__h1;
+        delete (it as any).__h3;
+        
         const row = (all||[]).find((r:any) => r.number === it.id);
         // Extract custom field bundle from comments (persisted without schema change)
         const rawComments = (row?.comments || []) as any[];
@@ -846,8 +847,17 @@ export class AuditEvaluationComponent {
       if (!created){
         try{ await this.applyTitlesFromJsonOrExcel(); }catch{}
       }
-    }catch{ this.resetItems(); }
+      }catch{ this.resetItems(); }
     await this.openFromPending();
+    
+    // 현재 열려있는 항목의 높이 재계산
+    if (this.openItemId) {
+      const openItem = this.items().find(it => (it as any).id === this.openItemId);
+      if (openItem) {
+        setTimeout(() => this.measureAndCacheSlideHeights(openItem as any), 100);
+        setTimeout(() => this.measureAndCacheSlideHeights(openItem as any), 200);
+      }
+    }
   }
   resetItems(){
     const blank = Array.from({ length: 214 }, (_, i) => {
@@ -1339,8 +1349,15 @@ export class AuditEvaluationComponent {
     // Load resources
     const { data: res } = await this.supabase.listGivaudanResources(it.id);
     this.resources = res || [];
+    
+    // 높이 캐시를 초기화하고 재계산
+    delete (it as any).__h1;
+    delete (it as any).__h3;
+    
     // 내용 길이만큼 입력창이 처음부터 보이도록 즉시 측정/캐시
     setTimeout(()=> this.measureAndCacheSlideHeights(it), 0);
+    // 더 확실한 재계산을 위해 두 번째 시도
+    setTimeout(()=> this.measureAndCacheSlideHeights(it), 50);
   }
 
   isOpen(it: any){ return this.openItemId === it.id || this.openExtra.has(it.id); }
@@ -1380,8 +1397,15 @@ export class AuditEvaluationComponent {
     }
     const { data: res } = await this.supabase.listGivaudanResources(it.id);
     this.resources = res || [];
+    
+    // 높이 캐시를 초기화하고 재계산
+    delete (it as any).__h1;
+    delete (it as any).__h3;
+    
     // 슬라이드가 열릴 때도 동일하게 높이 측정/캐시
     setTimeout(()=> this.measureAndCacheSlideHeights(it), 0);
+    // 더 확실한 재계산을 위해 두 번째 시도
+    setTimeout(()=> this.measureAndCacheSlideHeights(it), 50);
   }
 
   private centerRow(id: number){
@@ -1643,12 +1667,20 @@ export class AuditEvaluationComponent {
     const ta = ev?.target as HTMLTextAreaElement; if(!ta) return;
     // 슬라이드 입력창(평가 항목 세부/진행 현황)일 때: 내용 높이에 맞춰 즉시 확장하고 캐시
     if (key && it){
+      // 먼저 높이를 auto로 설정하여 실제 내용 높이를 측정
       ta.style.height = 'auto';
-      const base = 120; const cap = 480;
-      const text = (ta.value||'').trim();
-      const contentH = Math.max(ta.scrollHeight, 32);
-      const finalH = text ? Math.min(cap, Math.max(base, contentH)) : base;
       ta.style.overflowY = 'hidden';
+      
+      const base = 120; // 기본 높이
+      const cap = 480;  // 최대 높이
+      
+      // scrollHeight를 측정하여 실제 필요한 높이 계산
+      const scrollHeight = ta.scrollHeight;
+      
+      // 내용에 따라 높이 결정
+      // scrollHeight가 base보다 작으면 base 사용, 크면 scrollHeight 사용 (cap까지만)
+      const finalH = Math.min(cap, Math.max(base, scrollHeight));
+      
       ta.style.height = finalH + 'px';
       try{ (it as any)[key] = finalH; }catch{}
       return;
@@ -1667,16 +1699,36 @@ export class AuditEvaluationComponent {
       const tas = row.querySelectorAll('textarea.slide-input');
       const base = 120; const cap = 480;
       if (tas[0]){
-        const ta = tas[0] as HTMLTextAreaElement; ta.style.height = 'auto';
-        const text = (ta.value||'').trim();
-        const h = text ? Math.min(cap, Math.max(base, Math.max(ta.scrollHeight, 32))) : base;
-        (it as any).__h1 = h; ta.style.height = h + 'px'; ta.style.overflowY = 'hidden';
+        const ta = tas[0] as HTMLTextAreaElement; 
+        // 먼저 높이를 auto로 설정하여 실제 내용 높이 측정
+        ta.style.height = 'auto';
+        ta.style.overflowY = 'hidden';
+        
+        // 텍스트 내용이 있는지 확인
+        const hasContent = (ta.value || '').trim().length > 0;
+        
+        // 내용이 있으면 scrollHeight 사용, 없으면 base 사용
+        const scrollHeight = ta.scrollHeight;
+        const h = hasContent ? Math.min(cap, Math.max(base, scrollHeight)) : base;
+        
+        (it as any).__h1 = h; 
+        ta.style.height = h + 'px';
       }
       if (tas[1]){
-        const ta = tas[1] as HTMLTextAreaElement; ta.style.height = 'auto';
-        const text = (ta.value||'').trim();
-        const h = text ? Math.min(cap, Math.max(base, Math.max(ta.scrollHeight, 32))) : base;
-        (it as any).__h3 = h; ta.style.height = h + 'px'; ta.style.overflowY = 'hidden';
+        const ta = tas[1] as HTMLTextAreaElement; 
+        // 먼저 높이를 auto로 설정하여 실제 내용 높이 측정
+        ta.style.height = 'auto';
+        ta.style.overflowY = 'hidden';
+        
+        // 텍스트 내용이 있는지 확인
+        const hasContent = (ta.value || '').trim().length > 0;
+        
+        // 내용이 있으면 scrollHeight 사용, 없으면 base 사용
+        const scrollHeight = ta.scrollHeight;
+        const h = hasContent ? Math.min(cap, Math.max(base, scrollHeight)) : base;
+        
+        (it as any).__h3 = h; 
+        ta.style.height = h + 'px';
       }
     }catch{}
   }
@@ -1789,24 +1841,14 @@ export class AuditEvaluationComponent {
   private async openFromPending(){
     try{
       const id = this.pendingOpenId || null;
-      console.log('[Audit] openFromPending - pendingOpenId:', id);
       if (!id || id > 214) return;
       
-      // 디버깅: 현재 items의 id 목록 출력
-      const itemIds = this.items().map(x => (x as any).id);
-      console.log('[Audit] Available item IDs:', itemIds.slice(0, 10), '...');
-      
       const target = this.items().find(x => (x as any).id === id);
-      if (!target) {
-        console.warn('[Audit] Could not find item with id:', id);
-        return;
-      }
-      console.log('[Audit] Found target item:', target);
+      if (!target) return;
+      
       await this.selectItem(target as any);
       setTimeout(()=> this.centerRow(id), 0);
-    }catch(e){
-      console.error('[Audit] Error in openFromPending:', e);
-    }
+    }catch{}
     this.pendingOpenId = null;
   }
 }
