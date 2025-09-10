@@ -268,9 +268,13 @@ export class RmdPageComponent {
     try{ localStorage.setItem('rmd_standard_links', JSON.stringify(this.linksMap)); }catch{}
     this.linkQuery.set('');
     this.linkSuggest = [];
-    // reflect to UI
+    // reflect to UI with updated titles
     const arr = this.linksMap[std.id] || [];
-    this.linkedRecords.set([ ...arr ]);
+    const updatedArr = arr.map(item => {
+      const currentRecord = this.recordPool.find(rec => rec.id === item.id);
+      return currentRecord ? { ...item, title: currentRecord.title } : item;
+    });
+    this.linkedRecords.set([ ...updatedArr ]);
     this.linkedExpanded.set(true);
   }
   removeLink(r: { id: string }){
@@ -279,7 +283,11 @@ export class RmdPageComponent {
     this.linksMap[std.id] = list;
     try{ localStorage.setItem('rmd_standard_links', JSON.stringify(this.linksMap)); }catch{}
     const arr = this.linksMap[std.id] || [];
-    this.linkedRecords.set([ ...arr ]);
+    const updatedArr = arr.map(item => {
+      const currentRecord = this.recordPool.find(rec => rec.id === item.id);
+      return currentRecord ? { ...item, title: currentRecord.title } : item;
+    });
+    this.linkedRecords.set([ ...updatedArr ]);
   }
 
   public runSearch(){
@@ -353,7 +361,12 @@ export class RmdPageComponent {
   // expose small wrapper for template calls if needed
   private loadLinksPublic(stdId: string){
     const arr = this.linksMap[stdId] || [];
-    this.linkedRecords.set([ ...arr ]);
+    // 최신 제목으로 업데이트
+    const updatedArr = arr.map(item => {
+      const currentRecord = this.recordPool.find(r => r.id === item.id);
+      return currentRecord ? { ...item, title: currentRecord.title } : item;
+    });
+    this.linkedRecords.set([ ...updatedArr ]);
     this.linkedExpanded.set(true);
   }
 
