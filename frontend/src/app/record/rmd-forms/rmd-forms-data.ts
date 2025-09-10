@@ -24,7 +24,7 @@ export const RMD_FORM_CATEGORIES: RmdFormCategory[] = [
       { id: 'BF-RMD-GM-IR-02', title: '교육훈련 지시·기록서', department:'원료제조팀', standardCategory:'일반관리기준서' },
       { id: 'BF-RMD-GM-IR-03', title: '문서 및 기록관리 지시·기록서', department:'원료제조팀', standardCategory:'일반관리기준서' },
       { id: 'BF-RMD-GM-IR-04', title: '불만 처리 지시·기록서', department:'원료제조팀', standardCategory:'일반관리기준서' },
-      { id: 'BF-RMD-GM-IR-05', title: '내부감사 지시·기록서', department:'원료제조팀', standardCategory:'일반관리기준서' },
+      { id: 'BF-RMD-GM-IR-05', title: '내부감사 보고서', department:'원료제조팀', standardCategory:'일반관리기준서' },
     ],
   },
   {
