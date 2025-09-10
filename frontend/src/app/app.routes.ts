@@ -60,6 +60,14 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/profile/profile').then(m => m.ProfileComponent),
       },
       {
+        path: 'organization/chart',
+        loadComponent: () => import('./pages/organization').then(m => m.OrgChartComponent),
+      },
+      {
+        path: 'organization/roles',
+        loadComponent: () => import('./pages/organization').then(m => m.OrgRolesComponent),
+      },
+      {
         path: 'standard/rmd',
         loadComponent: () => import('./standard/rmd/rmd-page.component').then(m => m.RmdPageComponent),
       },
