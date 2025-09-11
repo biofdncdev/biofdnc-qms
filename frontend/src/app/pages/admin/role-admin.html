@@ -17,7 +17,7 @@
     <ng-container matColumnDef="name">
       <th mat-header-cell *matHeaderCellDef>이름</th>
       <td mat-cell *matCellDef="let r">
-        <input type="text" [value]="nameEdits[r.id] || r.name" (input)="markName(r, $any($event.target).value)" placeholder="이름" style="width: 120px;">
+        <input type="text" [value]="nameEdits[r.id] || r.name" (input)="markName(r, $any($event.target).value)" placeholder="이름">
       </td>
     </ng-container>
 
@@ -31,17 +31,29 @@
 
     <ng-container matColumnDef="created_at">
       <th mat-header-cell *matHeaderCellDef>가입일시</th>
-      <td mat-cell *matCellDef="let r">{{ r.created_at | date:'yyyy-MM-dd HH:mm' }}</td>
+      <td mat-cell *matCellDef="let r">
+        <div class="date-cell"><span class="date">{{ r.created_at | date:'yyyy-MM-dd' }}</span><span class="time">{{ r.created_at | date:'HH:mm' }}</span></div>
+      </td>
     </ng-container>
 
     <ng-container matColumnDef="updated_at">
       <th mat-header-cell *matHeaderCellDef>최종수정일시</th>
-      <td mat-cell *matCellDef="let r">{{ r.updated_at ? (r.updated_at | date:'yyyy-MM-dd HH:mm') : '-' }}</td>
+      <td mat-cell *matCellDef="let r">
+        <ng-container *ngIf="r.updated_at; else dash2">
+          <div class="date-cell"><span class="date">{{ r.updated_at | date:'yyyy-MM-dd' }}</span><span class="time">{{ r.updated_at | date:'HH:mm' }}</span></div>
+        </ng-container>
+        <ng-template #dash2>-</ng-template>
+      </td>
     </ng-container>
 
     <ng-container matColumnDef="last_sign_in_at">
       <th mat-header-cell *matHeaderCellDef>마지막 로그인</th>
-      <td mat-cell *matCellDef="let r">{{ r.last_sign_in_at ? (r.last_sign_in_at | date:'yyyy-MM-dd HH:mm') : '-' }}</td>
+      <td mat-cell *matCellDef="let r">
+        <ng-container *ngIf="r.last_sign_in_at; else dash3">
+          <div class="date-cell"><span class="date">{{ r.last_sign_in_at | date:'yyyy-MM-dd' }}</span><span class="time">{{ r.last_sign_in_at | date:'HH:mm' }}</span></div>
+        </ng-container>
+        <ng-template #dash3>-</ng-template>
+      </td>
     </ng-container>
 
     
@@ -68,11 +80,18 @@
       <th mat-header-cell *matHeaderCellDef>작업</th>
       <td mat-cell *matCellDef="let r">
         <ng-container *ngIf="isConfirmed(r); else needConfirm">
-          <span class="badge ok">인증완료</span>
+          <div class="action-btns">
+            <span class="badge ok">인증완료</span>
+            <button class="btn-outline success" (click)="sendReset(r)">비밀번호 초기화</button>
+          </div>
         </ng-container>
         <ng-template #needConfirm>
-          <button class="btn-outline" (click)="forceConfirm(r)">사용인증</button>
-          <button class="btn-outline" style="border-color:#2563eb;color:#1d4ed8;margin-left:8px" (click)="resendConfirm(r)">인증메일 재전송</button>
+          <div class="action-btns">
+            <button class="btn-outline danger" (click)="forceConfirm(r)">사용인증</button>
+            <button class="btn-outline primary" (click)="resendConfirm(r)">인증메일 재전송</button>
+            <button class="btn-outline success" (click)="sendReset(r)">비밀번호 초기화</button>
+            <button *ngIf="r._pending_signup" class="btn-outline warning" (click)="deletePendingSignup(r)">가입요청 삭제</button>
+          </div>
         </ng-template>
       </td>
     </ng-container>

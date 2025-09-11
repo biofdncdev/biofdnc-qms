@@ -160,4 +160,56 @@ export class RoleAdminComponent implements OnInit {
       alert('인증 메일 재발송에 실패했습니다: ' + (e?.message || e));
     }
   }
+
+  async sendReset(row: any){
+    try{
+      await this.supabase.sendPasswordResetEmail(row.email);
+      alert('비밀번호 초기화(변경) 메일을 발송했습니다.');
+    }catch(e: any){
+      alert('비밀번호 초기화 메일 발송 실패: ' + (e?.message || e));
+    }
+  }
+
+  async deletePendingSignup(row: any) {
+    if (!confirm(`정말로 ${row.email}의 가입 요청을 삭제하시겠습니까?`)) return;
+    try {
+      const client = this.supabase.getClient();
+      const emailNorm = String(row.email || '').trim().toLowerCase();
+
+      // 1) Fetch signup notifications and filter by normalized email
+      const { data: list, error: listErr } = await client
+        .from('notifications')
+        .select('id, actor_email, type')
+        .eq('type', 'signup');
+      if (listErr) throw listErr;
+
+      const ids = (Array.isArray(list) ? list : [])
+        .filter((n: any) => String((n?.actor_email || '')).trim().toLowerCase() === emailNorm)
+        .map((n: any) => n.id)
+        .filter(Boolean);
+
+      if (ids.length) {
+        const { error: delErr } = await client
+          .from('notifications')
+          .delete()
+          .in('id', ids as any);
+        if (delErr) throw delErr;
+      }
+      
+      // Remove from local list immediately
+      this.rows = this.rows.filter(r => {
+        if (!r._pending_signup) return true;
+        return String(r.email || '').trim().toLowerCase() !== emailNorm;
+      });
+      
+      alert('가입 요청이 삭제되었습니다.');
+      
+      // Do NOT reload - we already removed it from the list
+      // Reloading causes the deleted item to reappear due to timing/cache
+    } catch (e: any) {
+      alert('가입 요청 삭제 실패: ' + (e?.message || e));
+      // Only reload on error
+      await this.load();
+    }
+  }
 }

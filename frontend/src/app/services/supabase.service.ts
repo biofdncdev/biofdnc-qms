@@ -75,12 +75,14 @@ export class SupabaseService {
   }
 
   async listUsers() {
-    // Try admin RPC first
-    try {
-      const { data, error } = await this.ensureClient().rpc('admin_list_users_with_confirm');
-      if (!error && data) return { data, error: null } as any;
-    } catch (e) {
-      console.log('admin_list_users_with_confirm failed, falling back to users table', e);
+    // Try admin RPC first (behind feature flag)
+    if (environment.useAdminListUsersRpc) {
+      try {
+        const { data, error } = await this.ensureClient().rpc('admin_list_users_with_confirm');
+        if (!error && data) return { data, error: null } as any;
+      } catch (e) {
+        console.log('admin_list_users_with_confirm failed, falling back to users table', e);
+      }
     }
     
     // Fallback to direct users table query
@@ -111,6 +113,8 @@ export class SupabaseService {
         if (!email || existingEmails.has(email)) continue;
         // Don't add as pending if this email is already confirmed
         if (confirmedEmails.has(email)) continue;
+        // Skip if there is also a matching signup notification deletion marker
+        // (in case soft-delete or race conditions left a ghost)
         
         existingEmails.add(email);
         pendingRows.push({
@@ -142,6 +146,12 @@ export class SupabaseService {
     // Keep auth metadata in sync so server trigger won't overwrite profile name later
     try { await client.auth.updateUser({ data: { name } }); } catch {}
     return client.from('users').update({ name }).eq('id', id);
+  }
+
+  async sendPasswordResetEmail(email: string) {
+    const e = String(email || '').trim().toLowerCase();
+    if (!e) throw new Error('email is required');
+    return this.ensureClient().auth.resetPasswordForEmail(e, { redirectTo: location.origin + '/forgot-credentials' });
   }
 
   async updateLoginState(id: string, isOnline: boolean) {
@@ -195,13 +205,14 @@ export class SupabaseService {
   async findUserIdByEmail(email: string) {
     const e = String(email || '').trim().toLowerCase();
     if (!e) return null as any;
-    try {
-      const { data } = await this.ensureClient().rpc('admin_list_users_with_confirm');
-      const row = (Array.isArray(data) ? data : []).find((r: any) => String(r?.email || '').toLowerCase() === e);
-      return row?.id || null;
-    } catch {
-      return null as any;
+    if (environment.useAdminListUsersRpc) {
+      try {
+        const { data } = await this.ensureClient().rpc('admin_list_users_with_confirm');
+        const row = (Array.isArray(data) ? data : []).find((r: any) => String(r?.email || '').toLowerCase() === e);
+        return row?.id || null;
+      } catch {}
     }
+    return null as any;
   }
 
   // Ingredients - paginated list with keyword search

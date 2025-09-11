@@ -7,4 +7,5 @@ export const environment = {
   production: (metaEnv.NG_APP_PRODUCTION || runtimeEnv.NG_APP_PRODUCTION) === 'true',
   supabaseUrl: metaEnv.NG_APP_SUPABASE_URL || runtimeEnv.NG_APP_SUPABASE_URL || '',
   supabaseKey: metaEnv.NG_APP_SUPABASE_KEY || runtimeEnv.NG_APP_SUPABASE_KEY || '',
+  useAdminListUsersRpc: String(metaEnv.NG_APP_USE_ADMIN_LIST_USERS_RPC || runtimeEnv.NG_APP_USE_ADMIN_LIST_USERS_RPC || '').toLowerCase() === 'true',
 };

@@ -32,6 +32,7 @@ export class LoginComponent implements OnInit {
   recovery = false;
   newPassword = '';
   confirmNewPassword = '';
+  private maxAttempts = 10;
 
   constructor(private router: Router, private supabase: SupabaseService) {}
 
@@ -49,28 +50,29 @@ export class LoginComponent implements OnInit {
       return;
     }
 
-    const { data, error } = await this.supabase.signIn(email, password);
-    if (error) {
-      const msg = (error.message || '').toLowerCase();
-      if (msg.includes('email not confirmed')) {
-        const want = confirm('이메일 인증이 완료되지 않았습니다. 인증 메일을 다시 보낼까요?');
-        if (want) {
-          await this.supabase.resendConfirmationEmail(email);
-          alert('가입 인증 메일을 재발송했습니다. 메일함/스팸함을 확인해주세요.');
-        }
-        return;
-      } else if (msg.includes('invalid login')) {
-        const want = confirm('이메일 또는 비밀번호가 올바르지 않습니다. 비밀번호 재설정 메일을 보낼까요?');
-        if (want) {
-          await this.supabase.getClient().auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/login' });
-          alert('비밀번호 재설정 링크를 이메일로 보냈습니다. 메일함/스팸함을 확인해주세요.');
-        }
-        return;
-      }
-      alert('로그인 실패: ' + error.message);
+    // Simple client-side rate limiting per email
+    const key = `login.fail.${email}`;
+    const raw = localStorage.getItem(key) || '0';
+    let fails = parseInt(raw, 10); if (!Number.isFinite(fails)) fails = 0;
+    if (fails >= this.maxAttempts) {
+      alert('로그인 시도가 여러 차례 실패하여 계정이 일시적으로 잠겼습니다. 관리자에게 문의해 주세요.');
       return;
     }
 
+    const { data, error } = await this.supabase.signIn(email, password);
+    if (error) {
+      // Increase local fail counter and block after threshold
+      fails += 1; localStorage.setItem(key, String(fails));
+      if (fails >= this.maxAttempts) {
+        alert('비밀번호를 여러 번 잘못 입력하여 로그인이 차단되었습니다. 관리자에게 문의해 주세요.');
+      } else {
+        alert(`로그인 실패: 이메일 또는 비밀번호가 올바르지 않습니다. (${fails}/${this.maxAttempts})`);
+      }
+      return;
+    }
+
+    // Successful login: reset the local counter
+    try { localStorage.removeItem(key); } catch {}
     const user = await this.supabase.getCurrentUser();
     if (!user) {
       alert('로그인 세션을 확인할 수 없습니다. 다시 시도해주세요.');
