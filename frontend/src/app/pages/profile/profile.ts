@@ -15,23 +15,42 @@ import { MatInputModule } from '@angular/material/input';
 	standalone: true,
 	imports: [CommonModule, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule],
 	template: `
-	<div class="dialog" style="max-width:480px; width:100%">
-		<h3 style="margin:0 0 8px;">계정 탈퇴</h3>
-		<p style="margin:4px 0 12px; font-size:13px;">보안을 위해 본인 확인이 필요합니다. 아래 내용을 입력해 주세요.</p>
-		<mat-form-field appearance="outline" style="width:100%; margin-bottom:8px;">
-			<mat-label>이메일</mat-label>
-			<input matInput [(ngModel)]="email" placeholder="email@example.com">
-		</mat-form-field>
-		<mat-form-field appearance="outline" style="width:100%; margin-bottom:4px;">
-			<mat-label>확인 문구</mat-label>
-			<input matInput [(ngModel)]="confirmText" placeholder="탈퇴합니다">
-		</mat-form-field>
-		<div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+	<div class="delete-dialog">
+		<h2 mat-dialog-title>계정 탈퇴</h2>
+		<mat-dialog-content>
+			<p class="warning">이 작업은 되돌릴 수 없습니다. 계정과 데이터가 영구 삭제되며 복구할 수 없습니다.</p>
+			<p class="desc">보안을 위해 본인 확인이 필요합니다. 아래 내용을 입력해 주세요.</p>
+			<mat-form-field appearance="outline">
+				<mat-label>이메일</mat-label>
+				<input matInput [(ngModel)]="email" placeholder="email@example.com" autocomplete="off" autocapitalize="none" spellcheck="false">
+				<mat-hint align="start">프로필 이메일과 정확히 일치해야 합니다.</mat-hint>
+			</mat-form-field>
+			<mat-form-field appearance="outline">
+				<mat-label>확인 문구</mat-label>
+				<input matInput [(ngModel)]="confirmText" placeholder="탈퇴합니다" autocomplete="off" spellcheck="false">
+				<mat-hint align="start">확인 문구로 "탈퇴합니다"를 입력하세요.</mat-hint>
+			</mat-form-field>
+		</mat-dialog-content>
+		<mat-dialog-actions align="end">
 			<button mat-button mat-dialog-close>취소</button>
 			<button mat-flat-button color="warn" [disabled]="!canConfirm()" [mat-dialog-close]="{ email, confirm: true }">탈퇴</button>
-		</div>
+		</mat-dialog-actions>
 	</div>
 	`,
+	styles: [
+		`
+		.delete-dialog{ max-width:480px; width:100%; }
+		.delete-dialog .warning{ background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; padding:8px 10px; border-radius:8px; font-size:12px; margin:0 0 8px; }
+		.delete-dialog .desc{ font-size:12.5px; color:#374151; margin:0 0 12px; }
+		.delete-dialog mat-form-field{ width:100%; margin-bottom:8px; }
+		/* Compact and clean input visuals without breaking the notched outline */
+		.delete-dialog ::ng-deep .mat-mdc-form-field-infix{ padding-top: 10px; padding-bottom: 10px; }
+		.delete-dialog ::ng-deep .mat-mdc-text-field-wrapper{ border-radius:8px; }
+		.delete-dialog ::ng-deep .mdc-notched-outline__leading, 
+		.delete-dialog ::ng-deep .mdc-notched-outline__trailing{ border-radius:8px; }
+		.delete-dialog ::ng-deep .mat-mdc-form-field-subscript-wrapper{ margin: 4px 0 0; }
+		`
+	]
 })
 export class DeleteConfirmDialogComponent {
 	email = '';

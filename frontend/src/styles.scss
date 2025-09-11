@@ -28,6 +28,33 @@ body{
   background: var(--color-bg);
 }
 
+/* Angular Material select dropdown in global overlay */
+.cdk-overlay-container .mat-mdc-select-panel{
+  min-width: 120px !important;
+  max-width: 160px !important;
+  font-size: 12px !important;
+  font-family: var(--font-sans-kr) !important;
+  padding: 4px 0;
+  box-sizing: border-box;
+}
+.cdk-overlay-container .mat-mdc-option.mdc-list-item{
+  min-height: 28px;
+  height: 28px;
+}
+.cdk-overlay-container .mat-mdc-option,
+.cdk-overlay-container .mat-mdc-option .mdc-list-item__primary-text{
+  font-size: 12px !important;
+  font-family: var(--font-sans-kr) !important;
+  line-height: 1.2;
+}
+.cdk-overlay-container .mat-mdc-option .mdc-list-item__primary-text{
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: calc(100% - 24px);
+}
+
 /* Form controls - readable sizes and focus */
 input, textarea, select, button{
   font-size: 13.5px;

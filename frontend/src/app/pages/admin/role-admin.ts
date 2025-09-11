@@ -176,36 +176,18 @@ export class RoleAdminComponent implements OnInit {
       const client = this.supabase.getClient();
       const emailNorm = String(row.email || '').trim().toLowerCase();
 
-      // 1) Fetch signup notifications and filter by normalized email
-      const { data: list, error: listErr } = await client
+      // 1) Delete signup notifications for this email (case-insensitive)
+      const { error: delErr } = await client
         .from('notifications')
-        .select('id, actor_email, type')
-        .eq('type', 'signup');
-      if (listErr) throw listErr;
-
-      const ids = (Array.isArray(list) ? list : [])
-        .filter((n: any) => String((n?.actor_email || '')).trim().toLowerCase() === emailNorm)
-        .map((n: any) => n.id)
-        .filter(Boolean);
-
-      if (ids.length) {
-        const { error: delErr } = await client
-          .from('notifications')
-          .delete()
-          .in('id', ids as any);
-        if (delErr) throw delErr;
-      }
+        .delete()
+        .eq('type', 'signup')
+        .ilike('actor_email', emailNorm);
+      if (delErr) throw delErr;
       
-      // Remove from local list immediately
-      this.rows = this.rows.filter(r => {
-        if (!r._pending_signup) return true;
-        return String(r.email || '').trim().toLowerCase() !== emailNorm;
-      });
-      
+      // 서버 측 정리: SQL과 동일 동작(알림 + 프로필 삭제)
+      await this.supabase.purgeEmailEverywhere(emailNorm);
       alert('가입 요청이 삭제되었습니다.');
-      
-      // Do NOT reload - we already removed it from the list
-      // Reloading causes the deleted item to reappear due to timing/cache
+      await this.load();
     } catch (e: any) {
       alert('가입 요청 삭제 실패: ' + (e?.message || e));
       // Only reload on error

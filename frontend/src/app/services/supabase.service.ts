@@ -428,6 +428,56 @@ export class SupabaseService {
     throw error;
   }
 
+  // Admin: purge traces of a signup request by email (case/whitespace-insensitive)
+  async purgeEmailEverywhere(email: string){
+    const client = this.ensureClient();
+    const emailNorm = String(email || '').trim().toLowerCase();
+    if (!emailNorm) return { ok: true } as any;
+    
+    // Use server-side RPC for guaranteed SQL-identical behavior
+    try {
+      const { error } = await client.rpc('admin_delete_signup_request', { p_email: email });
+      if (error) {
+        console.warn('RPC admin_delete_signup_request failed, falling back to direct delete', error);
+        // Fallback to direct delete if RPC is not available
+        const norm = (s: any) => String(s || '').trim().toLowerCase();
+        
+        // 1) Delete signup notifications
+        try {
+          const { data: list } = await client
+            .from('notifications')
+            .select('id, actor_email, type')
+            .eq('type', 'signup');
+          const ids = (Array.isArray(list) ? list : [])
+            .filter((n: any) => norm(n?.actor_email) === emailNorm)
+            .map((n: any) => n.id)
+            .filter(Boolean);
+          if (ids.length) {
+            await client.from('notifications').delete().in('id', ids as any);
+          }
+        } catch {}
+        
+        // 2) Delete public.users rows
+        try {
+          const { data: ulist } = await client
+            .from('users')
+            .select('id, email');
+          const uids = (Array.isArray(ulist) ? ulist : [])
+            .filter((u: any) => norm(u?.email) === emailNorm)
+            .map((u: any) => u.id)
+            .filter(Boolean);
+          if (uids.length) {
+            await client.from('users').delete().in('id', uids as any);
+          }
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('Error calling admin_delete_signup_request', e);
+    }
+    
+    return { ok: true } as any;
+  }
+
   async addDeleteRequestNotification(payload: { email: string }) {
     const title = '회원탈퇴 요청';
     const message = `${payload.email} 사용자가 회원탈퇴를 요청했습니다.`;
