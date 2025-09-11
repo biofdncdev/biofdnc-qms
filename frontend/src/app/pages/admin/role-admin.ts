@@ -86,18 +86,54 @@ export class RoleAdminComponent implements OnInit {
 
   async forceConfirm(row: any) {
     if (!confirm('이 사용자의 이메일 인증을 관리자 권한으로 완료 처리할까요?')) return;
-    await this.supabase.forceConfirmUser(row.id);
-    // 프로필 갱신 시간 업데이트
-    await this.supabase.getClient().from('users').update({ updated_at: new Date().toISOString() }).eq('id', row.id);
-    // 로컬 행 즉시 반영 (버튼 → 텍스트)
-    row.email_confirmed_at = new Date().toISOString();
-    // 권한 변경 질의
-    const makeStaff = confirm('권한을 staff로 변경하시겠습니까? 취소를 누르면 viewer로 유지됩니다.');
-    const nextRole = makeStaff ? 'staff' : 'viewer';
-    await this.supabase.updateUserRole(row.id, nextRole);
-    await this.supabase.getClient().from('users').update({ updated_at: new Date().toISOString() }).eq('id', row.id);
-    row.role = nextRole;
+    
+    // 1. 먼저 이메일로 auth user ID 찾기
+    let targetId = row.id || await this.supabase.findUserIdByEmail(row.email);
+    
+    // 2. auth에서 강제 인증 처리
+    if (!targetId) {
+      // auth user가 없으면 이메일로 직접 인증 시도
+      try {
+        await this.supabase.forceConfirmByEmail(row.email);
+        // 다시 ID 조회
+        targetId = await this.supabase.findUserIdByEmail(row.email);
+      } catch (e: any) {
+        alert('이메일로 사용자를 찾지 못했습니다: ' + (e?.message || e));
+        return;
+      }
+    } else {
+      await this.supabase.forceConfirmUser(targetId);
+    }
+    
+    // 3. public.users 프로필 확실히 생성/업데이트
+    const now = new Date().toISOString();
+    if (targetId) {
+      // 프로필이 없으면 생성, 있으면 업데이트
+      await this.supabase.ensureUserProfileById(targetId, { email: row.email, name: row.name || row.email });
+      
+      // 권한 설정 및 last_sign_in_at 명시적 업데이트
+      const makeStaff = confirm('권한을 staff로 변경하시겠습니까? 취소를 누르면 viewer로 유지됩니다.');
+      const nextRole = makeStaff ? 'staff' : 'viewer';
+      
+      await this.supabase.getClient().from('users').update({ 
+        role: nextRole,
+        status: 'active',
+        updated_at: now, 
+        last_sign_in_at: now  // 이것이 핵심: 인증 완료 표시
+      }).eq('id', targetId);
+      
+      // 로컬 행 즉시 반영
+      row.id = targetId;
+      row.role = nextRole;
+      row.last_sign_in_at = now;
+      row.email_confirmed_at = now;
+      row._pending_signup = false;
+    }
+    
     alert('이메일 인증이 완료 처리되었습니다. 사용자에게 로그인 안내를 해주세요.');
+    
+    // 목록 새로고침으로 서버 상태 반영
+    await this.load();
   }
 
   isConfirmed(row: any){
@@ -114,5 +150,14 @@ export class RoleAdminComponent implements OnInit {
     if (row.status === status) return;
     await this.supabase.getClient().from('users').update({ status, updated_at: new Date().toISOString() }).eq('id', row.id);
     await this.load();
+  }
+
+  async resendConfirm(row: any) {
+    try {
+      await this.supabase.resendConfirmationEmail(row.email);
+      alert('인증 메일을 재발송했습니다. 사용자가 메일함(스팸함 포함)을 확인하도록 안내해 주세요.');
+    } catch (e: any) {
+      alert('인증 메일 재발송에 실패했습니다: ' + (e?.message || e));
+    }
   }
 }

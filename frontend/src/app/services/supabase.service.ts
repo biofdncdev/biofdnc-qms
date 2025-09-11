@@ -88,13 +88,50 @@ export class SupabaseService {
       .from('users')
       .select('id,name,email,role,status,created_at,updated_at,last_sign_in_at,is_online')
       .order('created_at', { ascending: false });
-    
-    if (!error && data) {
-      return { data, error: null };
+
+    const base = Array.isArray(data) ? data : [];
+
+    // Merge pending signups from notifications so admins can see them even if profile is missing
+    try {
+      const { data: notis } = await this.ensureClient()
+        .from('notifications')
+        .select('actor_email, actor_name, created_at, type')
+        .eq('type', 'signup')
+        .order('created_at', { ascending: false });
+      
+      // Check both email AND whether they have been confirmed (have last_sign_in_at)
+      const existingEmails = new Set(base.map((r: any) => (r?.email || '').toLowerCase()));
+      const confirmedEmails = new Set(base
+        .filter((r: any) => r?.last_sign_in_at || r?.email_confirmed_at)
+        .map((r: any) => (r?.email || '').toLowerCase()));
+      
+      const pendingRows: any[] = [];
+      for (const n of (notis || [])) {
+        const email = String((n as any)?.actor_email || '').toLowerCase();
+        if (!email || existingEmails.has(email)) continue;
+        // Don't add as pending if this email is already confirmed
+        if (confirmedEmails.has(email)) continue;
+        
+        existingEmails.add(email);
+        pendingRows.push({
+          id: null,
+          name: (n as any)?.actor_name || (n as any)?.actor_email,
+          email: (n as any)?.actor_email,
+          created_at: (n as any)?.created_at,
+          updated_at: null,
+          last_sign_in_at: null,
+          is_online: false,
+          status: 'active',
+          role: 'viewer',
+          email_confirmed_at: null,
+          _pending_signup: true,
+        });
+      }
+      return { data: [...pendingRows, ...base], error: null };
+    } catch (e) {
+      // If notifications table is unavailable, return base rows
+      return { data: base, error: error || null };
     }
-    
-    // If still no data, return empty array
-    return { data: [], error };
   }
 
   async updateUserRole(id: string, role: string) {
@@ -128,6 +165,43 @@ export class SupabaseService {
 
   async forceConfirmUser(userId: string) {
     return this.ensureClient().rpc('admin_force_confirm', { user_id: userId });
+  }
+  async forceConfirmByEmail(email: string) {
+    return this.ensureClient().rpc('admin_force_confirm_by_email', { p_email: email });
+  }
+
+  // Ensure a profile row exists (RPC preferred; fallback to minimal upsert)
+  async ensureUserProfileById(userId: string, fallback?: { email: string; name?: string }){
+    const client = this.ensureClient();
+    try { await client.rpc('ensure_user_profile', { user_id: userId }); return; } catch {}
+    if (fallback?.email){
+      const now = new Date().toISOString();
+      try{
+        await client.from('users').upsert({
+          id: userId,
+          email: fallback.email,
+          name: fallback.name || fallback.email,
+          role: 'viewer',
+          status: 'active',
+          created_at: now,
+          updated_at: now,
+          last_sign_in_at: now, // Mark as confirmed by setting last_sign_in_at
+        }, { onConflict: 'id', ignoreDuplicates: false });
+      }catch{}
+    }
+  }
+
+  // Try to resolve auth user id by email via admin RPC (best-effort)
+  async findUserIdByEmail(email: string) {
+    const e = String(email || '').trim().toLowerCase();
+    if (!e) return null as any;
+    try {
+      const { data } = await this.ensureClient().rpc('admin_list_users_with_confirm');
+      const row = (Array.isArray(data) ? data : []).find((r: any) => String(r?.email || '').toLowerCase() === e);
+      return row?.id || null;
+    } catch {
+      return null as any;
+    }
   }
 
   // Ingredients - paginated list with keyword search

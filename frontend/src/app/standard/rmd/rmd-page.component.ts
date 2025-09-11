@@ -27,6 +27,10 @@ export class RmdPageComponent {
   docUrl = signal<SafeResourceUrl | null>(null);
   query = signal<string>('');
   loading = signal<boolean>(false);
+  // keyboard focus index for left list (category or search results)
+  focusIndex = signal<number>(-1);
+  // whether keyboard navigation mode is on (disables hover highlight)
+  kbdMode = signal<boolean>(false);
 
   // search state
   indexReady = signal<boolean>(false);
@@ -73,20 +77,149 @@ export class RmdPageComponent {
   // 3) 키보드로 검색 결과 항목 이동 및 선택
   public onSearchKeydown(ev: KeyboardEvent){
     const key = ev.key;
-    if (key !== 'ArrowDown' && key !== 'ArrowUp' && key !== 'Enter') return;
-    ev.preventDefault();
-    const list = this.searching() ? this.results() : [];
-    if (!list || list.length === 0) return;
-    // focused index stored in matchIndex for reuse
-    let idx = this.matchIndex();
-    if (key === 'ArrowDown') idx = Math.min(list.length - 1, Math.max(0, idx + 1));
-    if (key === 'ArrowUp') idx = Math.max(0, Math.min(list.length - 1, idx - 1));
-    if (key === 'Enter'){
-      const item = list[Math.max(0, Math.min(list.length - 1, idx))];
-      if (item) this.openResult(item);
+    if (key === 'ArrowDown'){
+      // Move focus into the list (search results if searching, else category list)
+      ev.preventDefault();
+      this.kbdMode.set(true);
+      if (this.focusIndex() < 0){
+        // When searching, first ArrowDown should select the first result
+        if (!this.searching()){
+          const start = this.selected() ? this.getVisibleIndex(this.selected() as any) : 0;
+          this.focusIndex.set(Math.max(0, start));
+        }
+      }
+      this.moveListFocus('down');
       return;
     }
-    this.matchIndex.set(idx);
+    if (key === 'ArrowUp'){
+      ev.preventDefault();
+      this.kbdMode.set(true);
+      if (this.focusIndex() < 0){
+        if (!this.searching()){
+          const start = this.selected() ? this.getVisibleIndex(this.selected() as any) : 0;
+          this.focusIndex.set(Math.max(0, start));
+        }
+      }
+      this.moveListFocus('up');
+      return;
+    }
+    if (key === 'Enter'){
+      ev.preventDefault();
+      this.kbdMode.set(true);
+      this.activateFocusedItem();
+      return;
+    }
+  }
+
+  // Compute a flat list of items currently shown on the left, in DOM order
+  private getVisibleItems(): RegulationItem[] {
+    if (this.searching()) return this.results();
+    const items: RegulationItem[] = [] as any;
+    for (const cat of this.filtered()) items.push(...cat.items);
+    return items;
+  }
+
+  private scrollLeftListTo(index: number, center: boolean = false){
+    setTimeout(()=>{
+      const container = document.querySelector('aside.left') as HTMLElement | null;
+      if (!container) return;
+      const nodes = Array.from(container.querySelectorAll('.item')) as HTMLElement[];
+      const el = nodes[index]; if (!el) return;
+      const sticky = container.querySelector('.sticky') as HTMLElement | null;
+      const headerH = sticky ? sticky.getBoundingClientRect().height : 0;
+
+      const itemTop = el.offsetTop; // relative to container
+      const itemBottom = itemTop + el.offsetHeight;
+      const visibleTop = container.scrollTop + headerH;
+      const visibleBottom = container.scrollTop + container.clientHeight;
+
+      if (center){
+        const targetTop = Math.max(0, itemTop - Math.max(0, (container.clientHeight - headerH - el.offsetHeight) / 2));
+        container.scrollTo({ top: targetTop, behavior: 'auto' });
+        return;
+      }
+
+      if (itemTop < visibleTop){
+        container.scrollTo({ top: Math.max(0, itemTop - headerH - 6), behavior: 'auto' });
+      } else if (itemBottom > visibleBottom){
+        const delta = itemBottom - container.clientHeight + 6;
+        const target = Math.min(container.scrollHeight - container.clientHeight, delta);
+        container.scrollTo({ top: target, behavior: 'auto' });
+      }
+    }, 0);
+  }
+
+  public moveListFocus(dir: 'up'|'down'){
+    const list = this.getVisibleItems(); if (!list.length) return;
+    let i = this.focusIndex(); if (i < 0) i = 0;
+    i = dir==='down' ? Math.min(list.length-1, i+1) : Math.max(0, i-1);
+    this.focusIndex.set(i);
+    this.scrollLeftListTo(i);
+  }
+
+  public activateFocusedItem(){
+    const list = this.getVisibleItems(); if (!list.length) return;
+    let i = this.focusIndex();
+    if (i < 0){
+      // If searching and no focus yet, pick first result
+      if (this.searching() && list.length){ i = 0; }
+      else i = 0;
+    }
+    const it = list[i]; if (!it) return;
+    if (this.searching()) this.openResult(it); else this.select(it);
+  }
+
+  public getVisibleIndex(it: RegulationItem): number {
+    const list = this.getVisibleItems();
+    const idx = list.findIndex(x => x.id === it.id);
+    return idx;
+  }
+
+  public setFocusToItem(it: RegulationItem){
+    if (this.kbdMode()) return; // ignore hover while keyboard mode active
+    const idx = this.getVisibleIndex(it);
+    if (idx >= 0) this.focusIndex.set(idx);
+  }
+
+  // Global key navigation outside search as well
+  private onGlobalKeydown = (ev: KeyboardEvent) => {
+    const key = ev.key;
+    if (key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'Enter') return;
+    const ae = document.activeElement as HTMLElement | null;
+    const tag = (ae?.tagName || '').toLowerCase();
+    const isInput = tag === 'input' || tag === 'textarea';
+    const isSearch = (ae as HTMLInputElement | null)?.type === 'search';
+    if (isInput && !isSearch) return;
+    if (key === 'ArrowDown' || key === 'ArrowUp'){
+      this.kbdMode.set(true);
+      if (this.focusIndex() < 0){
+        const start = this.selected() ? this.getVisibleIndex(this.selected() as any) : 0;
+        this.focusIndex.set(Math.max(0, start));
+      }
+      this.moveListFocus(key === 'ArrowDown' ? 'down' : 'up');
+      ev.preventDefault(); // prevent native scroll
+      return;
+    }
+    if (key === 'Enter' && this.kbdMode()){
+      this.activateFocusedItem();
+      ev.preventDefault();
+    }
+  };
+
+  // Mouse moves over left list → exit keyboard mode
+  public onLeftMouseMove(){ this.kbdMode.set(false); this.focusIndex.set(-1); }
+
+  // Click on item with mouse enables keyboard mode starting from that item
+  public onItemClick(it: RegulationItem){
+    this.select(it);
+    this.kbdMode.set(true);
+    const idx = this.getVisibleIndex(it); if (idx >= 0) this.focusIndex.set(idx);
+  }
+
+  public onResultClick(it: RegulationItem){
+    this.openResult(it);
+    this.kbdMode.set(true);
+    const idx = this.getVisibleIndex(it); if (idx >= 0) this.focusIndex.set(idx);
   }
 
   onMenuEnter(which: 'add'|'links'){
@@ -160,6 +293,8 @@ export class RmdPageComponent {
       if (raw) this.linksMap = JSON.parse(raw) || {};
     }catch{}
     // remove eager restore; will restore after view is ready
+    // Global keyboard handler to prevent default scrolling and move list focus
+    document.addEventListener('keydown', this.onGlobalKeydown, { passive: false });
   }
 
   async buildIndex(){
@@ -244,7 +379,14 @@ export class RmdPageComponent {
         if (target){
           for(const cat of this.categories){
             const it = cat.items.find((i:any)=> i.id === target);
-            if (it){ this.select(it, { resetScroll: false }); break; }
+            if (it){
+              this.select(it, { resetScroll: false });
+              // Focus the left list item and center it
+              this.kbdMode.set(true);
+              const idx = this.getVisibleIndex(it as any);
+              if (idx >= 0){ this.focusIndex.set(idx); this.scrollLeftListTo(idx, true); }
+              break;
+            }
           }
         }
         sessionStorage.removeItem('standard.forceOpen');
@@ -259,6 +401,10 @@ export class RmdPageComponent {
     // restore after view exists
     setTimeout(()=> this.restoreUiState(), 0);
     setTimeout(()=> this.restoreUiState(), 200); // second pass to ensure after iframe/layout settles
+  }
+
+  ngOnDestroy(){
+    try{ document.removeEventListener('keydown', this.onGlobalKeydown as any); }catch{}
   }
   chooseLink(r: { id: string; title: string }){
     const std = this.selected(); if(!std) return;

@@ -1,5 +1,5 @@
 <div class="page">
-  <aside class="left">
+  <aside class="left" (mousemove)="onLeftMouseMove()">
     <div class="sticky">
       <h2>원료제조팀 규정</h2>
 
@@ -32,8 +32,11 @@
       <button
         class="item"
         *ngFor="let it of results()"
-        (click)="openResult(it)"
-        [class.selected]="selected()?.id === it.id">
+        (click)="onResultClick(it)"
+        [class.selected]="selected()?.id === it.id"
+        [class.focused]="getVisibleIndex(it)===focusIndex()"
+        (mouseenter)="setFocusToItem(it)"
+      >
         {{ it.id }}. {{ it.title }}
       </button>
     </ng-container>
@@ -45,8 +48,11 @@
         <button
           class="item"
           *ngFor="let it of cat.items"
-          (click)="select(it)"
-          [class.selected]="selected()?.id === it.id">
+          (click)="onItemClick(it)"
+          [class.selected]="selected()?.id === it.id"
+          [class.focused]="getVisibleIndex(it)===focusIndex()"
+          (mouseenter)="setFocusToItem(it)"
+        >
           {{ it.id }}. {{ it.title }}
         </button>
       </ng-container>

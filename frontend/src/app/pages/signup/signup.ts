@@ -160,7 +160,7 @@ export class SignupComponent {
       }
 
       if (!data?.user) {
-        alert('가입 요청이 접수되었습니다. 이메일로 전송된 인증 링크를 확인해주세요.');
+        alert('회원가입이 완료되었습니다. 이메일로 전송된 인증 메일의 링크를 클릭해 인증을 완료해 주세요. 인증 완료 후 로그인하실 수 있습니다.');
         // 관리자 알림 등록
         try {
           await this.supabaseService.addSignupNotification({ email, name });
@@ -172,7 +172,7 @@ export class SignupComponent {
       try {
         await this.supabaseService.addSignupNotification({ email, name });
       } catch {}
-      alert('회원가입에 성공했습니다! 로그인 페이지로 이동합니다.');
+      alert('회원가입이 완료되었습니다. 이메일로 전송된 인증 메일의 링크를 클릭해 인증을 완료해 주세요. 이제 로그인 페이지로 이동합니다.');
       this.router.navigate(['/login']);
     } catch (error: any) {
       this.errorMessage = `회원가입 중 오류가 발생했습니다: ${error.message}`;

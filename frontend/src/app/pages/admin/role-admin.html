@@ -23,7 +23,10 @@
 
     <ng-container matColumnDef="email">
       <th mat-header-cell *matHeaderCellDef>이메일</th>
-      <td mat-cell *matCellDef="let r">{{ r.email }}</td>
+      <td mat-cell *matCellDef="let r">
+        {{ r.email }}
+        <span *ngIf="r._pending_signup && !isConfirmed(r)" class="chip">가입요청</span>
+      </td>
     </ng-container>
 
     <ng-container matColumnDef="created_at">
@@ -69,6 +72,7 @@
         </ng-container>
         <ng-template #needConfirm>
           <button class="btn-outline" (click)="forceConfirm(r)">사용인증</button>
+          <button class="btn-outline" style="border-color:#2563eb;color:#1d4ed8;margin-left:8px" (click)="resendConfirm(r)">인증메일 재전송</button>
         </ng-template>
       </td>
     </ng-container>
