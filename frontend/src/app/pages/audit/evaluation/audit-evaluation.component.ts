@@ -141,8 +141,18 @@ interface AuditDate { value: string; label: string; }
                   <div class="list">
                     <div class="comment" *ngFor="let c of (it.comments||[]); let i = index; trackBy: trackByComment">
                       <button class="close-x" *ngIf="canDeleteComment(c)" (click)="$event.stopPropagation(); removeComment(it, i)" title="삭제">×</button>
+                      <button class="edit-btn" *ngIf="canEditComment(c)" (click)="$event.stopPropagation(); startEditComment(it, i, c.text)" title="수정">✎</button>
                       <div class="meta">{{ c.user }} · {{ c.time }}</div>
-                      <div class="text">{{ c.text }}</div>
+                      <ng-container *ngIf="editingComment[it.id]===i; else viewCmt">
+                        <textarea class="edit-area" [(ngModel)]="editCommentText[keyFor(it.id,i)]" (keydown)="onEditCommentKeydown($event, it, i)" spellcheck="false"></textarea>
+                        <div class="edit-actions">
+                          <button class="btn mini" (click)="saveEditComment(it, i)">저장</button>
+                          <button class="btn mini" (click)="cancelEditComment(it, i)">취소</button>
+                        </div>
+                      </ng-container>
+                      <ng-template #viewCmt>
+                        <div class="text">{{ c.text }}</div>
+                      </ng-template>
                     </div>
                   </div>
                 </div>
@@ -320,7 +330,11 @@ interface AuditDate { value: string; label: string; }
     .comment{ position:relative; }
     .comment .close-x{ position:absolute; top:6px; right:6px; width:20px; height:20px; border-radius:6px; border:1px solid #e5e7eb; background:#fff; color:#334155; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; }
     .comment .close-x:hover{ background:#fee2e2; border-color:#fecaca; color:#991b1b; }
+    .comment .edit-btn{ position:absolute; top:6px; right:30px; width:20px; height:20px; border-radius:6px; border:1px solid #e5e7eb; background:#fff; color:#334155; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; }
+    .comment .edit-btn:hover{ background:#eef2ff; border-color:#c7d2fe; color:#3730a3; }
     .comment .meta{ color:#6b7280; font-size:11px; margin-bottom:6px; }
+    .comment .edit-area{ width:100%; min-height:64px; border:1px solid #d1d5db; border-radius:8px; padding:6px; resize:vertical; }
+    .comment .edit-actions{ display:flex; gap:6px; margin-top:6px; }
     @media (max-width: 1200px){ .details-inner{ grid-template-columns: 1fr; } }
     .slide-input{ resize:none; overflow:hidden; white-space:pre-wrap; line-height:1.4; font-weight:400; border:1px solid #e5e7eb; border-radius:8px; padding:8px; font-family: var(--font-sans-kr); }
     /* slide inputs already placed via inline grid-row/column overrides */
@@ -781,6 +795,10 @@ export class AuditEvaluationComponent {
   resources: ResourceItem[] = [];
   userOptions: string[] = [];
   newComment: Record<number, string> = {};
+  // inline comment editing state
+  editingComment: Record<number, number> = {}; // itemId -> index being edited
+  editCommentText: Record<string, string> = {}; // key(itemId|index) -> text
+  keyFor(id: number, i: number){ return `${id}|${i}`; }
 
   setDate(value: string){ this.selectedDate.set(value); this.loadByDate(); }
   today(){ const d = new Date(); const mm = String(d.getMonth()+1).padStart(2,'0'); const dd = String(d.getDate()).padStart(2,'0'); return `${d.getFullYear()}-${mm}-${dd}`; }
@@ -914,6 +932,30 @@ export class AuditEvaluationComponent {
     // 즉시 UI 반영 후 저장
     it.comments = list;
     this.saveProgress(it);
+  }
+  canEditComment(c: { user: string }){ return this.canDeleteComment(c); }
+  startEditComment(it: any, idx: number, text: string){
+    this.editingComment[it.id] = idx;
+    this.editCommentText[this.keyFor(it.id, idx)] = text;
+  }
+  cancelEditComment(it: any, idx: number){
+    delete this.editingComment[it.id];
+    delete this.editCommentText[this.keyFor(it.id, idx)];
+  }
+  saveEditComment(it: any, idx: number){
+    const list = Array.isArray(it.comments) ? it.comments : [];
+    if (!(idx >= 0 && idx < list.length)) return;
+    const key = this.keyFor(it.id, idx);
+    const next = (this.editCommentText[key]||'').trim();
+    if (!next){ this.cancelEditComment(it, idx); return; }
+    list[idx] = { ...list[idx], text: next };
+    it.comments = list;
+    this.cancelEditComment(it, idx);
+    this.saveProgress(it);
+  }
+  onEditCommentKeydown(ev: KeyboardEvent, it: any, idx: number){
+    if ((ev.ctrlKey || (ev as any).metaKey) && ev.key==='Enter'){ ev.preventDefault(); this.saveEditComment(it, idx); }
+    if (ev.key==='Escape'){ ev.preventDefault(); this.cancelEditComment(it, idx); }
   }
 
   // Create current date data (initialize and save)
