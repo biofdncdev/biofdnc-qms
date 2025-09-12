@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase.service';
 
-interface Cat { id: string; name: string; doc_prefix: string; created_at?: string; updated_at?: string }
+interface Cat { id: string; name: string; doc_prefix: string; department_code?: string | null; created_at?: string; updated_at?: string }
 
 @Component({
   selector: 'app-rmd-categories',
@@ -18,18 +18,26 @@ interface Cat { id: string; name: string; doc_prefix: string; created_at?: strin
         <input type="text" [(ngModel)]="form.name" placeholder="예: 일반관리기준서" style="height:32px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px;" />
       </div>
       <div style="display:flex; flex-direction:column;">
+        <label>부서</label>
+        <select [(ngModel)]="form.department_code" style="height:32px; border:1px solid #d1d5db; border-radius:8px; min-width:160px;">
+          <option [ngValue]="null">선택</option>
+          <option *ngFor="let d of depts()" [ngValue]="d.code">{{ d.code }} · {{ d.name }}</option>
+        </select>
+      </div>
+      <div style="display:flex; flex-direction:column;">
         <label>문서번호</label>
-        <input type="text" [(ngModel)]="form.doc_prefix" placeholder="예: BF-RMD-GM" style="height:32px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px; min-width:220px;" />
+        <input type="text" [(ngModel)]="form.doc_prefix" placeholder="예: GM" style="height:32px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px; min-width:220px;" />
       </div>
       <button class="btn" (click)="save()" [disabled]="busy()" style="height:32px; padding:0 12px;">{{ busy() ? '저장중…' : '저장' }}</button>
     </div>
 
     <div class="list" style="border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
-      <div style="display:grid; grid-template-columns: 1fr 1fr 80px; gap:0; background:#f8fafc; border-bottom:1px solid #e5e7eb; padding:8px 10px; font-weight:700;">
-        <div>카테고리명</div><div>문서번호</div><div>삭제</div>
+      <div style="display:grid; grid-template-columns: 1.2fr 1fr 1fr 80px; gap:0; background:#f8fafc; border-bottom:1px solid #e5e7eb; padding:8px 10px; font-weight:700;">
+        <div>카테고리명</div><div>부서</div><div>문서번호</div><div>삭제</div>
       </div>
-      <div *ngFor="let c of cats()" style="display:grid; grid-template-columns: 1fr 1fr 80px; gap:0; padding:8px 10px; border-bottom:1px solid #f1f5f9; align-items:center;">
+      <div *ngFor="let c of cats()" style="display:grid; grid-template-columns: 1.2fr 1fr 1fr 80px; gap:0; padding:8px 10px; border-bottom:1px solid #f1f5f9; align-items:center;">
         <div>{{ c.name }}</div>
+        <div>{{ c.department_code || '-' }}</div>
         <div>{{ c.doc_prefix }}</div>
         <div><button class="btn danger" (click)="remove(c)" [disabled]="busy()">삭제</button></div>
       </div>
@@ -47,13 +55,22 @@ interface Cat { id: string; name: string; doc_prefix: string; created_at?: strin
 export class RmdCategoriesComponent {
   cats = signal<Cat[]>([]);
   busy = signal<boolean>(false);
-  form: { name: string; doc_prefix: string } = { name: '', doc_prefix: '' };
+  form: { name: string; doc_prefix: string; department_code: string | null } = { name: '', doc_prefix: '', department_code: null };
+  depts = signal<Array<{ code: string; name: string }>>([]);
   constructor(private supabase: SupabaseService){ this.load(); }
-  async load(){ this.cats.set(await this.supabase.listRmdCategories()); }
+  async load(){
+    this.cats.set(await this.supabase.listRmdCategories());
+    const ds = await this.supabase.listDepartments();
+    this.depts.set((ds||[]).map((d:any)=>({ code: d.code, name: d.name })));
+  }
   async save(){
     if(!(this.form.name||'').trim() || !(this.form.doc_prefix||'').trim()) return;
     this.busy.set(true);
-    try{ await this.supabase.upsertRmdCategory({ name: this.form.name.trim(), doc_prefix: this.form.doc_prefix.trim() } as any); this.form = { name:'', doc_prefix:'' }; await this.load(); }
+    try{
+      await this.supabase.upsertRmdCategory({ name: this.form.name.trim(), doc_prefix: this.form.doc_prefix.trim(), department_code: this.form.department_code || null } as any);
+      this.form = { name:'', doc_prefix:'', department_code: null };
+      await this.load();
+    }
     finally{ this.busy.set(false); }
   }
   async remove(c: Cat){ if(!confirm('삭제할까요?')) return; this.busy.set(true); try{ await this.supabase.deleteRmdCategory(c.id); await this.load(); } finally{ this.busy.set(false); } }

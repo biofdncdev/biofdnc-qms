@@ -1545,7 +1545,7 @@ export class SupabaseService {
       .order('doc_prefix', { ascending: true });
     return Array.isArray(data) ? data : [];
   }
-  async upsertRmdCategory(row: { id?: string; name: string; doc_prefix: string }){
+  async upsertRmdCategory(row: { id?: string; name: string; doc_prefix: string; department_code?: string | null }){
     const now = new Date().toISOString();
     const payload: any = { ...row, updated_at: now };
     if (!payload.id) payload.id = crypto.randomUUID();
