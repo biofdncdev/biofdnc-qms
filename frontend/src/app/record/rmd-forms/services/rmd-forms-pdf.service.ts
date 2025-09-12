@@ -53,14 +53,34 @@ export class RmdFormsPdfService {
     try {
       const pdfs = await this.supabase.listRecordPdfs(formId);
       const uploadInfo = this.getPdfUploadInfo(formId);
+      // Best-effort: backfill server index from localStorage for older uploads
+      try{
+        for (const pdf of (Array.isArray(pdfs)? pdfs: [])){
+          const info = uploadInfo[pdf.path];
+          if (info && (!pdf.originalName || pdf.originalName === null)){
+            await (this.supabase as any).updateRecordFileIndexEntry(formId, pdf.path, {
+              originalName: info.originalName,
+              uploadedBy: info.uploadedBy,
+              uploadedAt: info.uploadedAt,
+            });
+            // Reflect locally so below mapping picks it up without re-fetch
+            (pdf as any).originalName = info.originalName;
+            (pdf as any).uploadedBy = info.uploadedBy;
+            (pdf as any).uploadedAt = info.uploadedAt;
+          }
+        }
+      }catch{}
       const pdfList = pdfs.map((pdf: any) => {
         const info = uploadInfo[pdf.path] || {};
-        const originalName = info.originalName || pdf.originalName || '알 수 없는 파일';
+        // Priority: server index -> localStorage -> path fallback
+        const originalName = pdf.originalName || info.originalName || '알 수 없는 파일';
+        const uploadedBy = pdf.uploadedBy || info.uploadedBy || '알 수 없음';
+        const uploadedAt = pdf.uploadedAt || info.uploadedAt || new Date().toISOString();
         return {
           ...pdf,
-          originalName: originalName,
-          uploadedBy: info.uploadedBy || '알 수 없음',
-          uploadedAt: info.uploadedAt || new Date().toISOString()
+          originalName,
+          uploadedBy,
+          uploadedAt
         };
       }).reverse(); // 최신 파일이 위에 오도록
       
@@ -423,6 +443,8 @@ export class RmdFormsPdfService {
           originalName: fileName
         };
         this.savePdfUploadInfo(formId, uploadInfo);
+        // Persist to cross-device index immediately
+        try{ await (this.supabase as any).updateRecordFileIndexEntry(formId, path, { originalName: fileName, uploadedBy: uploadInfo[path].uploadedBy, uploadedAt: uploadInfo[path].uploadedAt }); }catch{}
       }catch{}
       this.clearPastedImage();
       await this.refreshPdfList(formId);
