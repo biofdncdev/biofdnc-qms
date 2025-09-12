@@ -80,6 +80,7 @@ export class RmdPageComponent {
     if (key === 'ArrowDown'){
       // Move focus into the list (search results if searching, else category list)
       ev.preventDefault();
+      ev.stopPropagation(); // avoid double-handling with global keydown
       this.kbdMode.set(true);
       if (this.focusIndex() < 0){
         // When searching, first ArrowDown should select the first result
@@ -93,6 +94,7 @@ export class RmdPageComponent {
     }
     if (key === 'ArrowUp'){
       ev.preventDefault();
+      ev.stopPropagation(); // avoid double-handling with global keydown
       this.kbdMode.set(true);
       if (this.focusIndex() < 0){
         if (!this.searching()){
@@ -105,6 +107,7 @@ export class RmdPageComponent {
     }
     if (key === 'Enter'){
       ev.preventDefault();
+      ev.stopPropagation(); // avoid double-handling with global keydown
       this.kbdMode.set(true);
       this.activateFocusedItem();
       return;
