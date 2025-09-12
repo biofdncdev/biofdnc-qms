@@ -417,9 +417,34 @@
   </div>
 
   <!-- Image Preview Modal -->
-  <div *ngIf="pdfService.showImagePreview()" class="modal-overlay" (click)="pdfService.closeImagePreview()" style="position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:10000;">
-    <div (click)="$event.stopPropagation()" style="max-width:90vw; max-height:90vh; background:#111; padding:8px; border-radius:8px; box-shadow:0 10px 24px rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center;">
-      <img [src]="pdfService.previewImageUrl()" alt="preview" style="max-width:90vw; max-height:90vh; object-fit:contain;" />
+  <div *ngIf="pdfService.showImagePreview()" class="modal-overlay" (click)="pdfService.closeImagePreview()" style="position:fixed; inset:0; background:rgba(17,24,39,.6); z-index:10000;">
+    <div (click)="$event.stopPropagation()" [style.left.px]="pdfService.previewPosX()" [style.top.px]="pdfService.previewPosY()" [style.width.px]="pdfService.previewWidth()" [style.height.px]="pdfService.previewHeight()" style="position:fixed; background:#111827; border-radius:12px; box-shadow:0 24px 64px rgba(0,0,0,.6); display:flex; flex-direction:column; overflow:hidden; border:1px solid #0b1220;">
+      <!-- Title bar: drag handle + controls -->
+      <div (mousedown)="pdfService.startWindowDrag($event)" (dblclick)="pdfService.toggleFullscreen()" style="height:42px; background:#0b1220; color:#ffffff; display:flex; align-items:center; gap:10px; padding:0 10px; cursor:move; user-select:none;">
+        <div style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600;">{{ pdfService.previewTitle() }}</div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button class="title-btn" title="최소화" (click)="pdfService.minimizeWindow(); $event.stopPropagation()" style="background:#0b1220; border:1px solid #0b1220; color:#ffffff; width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:bold;">－</button>
+          <button class="title-btn" title="최대화" (click)="pdfService.toggleFullscreen(); $event.stopPropagation()" style="background:#0b1220; border:1px solid #0b1220; color:#ffffff; width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:bold;">□</button>
+          <button class="title-btn" title="닫기" (click)="pdfService.closeImagePreview(); $event.stopPropagation()" style="background:#0b1220; border:1px solid #0b1220; color:#ffffff; width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:bold;">×</button>
+        </div>
+      </div>
+      <!-- Content -->
+      <div #pvWrap (wheel)="pdfService.onPreviewWheel($event)" (mousedown)="pdfService.startPreviewPan($event)" (mousemove)="pdfService.onPreviewPanMove($event)" (mouseup)="pdfService.endPreviewPan()" (mouseleave)="pdfService.endPreviewPan()" style="flex:1; overflow:hidden; display:flex; align-items:center; justify-content:center; cursor:grab; background:#0b1220;">
+        <div [style.transform]="'translate(' + pdfService.previewOffsetX() + 'px,' + pdfService.previewOffsetY() + 'px) scale(' + pdfService.previewZoom() + ') rotate(' + pdfService.previewRotate() + 'deg)'" style="transform-origin:center center; transition:transform .05s linear;">
+          <img [src]="pdfService.previewImageUrl()" alt="preview" style="object-fit:contain; max-width:none; max-height:none; user-select:none; pointer-events:none; display:block;" />
+        </div>
+      </div>
+      <!-- Bottom bar -->
+      <div style="height:44px; background:#0b1220; color:#ffffff; display:flex; align-items:center; justify-content:space-between; padding:0 10px; gap:10px; border-top:1px solid #1f2937;">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="bar-btn" title="축소" (click)="pdfService.zoomOut()" style="background:#0b1220; border:1px solid #ffffff; color:#ffffff; width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center;">－</button>
+          <button class="bar-btn" title="확대" (click)="pdfService.zoomIn()" style="background:#0b1220; border:1px solid #ffffff; color:#ffffff; width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center;">＋</button>
+          <button class="bar-btn" title="회전" (click)="pdfService.rotateCW()" style="background:#0b1220; border:1px solid #ffffff; color:#ffffff; width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center;">↻</button>
+        </div>
+        <div>
+          <button class="bar-btn" title="다운로드" (click)="pdfService.downloadCurrentImage()" style="background:#0b1220; border:1px solid #ffffff; color:#ffffff; width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:bold;">⬇</button>
+        </div>
+      </div>
     </div>
   </div>
 </ng-template>

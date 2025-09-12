@@ -14,6 +14,31 @@ export class RmdFormsPdfService {
   // Image preview state
   showImagePreview = signal<boolean>(false);
   previewImageUrl = signal<string>('');
+  previewZoom = signal<number>(1);
+  previewPanning = signal<boolean>(false);
+  private panStartX = 0;
+  private panStartY = 0;
+  private panStartOffsetX = 0;
+  private panStartOffsetY = 0;
+  previewOffsetX = signal<number>(0);
+  previewOffsetY = signal<number>(0);
+  private escHandler: ((e: KeyboardEvent)=>void) | null = null;
+  previewChrome = signal<boolean>(true);
+  previewTitle = signal<string>('');
+  previewSubtitle = signal<string>('');
+  previewRotate = signal<number>(0);
+  previewFullscreen = signal<boolean>(false);
+  previewWidth = signal<number>(0);
+  previewHeight = signal<number>(0);
+  previewPosX = signal<number>(0);
+  previewPosY = signal<number>(0);
+  previewMinimized = signal<boolean>(false);
+  private winDragging = false;
+  private winDragStartX = 0;
+  private winDragStartY = 0;
+  private winStartLeft = 0;
+  private winStartTop = 0;
+  private prevHeightBeforeMin = 0;
   // Clipboard paste image state
   pastedImageUrl = signal<string>('');
   pastedImageBlob = signal<Blob | null>(null);
@@ -160,6 +185,27 @@ export class RmdFormsPdfService {
     if (this.isImageName(name)){
       this.previewImageUrl.set(file.url);
       this.showImagePreview.set(true);
+      this.previewZoom.set(1);
+      this.previewChrome.set(true);
+      this.previewTitle.set(file.originalName || file.name || '이미지');
+      try{
+        const when = file.uploadedAt ? new Date(file.uploadedAt) : null;
+        this.previewSubtitle.set(when ? `${when.getFullYear()}-${String(when.getMonth()+1).padStart(2,'0')}-${String(when.getDate()).padStart(2,'0')} ${String(when.getHours()).padStart(2,'0')}:${String(when.getMinutes()).padStart(2,'0')}` : '');
+      }catch{ this.previewSubtitle.set(''); }
+      // ESC to close
+      this.escHandler = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { this.closeImagePreview(); } };
+      try{ document.addEventListener('keydown', this.escHandler as any); }catch{}
+      // initial window size/position (center)
+      try{
+        const vw = window.innerWidth || 1200;
+        const vh = window.innerHeight || 800;
+        const w = Math.min(820, Math.floor(vw * 0.96));
+        const h = Math.min(Math.floor(vh * 0.9), 1000);
+        this.previewWidth.set(w); this.previewHeight.set(h);
+        this.previewPosX.set(Math.max(0, Math.floor((vw - w) / 2)));
+        this.previewPosY.set(Math.max(0, Math.floor((vh - h) / 2)));
+        this.previewFullscreen.set(false);
+      }catch{}
     } else {
       this.openPdf(file.url);
     }
@@ -168,6 +214,15 @@ export class RmdFormsPdfService {
   closeImagePreview(): void {
     this.showImagePreview.set(false);
     this.previewImageUrl.set('');
+    this.previewZoom.set(1);
+    this.previewPanning.set(false);
+    this.previewOffsetX.set(0); this.previewOffsetY.set(0);
+    this.previewRotate.set(0);
+    this.previewFullscreen.set(false);
+    this.previewWidth.set(0); this.previewHeight.set(0);
+    this.previewPosX.set(0); this.previewPosY.set(0);
+    this.previewMinimized.set(false); this.prevHeightBeforeMin = 0;
+    if (this.escHandler){ try{ document.removeEventListener('keydown', this.escHandler as any); }catch{} this.escHandler = null; }
   }
 
   // Expose image check for templates (thumbnails etc.)
@@ -179,6 +234,121 @@ export class RmdFormsPdfService {
   private isImageName(name: string): boolean {
     return ['.png','.jpg','.jpeg','.gif','.webp','.bmp','.tif','.tiff']
       .some(ext => name.endsWith(ext));
+  }
+
+  // ===== Preview zoom controls =====
+  setPreviewZoom(v: number){
+    const z = Math.max(0.1, Math.min(8, v));
+    this.previewZoom.set(Number(z.toFixed(2)));
+  }
+  zoomIn(){ this.setPreviewZoom(this.previewZoom() + 0.1); }
+  zoomOut(){ this.setPreviewZoom(this.previewZoom() - 0.1); }
+  resetZoom(){ this.setPreviewZoom(1); }
+  onPreviewWheel(ev: WheelEvent){
+    if (!this.showImagePreview()) return;
+    if (!ev.ctrlKey) return; // Ctrl+Wheel to zoom
+    ev.preventDefault();
+    const delta = ev.deltaY > 0 ? -0.1 : 0.1;
+    this.setPreviewZoom(this.previewZoom() + delta);
+  }
+
+  startPreviewPan(ev: MouseEvent){
+    if (ev.button !== 0) return;
+    this.previewPanning.set(true);
+    this.panStartX = ev.clientX;
+    this.panStartY = ev.clientY;
+    this.panStartOffsetX = this.previewOffsetX();
+    this.panStartOffsetY = this.previewOffsetY();
+    ev.preventDefault();
+  }
+  onPreviewPanMove(ev: MouseEvent){
+    if (!this.previewPanning()) return;
+    const dx = ev.clientX - this.panStartX;
+    const dy = ev.clientY - this.panStartY;
+    this.previewOffsetX.set(this.panStartOffsetX + dx);
+    this.previewOffsetY.set(this.panStartOffsetY + dy);
+    ev.preventDefault();
+  }
+  endPreviewPan(){
+    this.previewPanning.set(false);
+  }
+
+  togglePreviewChrome(){ this.previewChrome.set(!this.previewChrome()); }
+
+  rotateCW(){ this.previewRotate.set((this.previewRotate() + 90) % 360); }
+
+  toggleFullscreen(){
+    const on = !this.previewFullscreen();
+    this.previewFullscreen.set(on);
+    try{
+      const vw = window.innerWidth || 1200;
+      const vh = window.innerHeight || 800;
+      if (on){
+        this.previewPosX.set(Math.floor(vw * 0.02));
+        this.previewPosY.set(Math.floor(vh * 0.02));
+        this.previewWidth.set(Math.floor(vw * 0.96));
+        this.previewHeight.set(Math.floor(vh * 0.96));
+      }else{
+        const w = Math.min(820, Math.floor(vw * 0.96));
+        const h = Math.min(Math.floor(vh * 0.9), 1000);
+        this.previewWidth.set(w); this.previewHeight.set(h);
+        this.previewPosX.set(Math.max(0, Math.floor((vw - w) / 2)));
+        this.previewPosY.set(Math.max(0, Math.floor((vh - h) / 2)));
+      }
+    }catch{}
+  }
+
+  // Drag window by title bar
+  startWindowDrag(ev: MouseEvent){
+    if (this.previewFullscreen()) return;
+    this.winDragging = true;
+    this.winDragStartX = ev.clientX;
+    this.winDragStartY = ev.clientY;
+    this.winStartLeft = this.previewPosX();
+    this.winStartTop = this.previewPosY();
+    const move = (e: MouseEvent) => this.onWindowDragMove(e);
+    const up = () => this.endWindowDrag(move, up);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up, { once: true });
+    ev.preventDefault();
+  }
+  private onWindowDragMove(e: MouseEvent){
+    if (!this.winDragging) return;
+    const dx = e.clientX - this.winDragStartX;
+    const dy = e.clientY - this.winDragStartY;
+    this.previewPosX.set(this.winStartLeft + dx);
+    this.previewPosY.set(this.winStartTop + dy);
+  }
+  private endWindowDrag(move: any, up: any){
+    this.winDragging = false;
+    try{ window.removeEventListener('mousemove', move as any); }catch{}
+    try{ window.removeEventListener('mouseup', up as any); }catch{}
+  }
+
+  async downloadCurrentImage(){
+    try{
+      const url = this.previewImageUrl(); if (!url) return;
+      const res = await fetch(url); if (!res.ok) throw new Error('download failed');
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (this.previewTitle() || 'image') + '';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=> URL.revokeObjectURL(a.href), 5000);
+    }catch{}
+  }
+
+  minimizeWindow(){
+    if (this.previewMinimized()) return; 
+    this.previewMinimized.set(true);
+    this.prevHeightBeforeMin = this.previewHeight();
+    this.previewHeight.set(42); // keep only title bar visible
+  }
+  restoreFromMinimize(){
+    if (!this.previewMinimized()) return;
+    this.previewMinimized.set(false);
+    const h = this.prevHeightBeforeMin || 400;
+    this.previewHeight.set(h);
   }
 
   // ===== Clipboard paste handling =====
@@ -222,9 +392,9 @@ export class RmdFormsPdfService {
   setPastedFileName(v: string){ this.pastedFileName.set(this.sanitizeFileName(v)); }
 
   private defaultImageName(title: string): string{
-    const ymd = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    const ymd = new Date().toISOString().slice(0,10); // yyyy-mm-dd
     const base = this.sanitizeFileName(title).slice(0,80) || '기록';
-    return `${ymd}_${base}.png`;
+    return `${ymd} ${base}.png`;
   }
 
   private sanitizeFileName(name: string): string{
