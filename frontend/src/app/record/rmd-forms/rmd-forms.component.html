@@ -298,8 +298,8 @@
       (dragover)="!pdfService.isUploadingPdf() && pdfService.handleDragOver($event)"
       (dragleave)="!pdfService.isUploadingPdf() && pdfService.handleDragLeave($event)"
       (drop)="!pdfService.isUploadingPdf() && pdfService.handleDrop($event, sel.id)"
-      (click)="!pdfService.isUploadingPdf() && fileInput.click()"
       (paste)="pdfService.handleImagePaste($event, sel.title)"
+      tabindex="0"
       style="min-height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;">
       
       <ng-container *ngIf="!pdfService.pendingPdfFile() && !pdfService.pastedImageUrl()">
@@ -307,7 +307,7 @@
           <path d="M12 15V3m0 0l-4 4m4-4l4 4M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17"/>
         </svg>
         <div style="text-align: center;">
-          <div style="font-size: 14px; font-weight: 600; color: #475569;">파일을 드래그하여 놓거나 클릭하여 선택</div>
+          <div style="font-size: 14px; font-weight: 600; color: #475569;">파일을 드래그하여 놓거나 아래 버튼으로 선택</div>
           <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">지원: PDF, 이미지, 엑셀(xls/xlsx/csv), 워드(doc/docx), 한글(hwp/hwpx) · 영역을 선택한 뒤 Ctrl+V로 이미지 붙여넣기 가능</div>
         </div>
       </ng-container>
@@ -335,6 +335,9 @@
       </ng-container>
       
       <input #fileInput type="file" accept="application/pdf,image/*,.xlsx,.xls,.csv,.doc,.docx,.hwp,.hwpx" style="display: none;" (change)="onPdfPick($event)">
+    </div>
+    <div style="display:flex; justify-content:center; margin-top:8px;">
+      <button class="action" (click)="fileInput.click()">파일 선택</button>
     </div>
     
     <div *ngIf="pdfService.pdfUploadError()" style="color: #ef4444; font-size: 13px; margin-top: 8px;">{{ pdfService.pdfUploadError() }}</div>
