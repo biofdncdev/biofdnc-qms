@@ -127,8 +127,24 @@ interface AuditDate { value: string; label: string; }
                 <textarea class="status-select slide-input" style="grid-row:1; grid-column:1; width:100%;" [attr.id]="'input-'+it.id+'-1'" [attr.data-col]="1" [style.height.px]="it.__h1 || 120" rows="5" spellcheck="false" [(ngModel)]="it.col1Text" (input)="autoResize($event, it, '__h1')" (blur)="saveProgress(it)" placeholder="평가 항목 세부 사항" (keydown)="onTextareaKeydown($event, it)"></textarea>
                 <div class="link-cell" style="grid-row:1; grid-column:2; display:flex; flex-direction:column; gap:6px; width:100%;">
                   <button class="btn mini pick-btn" style="align-self:flex-start; margin:4px 0;" (click)="openRecordPicker(it)">규정/기록 선택</button>
-                  <div class="link-list" style="display:flex; flex-direction:column; gap:6px; width:100%;">
-                    <button *ngFor="let l of (it.selectedLinks||[])" class="link-button" (click)="openLinkPopup(l)"><span class="text">{{ l.id }} · {{ l.title }}</span><span class="close-x" title="삭제" (click)="$event.stopPropagation(); removeSelectedLink(it, l)">×</span></button>
+                  <div class="link-list" style="display:flex; flex-direction:column; gap:6px; width:100%;"
+                       (dragover)="onLinkListDragOver($event, it)" (drop)="onLinkListDrop($event, it)">
+                    <button *ngFor="let l of (it.selectedLinks||[]); let i = index" class="link-button"
+                            draggable="true"
+                            [class.dragging]="linkDragItemId===it.id && linkDragIndex===i"
+                            [class.drag-over]="linkDragItemId===it.id && linkDragOverIndex===i"
+                            (dragstart)="onLinkDragStart($event, it, i)"
+                            (dragover)="onLinkDragOver($event, it, i)"
+                            (dragleave)="onLinkDragLeave($event, it, i)"
+                            (drop)="onLinkDrop($event, it, i)"
+                            (dragend)="onLinkDragEnd()"
+                            (click)="openLinkPopup(l)">
+                      <span class="text">{{ l.id }} · {{ l.title }}</span>
+                      <span class="close-x" title="삭제" (click)="$event.stopPropagation(); removeSelectedLink(it, l)">×</span>
+                    </button>
+                    <div class="link-drop-end" *ngIf="(it.selectedLinks||[]).length"
+                         [class.active]="linkDragItemId===it.id && linkDragOverIndex===(it.selectedLinks||[]).length"
+                         (dragover)="onLinkDragOverEnd($event, it)" (drop)="onLinkDropEnd($event, it)"></div>
                   </div>
                 </div>
                 <!-- 3열 1행으로 이동 -->
@@ -360,6 +376,11 @@ interface AuditDate { value: string; label: string; }
     .link-button .text{ font-weight:600; opacity:.9; }
     .link-button .close-x{ font-weight:700; font-size:14px; color:#64748b; padding:0 6px; }
     .link-button:hover{ background:#f8fafc; }
+    /* Drag styles for link chips */
+    .link-button.dragging{ opacity:.5; }
+    .link-button.drag-over{ box-shadow: inset 0 0 0 2px #6366f1; border-color:#c7d2fe; }
+    .link-drop-end{ height:8px; border-radius:6px; }
+    .link-drop-end.active{ outline:2px dashed #6366f1; outline-offset:2px; }
 
     /* Picker highlight */
     .picker-item.hovered{ background:#f8fafc; box-shadow: inset 0 0 0 1px #e5e7eb, 0 2px 8px rgba(59,130,246,.12); border-radius:10px; transition: box-shadow .15s ease, background .15s ease; }
@@ -1121,6 +1142,11 @@ export class AuditEvaluationComponent {
   previewing = false; previewItem: any=null;
   preview(r: any){ this.previewItem = r; this.previewing = true; }
   linkPopup: { id: string; title: string } | null = null;
+  // drag-n-drop state for selectedLinks
+  linkDragItemId: number | null = null;
+  linkDragIndex: number = -1;
+  linkDragOverIndex: number = -1;
+  private linkDragData?: { item: any; fromIndex: number };
   // drag state for picker
   @ViewChild('pickerRoot') pickerRoot?: ElementRef<HTMLDivElement>;
   private pickerDrag = { active: false, startX: 0, startY: 0, offsetX: 0, offsetY: 0, raf: 0, needsPaint: false };
@@ -1276,6 +1302,53 @@ export class AuditEvaluationComponent {
   async toggleDetails(it: any){
     // 유지: 다른 코드에서 사용하는 경우를 위해 남겨둠. selection 기반으로 위임
     await this.selectItem(it);
+  }
+  // Drag and drop handlers for selectedLinks chips
+  onLinkDragStart(ev: DragEvent, it: any, index: number){
+    this.linkDragItemId = it.id; this.linkDragIndex = index; this.linkDragOverIndex = index;
+    this.linkDragData = { item: it, fromIndex: index };
+    try{ ev.dataTransfer?.setData('text/plain', String(index)); ev.dataTransfer!.effectAllowed = 'move'; }catch{}
+  }
+  onLinkDragOver(ev: DragEvent, it: any, index: number){
+    if (this.linkDragItemId !== it.id) return;
+    ev.preventDefault(); ev.dataTransfer!.dropEffect = 'move';
+    this.linkDragOverIndex = index;
+  }
+  onLinkDragLeave(_ev: DragEvent, _it: any, index: number){
+    if (this.linkDragOverIndex === index) this.linkDragOverIndex = -1;
+  }
+  onLinkDrop(ev: DragEvent, it: any, index: number){
+    ev.preventDefault();
+    if (this.linkDragItemId !== it.id) { this.onLinkDragEnd(); return; }
+    const from = this.linkDragIndex; const to = index;
+    this.reorderLinks(it, from, to);
+    this.onLinkDragEnd();
+  }
+  onLinkListDragOver(ev: DragEvent, it: any){
+    if (this.linkDragItemId !== it.id) return; ev.preventDefault();
+  }
+  onLinkListDrop(ev: DragEvent, it: any){ ev.preventDefault(); this.onLinkDropEnd(ev, it); }
+  onLinkDragOverEnd(ev: DragEvent, it: any){
+    if (this.linkDragItemId !== it.id) return; ev.preventDefault();
+    this.linkDragOverIndex = (it.selectedLinks||[]).length;
+  }
+  onLinkDropEnd(ev: DragEvent, it: any){
+    ev.preventDefault();
+    if (this.linkDragItemId !== it.id) { this.onLinkDragEnd(); return; }
+    const from = this.linkDragIndex; const to = (it.selectedLinks||[]).length;
+    this.reorderLinks(it, from, to);
+    this.onLinkDragEnd();
+  }
+  onLinkDragEnd(){ this.linkDragItemId = null; this.linkDragIndex = -1; this.linkDragOverIndex = -1; this.linkDragData = undefined; }
+  private reorderLinks(it: any, from: number, to: number){
+    if (!it || !Array.isArray(it.selectedLinks)) return;
+    const arr = it.selectedLinks as any[];
+    if (from === to || from < 0 || from >= arr.length) return;
+    const toIndex = Math.max(0, Math.min(arr.length - 1, to));
+    const [moved] = arr.splice(from, 1);
+    arr.splice(toIndex, 0, moved);
+    it.selectedLinks = arr;
+    this.saveProgress(it);
   }
 
   private isEditableTarget(target: EventTarget | null){
