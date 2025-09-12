@@ -7,7 +7,7 @@ import { RmdFormItem } from '../rmd-forms-data';
 export class RmdFormsMetadataService {
   isSavingMeta = signal<boolean>(false);
   metaJustSaved = signal<boolean>(false);
-  infoOpen = signal<boolean>(true);
+  infoOpen = signal<boolean>(false);
 
   constructor(private supabase: SupabaseService) {}
 

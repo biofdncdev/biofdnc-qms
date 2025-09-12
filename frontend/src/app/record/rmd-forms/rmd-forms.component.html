@@ -299,15 +299,16 @@
       (dragleave)="!pdfService.isUploadingPdf() && pdfService.handleDragLeave($event)"
       (drop)="!pdfService.isUploadingPdf() && pdfService.handleDrop($event, sel.id)"
       (click)="!pdfService.isUploadingPdf() && fileInput.click()"
+      (paste)="pdfService.handleImagePaste($event, sel.title)"
       style="min-height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;">
       
-      <ng-container *ngIf="!pdfService.pendingPdfFile()">
+      <ng-container *ngIf="!pdfService.pendingPdfFile() && !pdfService.pastedImageUrl()">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
           <path d="M12 15V3m0 0l-4 4m4-4l4 4M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17"/>
         </svg>
         <div style="text-align: center;">
-          <div style="font-size: 14px; font-weight: 600; color: #475569;">PDF 파일을 드래그하여 놓거나 클릭하여 선택</div>
-          <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">PDF 파일만 업로드 가능합니다</div>
+          <div style="font-size: 14px; font-weight: 600; color: #475569;">파일을 드래그하여 놓거나 클릭하여 선택</div>
+          <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">지원: PDF, 이미지, 엑셀(xls/xlsx/csv), 워드(doc/docx), 한글(hwp/hwpx) · 영역을 선택한 뒤 Ctrl+V로 이미지 붙여넣기 가능</div>
         </div>
       </ng-container>
       
@@ -320,11 +321,24 @@
           <button type="button" (click)="pdfService.removePendingPdf(); $event.stopPropagation()" style="margin-left: 8px; color: #ef4444; font-weight: bold;">×</button>
         </div>
       </ng-container>
+
+      <!-- Pasted image preview -->
+      <ng-container *ngIf="!pdfService.pendingPdfFile() && pdfService.pastedImageUrl()">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+          <img [src]="pdfService.pastedImageUrl()" alt="pasted" style="max-width:420px; max-height:240px; object-fit:contain; border:1px solid #e5e7eb; border-radius:8px; background:#fff;" />
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="text" [ngModel]="pdfService.pastedFileName()" (ngModelChange)="pdfService.setPastedFileName($event)" style="height:30px; border:1px solid #e5e7eb; border-radius:8px; padding:0 8px;" />
+            <button class="action" (click)="pdfService.clearPastedImage()">지우기</button>
+            <button class="action primary" [disabled]="pdfService.isSavingPasted()" (click)="pdfService.savePastedImage(sel.id, sel.title)">{{ pdfService.isSavingPasted()? '저장 중...' : '저장' }}</button>
+          </div>
+        </div>
+      </ng-container>
       
-      <input #fileInput type="file" accept="application/pdf" style="display: none;" (change)="onPdfPick($event)">
+      <input #fileInput type="file" accept="application/pdf,image/*,.xlsx,.xls,.csv,.doc,.docx,.hwp,.hwpx" style="display: none;" (change)="onPdfPick($event)">
     </div>
     
     <div *ngIf="pdfService.pdfUploadError()" style="color: #ef4444; font-size: 13px; margin-top: 8px;">{{ pdfService.pdfUploadError() }}</div>
+    <div *ngIf="pdfService.pasteError()" style="color: #ef4444; font-size: 13px; margin-top: 4px;">{{ pdfService.pasteError() }}</div>
     
     <button 
       *ngIf="pdfService.pendingPdfFile()" 
@@ -350,14 +364,19 @@
         style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; transition: all 0.2s;">
         
         <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="#dc2626">
-            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-          </svg>
+          <ng-container *ngIf="pdfService.isImage(pdf); else docIcon">
+            <img [src]="pdf.url" alt="thumb" style="width:32px; height:32px; object-fit:cover; border-radius:4px; border:1px solid #e5e7eb;" />
+          </ng-container>
+          <ng-template #docIcon>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="#64748b">
+              <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+            </svg>
+          </ng-template>
           
           <div style="flex: 1;">
             <div 
               style="font-weight: 500; color: #1e40af; cursor: pointer; text-decoration: underline;"
-              (click)="pdfService.openPdf(pdf.url)">
+              (click)="pdfService.openFile(pdf)">
               {{ pdf.originalName || pdf.name }}
             </div>
             <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
@@ -391,6 +410,13 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Image Preview Modal -->
+  <div *ngIf="pdfService.showImagePreview()" class="modal-overlay" (click)="pdfService.closeImagePreview()" style="position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:10000;">
+    <div (click)="$event.stopPropagation()" style="max-width:90vw; max-height:90vh; background:#111; padding:8px; border-radius:8px; box-shadow:0 10px 24px rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center;">
+      <img [src]="pdfService.previewImageUrl()" alt="preview" style="max-width:90vw; max-height:90vh; object-fit:contain;" />
     </div>
   </div>
 </ng-template>

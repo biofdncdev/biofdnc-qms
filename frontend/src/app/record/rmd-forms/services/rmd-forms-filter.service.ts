@@ -18,7 +18,7 @@ export class RmdFormsFilterService {
   // Static data
   departments: string[] = ['원료제조팀','식물세포배양팀','품질팀','연구팀','경영지원팀'];
   methods: string[] = ['ERP','QMS','NAS','OneNote','수기'];
-  periods: string[] = ['일','주','월','년','갱신주기'];
+  periods: string[] = ['일','주','월','년','발생시','갱신주기에 따라'];
 
   filtered = computed(() => {
     const q = this.query().trim().toLowerCase();
@@ -30,7 +30,7 @@ export class RmdFormsFilterService {
         const byDept = !this.dept() || ((i as any).department || '원료제조팀') === this.dept();
         const byOwner = !this.ownerFilter() || ((i as any).owner || '').toLowerCase().includes(this.ownerFilter().toLowerCase());
         const byMethod = !this.method() || (i as any).method === this.method();
-        const byPeriod = !this.period() || (i as any).period === this.period();
+        const byPeriod = !this.period() || this.normalizePeriod((i as any).period) === this.normalizePeriod(this.period());
         const byStandard = !this.standard() || ((i as any).standard || '').toLowerCase().includes(this.standard().toLowerCase());
         const byCompany = !this.auditCompany() || (((i as any).companies || []).includes(this.auditCompany()));
         const stdCat = ((i as any).standardCategory || cat.category) as string;
@@ -96,5 +96,13 @@ export class RmdFormsFilterService {
   setCert(v: string): void { 
     this.cert.set(v); 
     this.onFiltersChanged(); 
+  }
+
+  private normalizePeriod(v: string): string {
+    const s = (v || '').toString().trim();
+    if (!s) return '';
+    // Treat legacy '갱신주기' as the same as new label '갱신주기에 따라'
+    if (s === '갱신주기' || s === '갱신주기에 따라') return '갱신주기';
+    return s;
   }
 }

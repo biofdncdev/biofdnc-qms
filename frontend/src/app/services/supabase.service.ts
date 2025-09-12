@@ -739,12 +739,14 @@ export class SupabaseService {
     const client = this.ensureClient();
     
     // 원본 파일명 저장
-    const original = file.name || 'document.pdf';
+    const original = file.name || 'document';
     
     // 확장자 분리
     const lastDotIndex = original.lastIndexOf('.');
     const base = lastDotIndex > 0 ? original.substring(0, lastDotIndex) : original;
-    const ext = lastDotIndex > 0 ? original.substring(lastDotIndex) : '.pdf';
+    const ext = lastDotIndex > 0 ? original.substring(lastDotIndex) : '';
+    const extLower = ext.toLowerCase();
+    const isPdf = (file as any).type === 'application/pdf' || extLower === '.pdf';
     
     // 저장용 파일명: 타임스탬프 + 랜덤 문자열 + 확장자 (한글 파일명 문제 회피)
     const timestamp = Date.now();
@@ -756,53 +758,50 @@ export class SupabaseService {
     
     const safeFolder = String(form_id).replace(/[^a-zA-Z0-9._-]/g,'-');
     
-    // rmd_pdfs 버킷을 기본으로 사용 (실제 작동하는 버킷)
+    // rmd_pdfs: PDF 전용, rmd_records: 그 외 파일 (이미지/오피스/한글 등)
     const pdfsPath = `${safeFolder}/${storageFileName}`;
     
     try {
-      const { error: pdfsError, data: pdfsData } = await client.storage
-        .from('rmd_pdfs')
-        .upload(pdfsPath, file, { 
-          upsert: true, 
-          contentType: 'application/pdf',
-          cacheControl: '3600'
-        });
-      
-      if (!pdfsError && pdfsData) {
-        const { data: pub } = client.storage.from('rmd_pdfs').getPublicUrl(pdfsData.path);
-        return { 
-          path: pdfsData.path, 
-          publicUrl: pub.publicUrl, 
-          bucket: 'rmd_pdfs',
-          originalName: cleanFileName // 원본 파일명 그대로
-        } as any;
+      if (isPdf){
+        // 1) PDF는 전용 버킷 우선
+        const { error: pdfsError, data: pdfsData } = await client.storage
+          .from('rmd_pdfs')
+          .upload(pdfsPath, file, { 
+            upsert: true, 
+            contentType: (file as any).type || undefined,
+            cacheControl: '3600'
+          });
+        if (!pdfsError && pdfsData){
+          const { data: pub } = client.storage.from('rmd_pdfs').getPublicUrl(pdfsData.path);
+          return { path: pdfsData.path, publicUrl: pub.publicUrl, bucket: 'rmd_pdfs', originalName: cleanFileName } as any;
+        }
+        // 실패 시 일반 버킷으로
+        const recordsPath = `pdfs/${safeFolder}/${storageFileName}`;
+        const { error, data } = await client.storage
+          .from('rmd_records')
+          .upload(recordsPath, file, { upsert: true, contentType: (file as any).type || undefined, cacheControl: '3600' });
+        if (error){
+          console.error('파일 업로드 실패:', pdfsError || error);
+          throw pdfsError || error;
+        }
+        const { data: pub } = client.storage.from('rmd_records').getPublicUrl(data.path);
+        return { path: data.path, publicUrl: pub.publicUrl, bucket: 'rmd_records', originalName: cleanFileName } as any;
+      } else {
+        // 2) 비-PDF는 바로 rmd_records에 저장
+        const recordsPath = `pdfs/${safeFolder}/${storageFileName}`;
+        const { error, data } = await client.storage
+          .from('rmd_records')
+          .upload(recordsPath, file, { upsert: true, contentType: (file as any).type || undefined, cacheControl: '3600' });
+        if (error){
+          console.error('파일 업로드 실패 (records):', error);
+          throw error;
+        }
+        const { data: pub } = client.storage.from('rmd_records').getPublicUrl(data.path);
+        return { path: data.path, publicUrl: pub.publicUrl, bucket: 'rmd_records', originalName: cleanFileName } as any;
       }
-      
-      // rmd_pdfs 실패시 rmd_records 시도 (대체 버킷)
-      const recordsPath = `pdfs/${safeFolder}/${storageFileName}`;
-      const { error, data } = await client.storage
-        .from('rmd_records')
-        .upload(recordsPath, file, { 
-          upsert: true, 
-          contentType: 'application/pdf',
-          cacheControl: '3600'
-        });
-      
-      if (error) {
-        console.error('PDF 업로드 실패:', pdfsError || error);
-        throw pdfsError || error; // 첫 번째 에러를 우선 반환
-      }
-      
-      const { data: pub } = client.storage.from('rmd_records').getPublicUrl(data.path);
-      return { 
-        path: data.path, 
-        publicUrl: pub.publicUrl, 
-        bucket: 'rmd_records',
-        originalName: cleanFileName // 원본 파일명 그대로
-      } as any;
       
     } catch (uploadError: any) {
-      console.error('PDF 업로드 중 예외 발생:', uploadError);
+      console.error('파일 업로드 중 예외 발생:', uploadError);
       // 더 구체적인 에러 메시지 제공
       if (uploadError?.message?.includes('Invalid URL')) {
         throw new Error('파일명에 사용할 수 없는 문자가 있습니다. 파일명을 변경해주세요.');
@@ -819,7 +818,7 @@ export class SupabaseService {
     try{
       const { data: list, error } = await client.storage.from('rmd_pdfs').list(form_id, { limit: 100 });
       if (!error && list) {
-        const items = (Array.isArray(list)? list: []).filter((o:any)=> (o?.name||'').toLowerCase().endsWith('.pdf'));
+        const items = (Array.isArray(list)? list: []);
         const pdfItems = await Promise.all(items.map(async (o:any)=>{
           const full = `${form_id}/${o.name}`;
           const { data } = client.storage.from('rmd_pdfs').getPublicUrl(full);
@@ -842,7 +841,7 @@ export class SupabaseService {
     try{
       const { data: list, error } = await client.storage.from('rmd_records').list(`pdfs/${form_id}`, { limit: 100 });
       if (!error && list) {
-        const items = (Array.isArray(list)? list: []).filter((o:any)=> (o?.name||'').toLowerCase().endsWith('.pdf'));
+        const items = (Array.isArray(list)? list: []);
         const pdfItems = await Promise.all(items.map(async (o:any)=>{
           const full = `pdfs/${form_id}/${o.name}`;
           const { data } = client.storage.from('rmd_records').getPublicUrl(full);

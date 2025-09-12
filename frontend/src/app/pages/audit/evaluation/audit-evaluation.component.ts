@@ -1165,7 +1165,7 @@ export class AuditEvaluationComponent {
   pickerIndex = 0;
   hoverPickerIndex = -1;
   methods: string[] = ['ERP','QMS','NAS','OneNote','Paper'];
-  periods: string[] = ['일','주','월','년','갱신주기'];
+  periods: string[] = ['일','주','월','년','발생시','갱신주기에 따라'];
   recordData: (RmdFormItem & { kind?: 'record'|'standard' })[] = ([] as any);
   recordCategories: string[] = ['일반관리기준서','제조위생관리기준서','제조관리기준서','품질관리기준서','ISO'];
   private pickerTargetItem: any = null;

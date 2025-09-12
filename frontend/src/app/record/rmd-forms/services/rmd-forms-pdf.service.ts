@@ -11,6 +11,15 @@ export class RmdFormsPdfService {
   pendingPdfFile = signal<File | null>(null);
   isUploadingPdf = signal<boolean>(false);
   pdfUploadError = signal<string>('');
+  // Image preview state
+  showImagePreview = signal<boolean>(false);
+  previewImageUrl = signal<string>('');
+  // Clipboard paste image state
+  pastedImageUrl = signal<string>('');
+  pastedImageBlob = signal<Blob | null>(null);
+  pastedFileName = signal<string>('');
+  isSavingPasted = signal<boolean>(false);
+  pasteError = signal<string>('');
 
   constructor(private supabase: SupabaseService) {}
 
@@ -43,9 +52,14 @@ export class RmdFormsPdfService {
 
   async handlePdfPick(file: File | null, formId: string): Promise<void> {
     if (!file || !formId) return;
-    
-    if (file.type !== 'application/pdf') {
-      this.pdfUploadError.set('PDF 파일만 업로드 가능합니다.');
+    // Allow common document types beyond PDFs
+    const okMimePrefixes = ['application/pdf','image/','application/vnd.openxmlformats-officedocument','application/msword','application/vnd.ms-excel','text/csv','application/haansofthwp','application/x-hwp'];
+    const okExts = ['.pdf','.png','.jpg','.jpeg','.gif','.webp','.bmp','.tif','.tiff','.xlsx','.xls','.csv','.doc','.docx','.hwp','.hwpx'];
+    const name = (file.name || '').toLowerCase();
+    const hasOkExt = okExts.some(ext => name.endsWith(ext));
+    const hasOkMime = okMimePrefixes.some(prefix => (file.type || '').startsWith(prefix));
+    if (!hasOkExt && !hasOkMime){
+      this.pdfUploadError.set('지원되지 않는 파일 형식입니다. (PDF, 이미지, 엑셀, 워드, 한글)');
       return;
     }
     
@@ -129,7 +143,7 @@ export class RmdFormsPdfService {
       } else if (error?.message?.includes('timeout')) {
         this.pdfUploadError.set('업로드 시간이 초과되었습니다. 네트워크를 확인하세요.');
       } else {
-        this.pdfUploadError.set(`PDF 업로드 실패: ${error?.message || '알 수 없는 오류'}`);
+        this.pdfUploadError.set(`업로드 실패: ${error?.message || '알 수 없는 오류'}`);
       }
     } finally {
       this.isUploadingPdf.set(false);
@@ -138,6 +152,132 @@ export class RmdFormsPdfService {
   
   openPdf(url: string): void {
     window.open(url, '_blank');
+  }
+
+  // Public helper to decide and open: image preview vs new tab
+  openFile(file: PdfFile): void {
+    const name = (file.originalName || file.name || '').toLowerCase();
+    if (this.isImageName(name)){
+      this.previewImageUrl.set(file.url);
+      this.showImagePreview.set(true);
+    } else {
+      this.openPdf(file.url);
+    }
+  }
+
+  closeImagePreview(): void {
+    this.showImagePreview.set(false);
+    this.previewImageUrl.set('');
+  }
+
+  // Expose image check for templates (thumbnails etc.)
+  isImage(file: PdfFile): boolean {
+    const name = (file.originalName || file.name || '').toLowerCase();
+    return this.isImageName(name);
+  }
+
+  private isImageName(name: string): boolean {
+    return ['.png','.jpg','.jpeg','.gif','.webp','.bmp','.tif','.tiff']
+      .some(ext => name.endsWith(ext));
+  }
+
+  // ===== Clipboard paste handling =====
+  handleImagePaste(ev: ClipboardEvent, recordTitle?: string){
+    try{
+      const items = ev.clipboardData?.items || [] as any;
+      for (let i=0;i<items.length;i++){
+        const it = items[i];
+        if (!it) continue;
+        const type = it.type || '';
+        if (type.startsWith('image/')){
+          const blob = it.getAsFile() as Blob | null;
+          if (blob){
+            const url = URL.createObjectURL(blob);
+            // clean previous
+            try{ URL.revokeObjectURL(this.pastedImageUrl()); }catch{}
+            this.pastedImageBlob.set(blob);
+            this.pastedImageUrl.set(url);
+            this.pasteError.set('');
+            const def = this.defaultImageName(recordTitle || '기록');
+            this.pastedFileName.set(def);
+            ev.preventDefault();
+            return;
+          }
+        }
+      }
+      this.pasteError.set('클립보드에서 이미지를 찾을 수 없습니다.');
+    }catch(e:any){
+      this.pasteError.set('붙여넣기 처리 중 오류가 발생했습니다.');
+    }
+  }
+
+  clearPastedImage(){
+    try{ URL.revokeObjectURL(this.pastedImageUrl()); }catch{}
+    this.pastedImageUrl.set('');
+    this.pastedImageBlob.set(null);
+    this.pastedFileName.set('');
+    this.pasteError.set('');
+  }
+
+  setPastedFileName(v: string){ this.pastedFileName.set(this.sanitizeFileName(v)); }
+
+  private defaultImageName(title: string): string{
+    const ymd = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    const base = this.sanitizeFileName(title).slice(0,80) || '기록';
+    return `${ymd}_${base}.png`;
+  }
+
+  private sanitizeFileName(name: string): string{
+    return (name||'').toString().trim().replace(/[\\/:*?"<>|]+/g,'-');
+  }
+
+  async savePastedImage(formId: string, recordTitle?: string){
+    const blob = this.pastedImageBlob();
+    if (!blob) { this.pasteError.set('붙여넣은 이미지가 없습니다.'); return; }
+    const fileName = this.pastedFileName() || this.defaultImageName(recordTitle||'기록');
+    const safeFolder = String(formId).replace(/[^a-zA-Z0-9._-]/g,'-');
+    const storageName = `${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`;
+    const storagePath = `pdfs/${safeFolder}/${storageName}`;
+    this.isSavingPasted.set(true);
+    try{
+      // Upload blob as PNG
+      const pngBlob = blob.type === 'image/png' ? blob : await this.convertToPng(blob);
+      const { path, publicUrl } = await this.supabase.uploadRecordImage(pngBlob, storagePath);
+      // Map originalName for display
+      try{
+        const user = await this.supabase.getCurrentUser();
+        const uploadInfo = this.getPdfUploadInfo(formId);
+        uploadInfo[path] = {
+          uploadedBy: user?.email || '알 수 없음',
+          uploadedAt: new Date().toISOString(),
+          originalName: fileName
+        };
+        this.savePdfUploadInfo(formId, uploadInfo);
+      }catch{}
+      this.clearPastedImage();
+      await this.refreshPdfList(formId);
+    }catch(e:any){
+      this.pasteError.set('이미지 저장 중 오류가 발생했습니다.');
+    }finally{
+      this.isSavingPasted.set(false);
+    }
+  }
+
+  private async convertToPng(blob: Blob): Promise<Blob>{
+    // Draw to canvas and export to PNG
+    const img = await new Promise<HTMLImageElement>((resolve, reject)=>{
+      const url = URL.createObjectURL(blob);
+      const image = new Image();
+      image.onload = ()=>{ URL.revokeObjectURL(url); resolve(image); };
+      image.onerror = (e)=>{ URL.revokeObjectURL(url); reject(e); };
+      image.src = url;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width; canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return blob;
+    ctx.drawImage(img, 0, 0);
+    return await new Promise<Blob>((resolve)=> canvas.toBlob(b=> resolve(b as Blob), 'image/png') );
   }
   
   async downloadPdf(pdf: PdfFile): Promise<void> {
@@ -149,7 +289,7 @@ export class RmdFormsPdfService {
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = downloadUrl;
-      link.download = pdf.originalName || pdf.name || 'document.pdf';
+      link.download = pdf.originalName || pdf.name || 'document';
       
       document.body.appendChild(link);
       link.click();
