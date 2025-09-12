@@ -26,6 +26,8 @@ export class RmdPageComponent {
   selected = signal<RegulationItem | null>(null);
   docUrl = signal<SafeResourceUrl | null>(null);
   query = signal<string>('');
+  // 입력 중 임시 버퍼(엔터 눌러 확정 시에만 검색 적용)
+  queryDraft = signal<string>('');
   loading = signal<boolean>(false);
   // keyboard focus index for left list (category or search results)
   focusIndex = signal<number>(-1);
@@ -453,6 +455,7 @@ export class RmdPageComponent {
 
   public clearSearch() {
     this.query.set('');
+    this.queryDraft.set('');
     this.term.set('');
     this.searching.set(false);
     this.results.set([]);
@@ -460,6 +463,12 @@ export class RmdPageComponent {
     this.matchIndex.set(0);
     const frame = document.querySelector('iframe') as HTMLIFrameElement | null;
     if (frame?.contentWindow) frame.contentWindow.postMessage({ type:'highlight', term: '' }, '*');
+  }
+
+  // 엔터로 입력 확정 후 검색 실행
+  public applySearch(){
+    this.query.set(this.queryDraft().trim());
+    this.runSearch();
   }
 
   public navigate(dir: 'prev'|'next'){

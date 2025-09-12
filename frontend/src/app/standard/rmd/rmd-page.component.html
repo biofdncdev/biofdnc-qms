@@ -8,15 +8,15 @@
           #searchBox
           type="search"
           placeholder="문서 제목/본문 검색"
-          [ngModel]="query()"
-          (ngModelChange)="query.set($event)"
-          (keydown.enter)="runSearch()"
+          [ngModel]="queryDraft()"
+          (ngModelChange)="queryDraft.set($event)"
+          (keydown.enter)="applySearch()"
           (keydown)="onSearchKeydown($event)"
           (keyup.escape)="clearSearch()"
           [disabled]="!indexReady()"
           [class.disabled]="!indexReady()"
         />
-        <button class="clear" *ngIf="query()" (click)="clearSearch()">×</button>
+        <button class="clear" *ngIf="queryDraft() || query()" (click)="clearSearch()">×</button>
         <div class="loader" *ngIf="!indexReady()"></div>
         <div class="search-nav" *ngIf="indexReady() && term() && matchTotal()>0">
           <span>{{ matchIndex()+1 }} / {{ matchTotal() }}</span>
