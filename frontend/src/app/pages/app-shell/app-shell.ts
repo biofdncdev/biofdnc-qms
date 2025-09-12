@@ -108,17 +108,20 @@ export class AppShellComponent {
             { label: '조직도2', path: '/app/organization/chart2' },
             { label: '업무분장 · 원료제조', path: '/app/organization/roles?dept=rm' },
             { label: '업무분장 · 품질보증', path: '/app/organization/roles?dept=qa' },
+            ...(this.isAdmin ? [{ label: '부서 등록', path: '/app/organization/departments' }] : []),
           ]
         },
         {
           key: 'standard', icon: 'gavel', label: 'Standard',
           submenu: [
-            { label: '원료제조팀 규정', path: '/app/standard/rmd' }
+            { label: '원료제조팀 규정', path: '/app/standard/rmd' },
+            { label: '규정 카테고리 등록', path: '/app/standard/rmd-categories' }
           ]
         },
         {
           key: 'record', icon: 'description', label: 'Record', submenu: [
-            { label: '원료제조팀 기록', path: '/app/record/rmd-forms' }
+            { label: '원료제조팀 기록', path: '/app/record/rmd-forms' },
+            { label: '원료제조팀 기록 등록', path: '/app/record/rmd-register' }
           ]
         },
         {

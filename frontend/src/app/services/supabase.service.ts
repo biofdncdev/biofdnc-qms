@@ -1535,4 +1535,107 @@ export class SupabaseService {
 
     return { ok: true, total: rows.length, updated, skipped, inserted, errors } as any;
   }
+
+  // ===== RMD Standard Categories & Records =====
+  // Categories CRUD
+  async listRmdCategories(){
+    const { data } = await this.ensureClient()
+      .from('rmd_standard_categories')
+      .select('*')
+      .order('doc_prefix', { ascending: true });
+    return Array.isArray(data) ? data : [];
+  }
+  async upsertRmdCategory(row: { id?: string; name: string; doc_prefix: string }){
+    const now = new Date().toISOString();
+    const payload: any = { ...row, updated_at: now };
+    if (!payload.id) payload.id = crypto.randomUUID();
+    return this.ensureClient()
+      .from('rmd_standard_categories')
+      .upsert(payload, { onConflict: 'id' })
+      .select('*')
+      .single();
+  }
+  async deleteRmdCategory(id: string){
+    return this.ensureClient().from('rmd_standard_categories').delete().eq('id', id);
+  }
+
+  // Records CRUD + helpers
+  async listRmdRecords(){
+    const { data } = await this.ensureClient()
+      .from('rmd_records')
+      .select('*')
+      .order('created_at', { ascending: false });
+    return Array.isArray(data) ? data : [];
+  }
+  async isRecordDocNoTaken(doc_no: string){
+    const { data } = await this.ensureClient().from('rmd_records').select('doc_no').eq('doc_no', doc_no).maybeSingle();
+    return !!(data as any)?.doc_no;
+  }
+  async getNextRecordDocNo(docPrefix: string){
+    // Build search prefix: e.g., BF-RMD-GM-FR-
+    const prefix = `${docPrefix}-`;
+    const { data } = await this.ensureClient()
+      .from('rmd_records')
+      .select('doc_no')
+      .ilike('doc_no', `${prefix}%`) as any;
+    const nums = (Array.isArray(data)? data: []).map(r => {
+      const s = String((r as any).doc_no || '');
+      const m = s.match(/^(.*?-FR-)(\d{2})$/);
+      return m ? Number(m[2]) : 0;
+    }).filter(n => Number.isFinite(n));
+    const max = nums.length ? Math.max(...nums) : 0;
+    const next = Math.min(99, max + 1);
+    const seq = String(next).padStart(2, '0');
+    return `${prefix}${seq}`;
+  }
+  async upsertRmdRecord(row: { id: string; title: string; category_id: string; doc_no: string; }){
+    // Duplicate guard on doc_no
+    const taken = await this.isRecordDocNoTaken(row.doc_no);
+    if (taken){
+      throw new Error('이미 사용 중인 기록번호입니다.');
+    }
+    const now = new Date().toISOString();
+    const payload: any = { ...row, updated_at: now };
+    try{ const { data: u } = await this.ensureClient().auth.getUser(); payload.created_by = u.user?.id || null; payload.created_by_name = (u.user as any)?.user_metadata?.name || null; }catch{}
+    return this.ensureClient().from('rmd_records').upsert(payload, { onConflict: 'id' }).select('*').single();
+  }
+  async deleteRmdRecord(id: string){
+    return this.ensureClient().from('rmd_records').delete().eq('id', id);
+  }
+
+  // ===== Departments =====
+  async listDepartments(){
+    const { data } = await this.ensureClient().from('departments').select('*').order('name', { ascending: true });
+    return Array.isArray(data) ? data : [];
+  }
+  async upsertDepartment(row: { id?: string; name: string; code: string }){
+    const payload: any = { ...row, updated_at: new Date().toISOString() };
+    if (!payload.id) payload.id = crypto.randomUUID();
+    return this.ensureClient().from('departments').upsert(payload, { onConflict: 'id' }).select('*').single();
+  }
+  async deleteDepartment(id: string){
+    return this.ensureClient().from('departments').delete().eq('id', id);
+  }
+
+  async countDepartmentUsage(params: { code: string; name: string }){
+    const client = this.ensureClient();
+    let total = 0;
+    try{
+      const { count } = await client
+        .from('record_form_meta')
+        .select('form_id', { count: 'exact', head: true })
+        .eq('department', params.name);
+      total += count || 0;
+    }catch{}
+    try{
+      // departments is string[]
+      const { count } = await client
+        .from('audit_progress')
+        .select('number', { count: 'exact', head: true })
+        .contains('departments', [params.name]);
+      total += count || 0;
+    }catch{}
+    return total;
+  }
 }
+

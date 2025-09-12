@@ -72,12 +72,24 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/organization').then(m => m.OrgRolesComponent),
       },
       {
+        path: 'organization/departments',
+        loadComponent: () => import('./pages/organization/dept-register').then(m => m.DeptRegisterComponent),
+      },
+      {
         path: 'standard/rmd',
         loadComponent: () => import('./standard/rmd/rmd-page.component').then(m => m.RmdPageComponent),
       },
       {
+        path: 'standard/rmd-categories',
+        loadComponent: () => import('./pages/standard/rmd-categories').then(m => m.RmdCategoriesComponent),
+      },
+      {
         path: 'record/rmd-forms',
         loadComponent: () => import('./record/rmd-forms/rmd-forms.component').then(m => m.RmdFormsComponent),
+      },
+      {
+        path: 'record/rmd-register',
+        loadComponent: () => import('./pages/record/rmd-register').then(m => m.RmdRegisterComponent),
       },
       {
         path: 'audit',
