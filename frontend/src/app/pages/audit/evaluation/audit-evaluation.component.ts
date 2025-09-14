@@ -4,7 +4,7 @@ import { TabService } from '../../../services/tab.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../../services/supabase.service';
-import { RMD_FORM_CATEGORIES, RmdFormItem } from '../../../record/rmd-forms/rmd-forms-data';
+import { RmdFormItem } from '../../../record/rmd-forms/rmd-forms-data';
 import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
 import * as XLSX from 'xlsx';
 
@@ -1198,10 +1198,20 @@ export class AuditEvaluationComponent {
 
   openRecordPicker(it: any){
     this.pickerTargetItem = it;
-    // Load records once (static list)
+    // Load once from DB for records + static standards
     if (!(this.recordData && (this.recordData as any).length)){
       try{
-        const recs = RMD_FORM_CATEGORIES.flatMap(c => c.items.map(i => ({ ...i, standardCategory: (i as any).standardCategory || (c as any).category, kind: 'record' as const })));
+        const rows: any[] = await this.supabase.listAllFormMeta();
+        const recs = (rows||[]).map(r => ({
+          id: String((r as any).record_no || '').trim(),
+          title: (r as any).record_name || (r as any).name || '',
+          department: (r as any).department || undefined,
+          method: (r as any).method || undefined,
+          period: (r as any).period || undefined,
+          standard: (r as any).standard || undefined,
+          standardCategory: (r as any).standard_category || '기타',
+          kind: 'record' as const,
+        })).filter(r => !!r.id);
         const stds = RMD_STANDARDS.flatMap(c => c.items.map(i => ({ id: i.id, title: i.title, standardCategory: c.category, kind: 'standard' as const })));
         this.recordData = ([] as any).concat(recs, stds);
       }catch{}
@@ -1291,7 +1301,7 @@ export class AuditEvaluationComponent {
   }
   private buildLinkUrl(l: { id: string; title: string }): string | null {
     try{
-      // Map by pattern: Standard pages served under /rmd/<ID>.html
+      // Records are handled in app; standards are served as static HTML
       if(/^BF-/.test(l.id)){
         return `/rmd/${l.id}.html`;
       }

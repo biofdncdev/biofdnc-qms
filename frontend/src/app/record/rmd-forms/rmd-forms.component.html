@@ -99,10 +99,8 @@
         </ng-container>
         
         <ng-template #genericInfo>
-          <!-- ISO PDF Upload Sections -->
-          <ng-container *ngIf="sel.id === 'ISO-14001' || sel.id === 'ISO-9001' || sel.id === 'ISO-22716'">
-            <ng-container *ngTemplateOutlet="pdfUploadSection; context: { sel: sel }"></ng-container>
-          </ng-container>
+          <!-- File Upload Section (DB-driven records) -->
+          <ng-container *ngTemplateOutlet="pdfUploadSection; context: { sel: sel }"></ng-container>
         </ng-template>
       </div>
     </section>
