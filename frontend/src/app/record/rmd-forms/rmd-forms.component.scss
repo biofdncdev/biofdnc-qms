@@ -1,3 +1,6 @@
+.chip.small{ height:24px; padding:0 8px; font-size:12px; }
+.chip .remove.flat{ border:0; background:transparent; padding:0 4px; }
+.chip.small .remove.flat{ height:24px; display:inline-flex; align-items:center; }
 // Grid layout
 :host .page { 
   display: grid; 

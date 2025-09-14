@@ -201,36 +201,34 @@
     <div class="detail-form" (ngModelChange)="metadataService.persistMeta(sel)">
       <div>
         <label>담당부서</label>
-        <div style="padding:8px; border:1px solid #e5e7eb; border-radius:10px; background:#fff;">
-          <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
-            <span class="chip" *ngFor="let d of (sel.ownerDepartments||[])">
-              {{ d }}
-              <button class="remove" (click)="removeOwnerDeptChip(sel,d)" title="삭제">×</button>
-            </span>
-            <span class="muted" *ngIf="!(sel.ownerDepartments||[]).length">선택 없음</span>
-          </div>
-          <div class="btn-group wrap">
-            <label class="inline" *ngFor="let d of filterService.departments" style="margin-right:10px; margin-bottom:6px; display:inline-flex; align-items:center; gap:6px;">
-              <input type="checkbox" [checked]="(sel.ownerDepartments||[]).includes(d)" (change)="onToggleOwnerDept(sel, d, $any($event.target).checked)" /> {{ d }}
-            </label>
-          </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select [(ngModel)]="ownerDeptToAdd" style="flex:1; height:36px; border:1px solid #e5e7eb; border-radius:8px;">
+            <option [ngValue]="''">팀 선택</option>
+            <option *ngFor="let d of departments" [ngValue]="d.name">{{ d.name }}</option>
+          </select>
+          <button class="action" (click)="ownerDeptToAdd && onToggleOwnerDept(sel, ownerDeptToAdd, true); ownerDeptToAdd=''">추가</button>
+        </div>
+        <div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
+          <span class="chip small" *ngFor="let d of (sel.ownerDepartments||[])">{{ d }}
+            <button class="remove flat" (click)="removeOwnerDeptChip(sel,d)" title="삭제">×</button>
+          </span>
+          <span class="muted" *ngIf="!(sel.ownerDepartments||[]).length">선택 없음</span>
         </div>
       </div>
       <div>
         <label>사용부서</label>
-        <div style="padding:8px; border:1px solid #e5e7eb; border-radius:10px; background:#fff;">
-          <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
-            <span class="chip" *ngFor="let d of (sel.useDepartments||[])">
-              {{ d }}
-              <button class="remove" (click)="removeUseDeptChip(sel,d)" title="삭제">×</button>
-            </span>
-            <span class="muted" *ngIf="!(sel.useDepartments||[]).length">선택 없음</span>
-          </div>
-          <div class="btn-group wrap" style="max-height:140px; overflow:auto;">
-            <label class="inline" *ngFor="let d of filterService.departments" style="margin-right:10px; margin-bottom:6px; display:inline-flex; align-items:center; gap:6px;">
-              <input type="checkbox" [checked]="(sel.useDepartments||[]).includes(d)" (change)="onToggleUseDept(sel, d, $any($event.target).checked)" /> {{ d }}
-            </label>
-          </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select [(ngModel)]="useDeptToAdd" style="flex:1; height:36px; border:1px solid #e5e7eb; border-radius:8px;">
+            <option [ngValue]="''">팀 선택</option>
+            <option *ngFor="let d of departments" [ngValue]="d.name">{{ d.name }}</option>
+          </select>
+          <button class="action" (click)="useDeptToAdd && onToggleUseDept(sel, useDeptToAdd, true); useDeptToAdd=''">추가</button>
+        </div>
+        <div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
+          <span class="chip small" *ngFor="let d of (sel.useDepartments||[])">{{ d }}
+            <button class="remove flat" (click)="removeUseDeptChip(sel,d)" title="삭제">×</button>
+          </span>
+          <span class="muted" *ngIf="!(sel.useDepartments||[]).length">선택 없음</span>
         </div>
       </div>
       <div>

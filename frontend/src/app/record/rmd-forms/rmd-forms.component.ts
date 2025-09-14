@@ -52,6 +52,10 @@ export class RmdFormsComponent {
   linkedAuditItems = signal<AuditLink[]>([]);
   linkedCompanies = signal<string[]>([]);
   linkedStandards = signal<StandardLink[]>([]);
+  // Departments for dropdowns
+  departments: Array<{ id: string; name: string; code: string; company_code?: string|null; company_name?: string|null }> = [];
+  ownerDeptToAdd: string = '';
+  useDeptToAdd: string = '';
   
   // Standard search modal
   showStandardSearchModal = signal(false);
@@ -784,6 +788,9 @@ export class RmdFormsComponent {
   // === Initial data loading ===
   private async loadInitialData() {
     queueMicrotask(async () => {
+      // Load departments for dropdowns
+      try { this.departments = await this.supabase.listDepartments(); } catch { this.departments = []; }
+
       await this.metadataService.loadMetadata(this.categories);
       
       // Load user list for typeahead
