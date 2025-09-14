@@ -59,8 +59,8 @@ export class RmdFormsPdfService {
         return {
           ...pdf,
           originalName: originalName,
-          uploadedBy: info.uploadedBy || '알 수 없음',
-          uploadedAt: info.uploadedAt || new Date().toISOString()
+          uploadedBy: pdf.uploadedBy || info.uploadedBy || '알 수 없음',
+          uploadedAt: pdf.uploadedAt || info.uploadedAt || new Date().toISOString()
         };
       }).reverse(); // 최신 파일이 위에 오도록
       
@@ -423,6 +423,14 @@ export class RmdFormsPdfService {
           originalName: fileName
         };
         this.savePdfUploadInfo(formId, uploadInfo);
+        // Persist to cross-device index immediately
+        try{
+          await this.supabase.updateRecordFileIndexEntry(formId, path, {
+            originalName: fileName,
+            uploadedBy: (user as any)?.email || (user as any)?.id || null,
+            uploadedAt: new Date().toISOString()
+          });
+        }catch{}
       }catch{}
       this.clearPastedImage();
       await this.refreshPdfList(formId);

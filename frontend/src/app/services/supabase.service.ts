@@ -10,6 +10,8 @@ type G = typeof globalThis & { __supabase?: SupabaseClient };
 })
 export class SupabaseService {
   private _client?: SupabaseClient;
+  // Cross-device file metadata index (stored as JSON in storage)
+  private recordIndexBucketId = 'rmd_records';
 
   constructor() {}
 
@@ -773,6 +775,8 @@ export class SupabaseService {
           });
         if (!pdfsError && pdfsData){
           const { data: pub } = client.storage.from('rmd_pdfs').getPublicUrl(pdfsData.path);
+          // Persist cross-device metadata
+          try{ const { data: u } = await client.auth.getUser(); const who = (u as any)?.user?.email || (u as any)?.user?.id || null; await this.updateRecordFileIndexEntry(form_id, pdfsData.path, { originalName: cleanFileName, uploadedBy: who, uploadedAt: new Date().toISOString() }); }catch{}
           return { path: pdfsData.path, publicUrl: pub.publicUrl, bucket: 'rmd_pdfs', originalName: cleanFileName } as any;
         }
         // 실패 시 일반 버킷으로
@@ -785,6 +789,7 @@ export class SupabaseService {
           throw pdfsError || error;
         }
         const { data: pub } = client.storage.from('rmd_records').getPublicUrl(data.path);
+        try{ const { data: u } = await client.auth.getUser(); const who = (u as any)?.user?.email || (u as any)?.user?.id || null; await this.updateRecordFileIndexEntry(form_id, data.path, { originalName: cleanFileName, uploadedBy: who, uploadedAt: new Date().toISOString() }); }catch{}
         return { path: data.path, publicUrl: pub.publicUrl, bucket: 'rmd_records', originalName: cleanFileName } as any;
       } else {
         // 2) 비-PDF는 바로 rmd_records에 저장
@@ -797,6 +802,7 @@ export class SupabaseService {
           throw error;
         }
         const { data: pub } = client.storage.from('rmd_records').getPublicUrl(data.path);
+        try{ const { data: u } = await client.auth.getUser(); const who = (u as any)?.user?.email || (u as any)?.user?.id || null; await this.updateRecordFileIndexEntry(form_id, data.path, { originalName: cleanFileName, uploadedBy: who, uploadedAt: new Date().toISOString() }); }catch{}
         return { path: data.path, publicUrl: pub.publicUrl, bucket: 'rmd_records', originalName: cleanFileName } as any;
       }
       
@@ -813,6 +819,9 @@ export class SupabaseService {
   async listRecordPdfs(form_id: string){
     const client = this.ensureClient();
     const results: any[] = [];
+    // Load cross-device index (best-effort)
+    let index: Record<string, any> = {};
+    try{ index = await this.getRecordFileIndex(form_id); }catch{}
     
     // rmd_pdfs 버킷에서 먼저 시도 (기본 버킷)
     try{
@@ -822,13 +831,14 @@ export class SupabaseService {
         const pdfItems = await Promise.all(items.map(async (o:any)=>{
           const full = `${form_id}/${o.name}`;
           const { data } = client.storage.from('rmd_pdfs').getPublicUrl(full);
-          // 원본 파일명은 localStorage에서 가져와야 함 (파일명이 타임스탬프+랜덤)
           return { 
             name: o.name, 
-            originalName: null, // 컴포넌트에서 localStorage를 통해 설정
+            originalName: index[full]?.originalName || null,
             path: full, 
             url: data.publicUrl, 
-            bucket: 'rmd_pdfs' 
+            bucket: 'rmd_pdfs',
+            uploadedBy: index[full]?.uploadedBy || null,
+            uploadedAt: index[full]?.uploadedAt || null,
           };
         }));
         results.push(...pdfItems);
@@ -845,13 +855,14 @@ export class SupabaseService {
         const pdfItems = await Promise.all(items.map(async (o:any)=>{
           const full = `pdfs/${form_id}/${o.name}`;
           const { data } = client.storage.from('rmd_records').getPublicUrl(full);
-          // 원본 파일명은 localStorage에서 가져와야 함 (파일명이 타임스탬프+랜덤)
           return { 
             name: o.name, 
-            originalName: null, // 컴포넌트에서 localStorage를 통해 설정
+            originalName: index[full]?.originalName || null,
             path: full, 
             url: data.publicUrl, 
-            bucket: 'rmd_records' 
+            bucket: 'rmd_records',
+            uploadedBy: index[full]?.uploadedBy || null,
+            uploadedAt: index[full]?.uploadedAt || null,
           };
         }));
         results.push(...pdfItems);
@@ -882,6 +893,17 @@ export class SupabaseService {
         throw error; // 원래 에러를 throw
       }
     }
+    // Best-effort: remove from cross-device index
+    try{
+      const formId = this.extractFormIdFromPath(path);
+      if (formId){
+        const index = await this.getRecordFileIndex(formId);
+        if (index && index[path]){
+          delete index[path];
+          await this.saveRecordFileIndex(formId, index);
+        }
+      }
+    }catch{}
     return { ok: true } as any;
   }
 
@@ -1272,7 +1294,7 @@ export class SupabaseService {
       '규격':'spec', '기준단위':'standard_unit', '내외자구분':'domestic_foreign_class', '중요도':'importance',
       '관리자':'manager', '제조사':'manufacturer', '자재중분류':'material_middle_class', '영문명':'english_name',
       '출고구분':'shipping_class', '대표자재':'representative_material', 'BOM등록':'is_bom_registered',
-      '제품별공정소요자재':'material_required_for_process_by_product', 'Serial 관리':'is_serial_managed',
+      '제품별공정소요재':'material_required_for_process_by_product', 'Serial 관리':'is_serial_managed',
       '단가등록여부':'is_unit_price_registered', '유통기한구분':'expiration_date_class', '유통기간':'distribution_period',
       '품목설명':'item_description', '기본구매처':'default_supplier', '수탁거래처':'consignment_supplier',
       '부가세구분':'vat_class', '판매단가에 부가세포함여부':'is_vat_included_in_sales_price', '첨부파일':'attachment_file',
@@ -1637,5 +1659,61 @@ export class SupabaseService {
     }catch{}
     return total;
   }
+
+  // ===== Helper methods for cross-device file metadata index =====
+  private buildRecordIndexPath(formId: string){
+    const safe = String(formId).replace(/[^a-zA-Z0-9._-]/g,'-');
+    return `index/${safe}.json`;
+  }
+
+  async getRecordFileIndex(formId: string): Promise<RecordFileIndexMap>{
+    const client = this.ensureClient();
+    const path = this.buildRecordIndexPath(formId);
+    try{
+      const { data, error } = await client.storage.from(this.recordIndexBucketId).download(path);
+      if (error || !data) return {} as RecordFileIndexMap;
+      const text = await (data as any).text();
+      const json = JSON.parse(text || '{}');
+      return (json && typeof json === 'object') ? json as RecordFileIndexMap : {} as RecordFileIndexMap;
+    }catch{
+      return {} as RecordFileIndexMap;
+    }
+  }
+
+  async saveRecordFileIndex(formId: string, index: RecordFileIndexMap): Promise<void>{
+    const client = this.ensureClient();
+    const path = this.buildRecordIndexPath(formId);
+    const blob = new Blob([JSON.stringify(index || {}, null, 0)], { type: 'application/json' });
+    await client.storage.from(this.recordIndexBucketId).upload(path, blob, { upsert: true, cacheControl: '60', contentType: 'application/json' } as any);
+  }
+
+  async updateRecordFileIndexEntry(formId: string, filePath: string, entry: RecordFileIndexEntry): Promise<void>{
+    const index = await this.getRecordFileIndex(formId);
+    const prev = (index as any)[filePath] || {};
+    (index as any)[filePath] = { ...prev, ...entry } as RecordFileIndexEntry;
+    await this.saveRecordFileIndex(formId, index);
+  }
+
+  extractFormIdFromPath(path: string): string | null {
+    // rmd_pdfs: `${formId}/${name}`; rmd_records: `pdfs/${formId}/${name}`
+    const p = String(path || '');
+    if (!p) return null;
+    if (p.startsWith('pdfs/')){
+      const rest = p.substring('pdfs/'.length);
+      const idx = rest.indexOf('/');
+      return idx > 0 ? rest.substring(0, idx) : null;
+    }
+    const idx = p.indexOf('/');
+    return idx > 0 ? p.substring(0, idx) : null;
+  }
 }
+
+// ===== Helper types for cross-device file metadata index =====
+export interface RecordFileIndexEntry {
+  originalName?: string | null;
+  uploadedBy?: string | null;
+  uploadedAt?: string | null;
+}
+
+export interface RecordFileIndexMap { [path: string]: RecordFileIndexEntry }
 
