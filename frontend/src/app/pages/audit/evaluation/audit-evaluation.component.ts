@@ -1196,7 +1196,7 @@ export class AuditEvaluationComponent {
   recordCategories: string[] = ['일반관리기준서','제조위생관리기준서','제조관리기준서','품질관리기준서','ISO'];
   private pickerTargetItem: any = null;
 
-  openRecordPicker(it: any){
+  async openRecordPicker(it: any){
     this.pickerTargetItem = it;
     // Load once from DB for records + static standards
     if (!(this.recordData && (this.recordData as any).length)){

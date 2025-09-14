@@ -74,21 +74,10 @@ export class RmdFormsFilterService {
   private extraItems: RmdFormItem[] = [];
   
   setCategories(categories: RmdFormCategory[]): void {
-<<<<<<< HEAD
-    this.categories = categories;
-    // refresh dynamic department list from global cache if available
-    try{
-      const ds = (window as any).__app_cached_departments || [];
-      if (Array.isArray(ds) && ds.length){
-        this.departments = ds.map((d:any)=> d.name || d.code).filter(Boolean);
-      }
-    }catch{}
-=======
     this.categoriesSig.set(categories || []);
   }
   addExtraItem(item: RmdFormItem){
     this.extraItems = [item, ...this.extraItems];
->>>>>>> eb97d52 (기록 항목 추가 DB 연결 수정)
   }
 
   private getCategories(): RmdFormCategory[] {

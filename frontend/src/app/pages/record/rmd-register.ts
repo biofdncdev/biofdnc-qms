@@ -6,7 +6,7 @@ import { RecordFeaturesTextPipe } from './features/record-features.pipe';
 import { getDefaultRecordFeatures, normalizeRecordFeatures } from './features/record-features.registry';
 import { SupabaseService } from '../../services/supabase.service';
 
-interface Cat { id: string; name: string; doc_prefix: string }
+interface Cat { id: string; name: string; doc_prefix: string; department_code?: string }
 
 @Component({
   selector: 'app-rmd-register',
@@ -121,7 +121,8 @@ export class RmdRegisterComponent {
       const ds = await this.supabase.listDepartments();
       this.depts.set((ds||[]).map((d:any)=>({ code: d.code, name: d.name, company: d.company_code || null })));
     }catch{ this.depts.set([]); }
-    try{ const us = await this.supabase.listActiveStaffManagers(); this.owners.set(us.map((u:any)=>({ id: u.id, name: u.name || u.email, email: u.email }))); }catch{ this.owners.set([]); }
+    // try{ const us = await this.supabase.listActiveStaffManagers(); this.owners.set(us.map((u:any)=>({ id: u.id, name: u.name || u.email, email: u.email }))); }catch{ this.owners.set([]); }
+    this.owners.set([]);
   }
   findCat(id: string){ return this.cats().find(c => c.id === id); }
   onCategoryChange(){
@@ -133,7 +134,12 @@ export class RmdRegisterComponent {
     const cat = this.findCat(this.categoryId); if (!cat) return;
     this.busy.set(true);
     try{
-      const prefix = await this.supabase.getRecordPrefixForCategory(cat);
+      // Build prefix from category data
+      const deptCode = cat.department_code || '';
+      const deptInfo = this.depts().find(d => d.code === deptCode);
+      const companyCode = deptInfo?.company || '';
+      const parts = [companyCode, deptCode, cat.doc_prefix].filter(Boolean);
+      const prefix = parts.join('-') + '-FR';
       const nextNo = await this.supabase.getNextRecordDocNo(prefix);
       this.docNo = nextNo;
       this.dupError.set(false);

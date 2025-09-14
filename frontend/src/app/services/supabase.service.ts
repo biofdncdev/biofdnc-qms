@@ -1569,24 +1569,6 @@ export class SupabaseService {
   // Categories CRUD
   async listRmdCategories(){
     const client = this.ensureClient();
-<<<<<<< HEAD
-    const { data } = await client
-      .from('rmd_standard_categories')
-      .select('*')
-      .order('doc_prefix', { ascending: true });
-    const rows = Array.isArray(data) ? data : [];
-    // Enrich with department/company display info for UI convenience
-    try{
-      const { data: depts } = await client.from('departments').select('code,name,company_code,company_name');
-      const map: Record<string, any> = {};
-      for (const d of (depts as any[])||[]) map[(d as any).code] = d;
-      return rows.map((c:any)=>{
-        const d = c.department_code ? map[c.department_code] : null;
-        return d ? { ...c, department_name: d.name, company_code: d.company_code, company_name: d.company_name } : c;
-      });
-    }catch{
-      return rows;
-=======
     try{
       const { data, error } = await client
         .from('rmd_standard_categories')
@@ -1595,7 +1577,6 @@ export class SupabaseService {
       if (!error && Array.isArray(data)) return data;
       throw error;
     }catch{
-      // Fallback for environments where the table was renamed to standard_categories
       try{
         const { data } = await client
           .from('standard_categories')
@@ -1603,7 +1584,6 @@ export class SupabaseService {
           .order('doc_prefix', { ascending: true });
         return Array.isArray(data) ? data : [];
       }catch{ return [] as any[]; }
->>>>>>> eb97d52 (기록 항목 추가 DB 연결 수정)
     }
   }
   async upsertRmdCategory(row: { id?: string; name: string; doc_prefix: string; department_code?: string | null }){
@@ -1640,46 +1620,6 @@ export class SupabaseService {
       .order('created_at', { ascending: false });
     return Array.isArray(data) ? data : [];
   }
-<<<<<<< HEAD
-  async listActiveStaffManagers(){
-    const client = this.ensureClient();
-    try{
-      const { data } = await client
-        .from('users')
-        .select('id,name,email,role,status')
-        .in('role', ['staff','manager'])
-        .eq('status','active')
-        .order('name',{ ascending: true }) as any;
-      return Array.isArray(data) ? data : [];
-    }catch{ return [] as any[]; }
-  }
-  async isRecordDocNoTaken(doc_no: string){
-    const client = this.ensureClient();
-    // Check current records
-    const { data: r1 } = await client.from('rmd_records').select('doc_no').eq('doc_no', doc_no).maybeSingle();
-    if ((r1 as any)?.doc_no) return true;
-    // Check used numbers registry (includes deleted historical numbers)
-    try{
-      const { data: r2 } = await client.from('rmd_record_numbers').select('doc_no').eq('doc_no', doc_no).maybeSingle();
-      if ((r2 as any)?.doc_no) return true;
-    }catch{}
-    return false;
-  }
-  async getNextRecordDocNo(prefixWithoutSeq: string){
-    // Ensure fixed '-FR' suffix is present and compute search prefix with trailing '-'
-    const base = prefixWithoutSeq.endsWith('-FR') ? prefixWithoutSeq : `${prefixWithoutSeq}-FR`;
-    const searchPrefix = `${base}-`;
-    const client = this.ensureClient();
-    // Collect existing numbers from both current table and historical registry
-    const [cur, hist] = await Promise.all([
-      client.from('rmd_records').select('doc_no').ilike('doc_no', `${searchPrefix}%`) as any,
-      client.from('rmd_record_numbers').select('doc_no').ilike('doc_no', `${searchPrefix}%`) as any,
-    ]);
-    const all = ([] as any[]).concat((cur.data||[]),(hist.data||[]));
-    const nums = all.map(r => {
-      const s = String((r as any).doc_no || '');
-      const m = s.match(/^(.*?-FR-)(\d{2})$/);
-=======
   async isRecordDocNoTaken(doc_no: string){
     const client = this.ensureClient();
     try{
@@ -1689,7 +1629,6 @@ export class SupabaseService {
     return false;
   }
   async getNextRecordDocNo(docPrefix: string){
-    // Build search prefix: e.g., BF-RM-GM-FR-
     const client = this.ensureClient();
     const prefix = `${docPrefix}-`;
     const used: string[] = [];
@@ -1699,93 +1638,29 @@ export class SupabaseService {
     }catch{}
     const nums = used.map(str => {
       const m = String(str || '').match(/^(.*?-FR-)(\d{2})$/);
->>>>>>> eb97d52 (기록 항목 추가 DB 연결 수정)
       return m ? Number(m[2]) : 0;
     }).filter(n => Number.isFinite(n));
     const max = nums.length ? Math.max(...nums) : 0;
     const next = Math.min(99, max + 1);
     const seq = String(next).padStart(2, '0');
-    return `${searchPrefix}${seq}`;
+    return `${prefix}${seq}`;
   }
-<<<<<<< HEAD
-  async getRecordPrefixForCategory(cat: { doc_prefix: string; department_code?: string|null }){
-    const deptCode = (cat as any)?.department_code || null;
-    let company: string | null = null;
-    try{
-      if (deptCode){
-        const { data } = await this.ensureClient().from('departments').select('company_code').eq('code', deptCode).maybeSingle();
-        company = (data as any)?.company_code || null;
-      }
-    }catch{}
-    const parts = [company, deptCode, cat.doc_prefix].filter(Boolean) as string[];
-    return parts.join('-') + '-FR';
-  }
-  async upsertRmdRecord(row: { id: string; title: string; category_id: string; doc_no: string; features?: any }){
-    // Duplicate guard on doc_no
-=======
   async reserveRecordNumber(doc_no: string){ /* no-op in legacy mode */ }
   async upsertRmdRecord(row: { id: string; title: string; category_id: string; doc_no: string; }){
-    // Legacy mode: persist to record_form_meta only
->>>>>>> eb97d52 (기록 항목 추가 DB 연결 수정)
     const taken = await this.isRecordDocNoTaken(row.doc_no);
     if (taken){ throw new Error('이미 사용 중인 기록번호입니다.'); }
     const client = this.ensureClient();
-    // Try by record_no (text, unique) first; fallback to form_id for older schema
     const base: any = { record_no: row.doc_no, record_name: row.title, category_id: row.category_id };
     try{ const { data: u } = await client.auth.getUser(); base.updated_by = u.user?.id || null; }catch{}
-    // Attempt 1: onConflict record_no
     try{
       const res: any = await client.from('record_form_meta').upsert(base, { onConflict: 'record_no' }).select('*').maybeSingle();
       if (res?.error) throw res.error;
       return res;
-    }catch(e){
-      // Attempt 2: some schemas still use form_id; try that
+    }catch{
       const payload2: any = { ...base, form_id: row.doc_no };
       const res2: any = await client.from('record_form_meta').upsert(payload2, { onConflict: 'form_id' }).select('*').maybeSingle();
-      if (res2?.error) throw res2.error;
       return res2;
     }
-<<<<<<< HEAD
-    const now = new Date().toISOString();
-    const payload: any = { ...row, updated_at: now };
-    try{ const { data: u } = await this.ensureClient().auth.getUser(); payload.created_by = u.user?.id || null; payload.created_by_name = (u.user as any)?.user_metadata?.name || null; }catch{}
-    const client = this.ensureClient();
-    // Try with all fields first
-    try{
-      const res = await client.from('rmd_records').upsert(payload, { onConflict: 'id' }).select('*').single();
-      if ((res as any)?.error) { throw (res as any).error; }
-      try{ await client.from('rmd_record_numbers').upsert({ doc_no: row.doc_no, first_used_at: now }, { onConflict: 'doc_no' }); }catch{}
-      return res;
-    } catch (e: any) {
-      const msg = String(e?.message || e || '');
-      // Fallback: if 'departments' column is missing on current DB, retry without it so save still succeeds
-      if (msg.includes('rmd_records') && msg.includes('departments')){
-        const { departments: _omit, ...withoutDepts } = payload;
-        const res2 = await client.from('rmd_records').upsert(withoutDepts as any, { onConflict: 'id' }).select('*').single();
-        if ((res2 as any)?.error) { throw (res2 as any).error; }
-        try{ await client.from('rmd_record_numbers').upsert({ doc_no: row.doc_no, first_used_at: now }, { onConflict: 'doc_no' }); }catch{}
-        return res2;
-      }
-      // Fallback: if owner_departments column missing
-      if (msg.includes('rmd_records') && msg.includes('owner_departments')){
-        const { owner_departments: _omit2, ...rest } = payload as any;
-        const res3 = await client.from('rmd_records').upsert(rest, { onConflict: 'id' }).select('*').single();
-        if ((res3 as any)?.error) { throw (res3 as any).error; }
-        try{ await client.from('rmd_record_numbers').upsert({ doc_no: row.doc_no, first_used_at: now }, { onConflict: 'doc_no' }); }catch{}
-        return res3;
-      }
-      // Fallback: if owners column missing
-      if (msg.includes('rmd_records') && msg.includes('owners')){
-        const { owners: _omit3, ...rest2 } = payload as any;
-        const res4 = await client.from('rmd_records').upsert(rest2, { onConflict: 'id' }).select('*').single();
-        if ((res4 as any)?.error) { throw (res4 as any).error; }
-        try{ await client.from('rmd_record_numbers').upsert({ doc_no: row.doc_no, first_used_at: now }, { onConflict: 'doc_no' }); }catch{}
-        return res4;
-      }
-      throw e;
-    }
-=======
->>>>>>> eb97d52 (기록 항목 추가 DB 연결 수정)
   }
   async deleteRmdRecord(id: string){
     return this.ensureClient().from('rmd_records').delete().eq('id', id);
