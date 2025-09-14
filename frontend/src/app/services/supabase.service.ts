@@ -961,6 +961,16 @@ export class SupabaseService {
       throw e;
     }
   }
+
+  // Explicit update by record_no. Use this for edits to avoid accidental insert.
+  async updateFormMetaByRecordNo(prevRecordNo: string, changes: { record_no?: string; record_name?: string; department?: string | null; owner?: string | null; method?: string | null; period?: string | null; standard?: string | null; standard_category?: string | null; certs?: string[] | null; features?: any; use_departments?: string[] | null; }){
+    const client = this.ensureClient();
+    const payload: any = { ...changes };
+    try{ const { data: u } = await client.auth.getUser(); payload.updated_by = u.user?.id || null; }catch{}
+    // Perform a targeted update; update can also change record_no (unique)
+    const res = await client.from('record_form_meta').update(payload).eq('record_no', prevRecordNo).select('*').maybeSingle();
+    return res;
+  }
   async deleteFormMeta(recordNo: string) {
     const client = this.ensureClient();
     const { data, error } = await client

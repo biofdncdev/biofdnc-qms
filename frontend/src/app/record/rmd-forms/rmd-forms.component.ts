@@ -123,18 +123,23 @@ export class RmdFormsComponent {
 
   // Edit modal handlers
   openEditModal(sel: any){
+    // Ensure categories are loaded for the dropdown
+    if (!this.allCategoriesForCreate?.length) { try{ this.loadCatsForCreate(); }catch{} }
+    // Map existing category name to its ID for the select
+    const catId = (this.allCategoriesForCreate||[])
+      .find((c:any) => (c?.name||'') === (sel?.standardCategory||''))?.id || null;
     this.edit = {
       id: sel.id,
       title: sel.title || sel.id,
       docNo: sel.id,
-      category: sel.standardCategory || null,
+      category: catId,
     };
     this.editOpen.set(true);
   }
   closeEditModal(){ this.editOpen.set(false); }
   async autoNumberEdit(){
     try{
-      const cat = (this.allCategoriesForCreate||[]).find((c:any)=> c.category === this.edit.category);
+      const cat = (this.allCategoriesForCreate||[]).find((c:any)=> c.id === this.edit.category);
       if (!cat) return;
       const d = (await this.supabase.listDepartments()).find((x:any)=> (x?.code||'') === (cat as any)?.department_code);
       const company = (d?.company_code || '').trim();
@@ -147,17 +152,25 @@ export class RmdFormsComponent {
   async applyEdit(){
     const sel = this.selected();
     if (!sel) return;
-    // Update local item
-    sel.title = this.edit.title || sel.title;
-    // Map chosen category id to its display name (same as create flow)
+    const prevRecordNo = sel.id;
+    // Prepare change set for DB update
+    const update: any = {};
+    if (this.edit.title && this.edit.title !== sel.title) {
+      update.record_name = this.edit.title;
+      sel.title = this.edit.title;
+    }
     if (this.edit.category){
       const cat = (this.allCategoriesForCreate||[]).find((c:any)=> c.id === this.edit.category);
-      if (cat) sel.standardCategory = cat.name;
+      if (cat) { update.standard_category = cat.name; sel.standardCategory = cat.name; }
     }
     if (this.edit.docNo && this.edit.docNo !== sel.id){
+      update.record_no = this.edit.docNo; // request doc number change
       sel.id = this.edit.docNo;
     }
-    await this.metadataService.saveMeta(sel);
+    // Persist changes directly without creating a new row
+    try{ await (this.supabase as any).updateFormMetaByRecordNo(prevRecordNo, update); }catch{}
+    // Keep other meta values untouched but ensure local state is saved
+    await this.metadataService.persistMeta(sel);
     this.closeEditModal();
     // Refresh list
     await this.reloadMeta();

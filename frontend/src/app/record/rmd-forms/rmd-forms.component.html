@@ -36,7 +36,7 @@
           <option *ngFor="let c of categoriesNoISO" [value]="c">{{ c }}</option>
         </select>
 
-        <label class="f-title" style="margin-top:8px;">인증 체계로 검색</label>
+        <label class="f-title" style="margin-top:8px;">수저ㅇ으로로 검색</label>
         <select [ngModel]="filterService.cert()" (ngModelChange)="filterService.setCert($event)">
           <option value="">전체</option>
           <option value="ISO9001">ISO9001</option>
