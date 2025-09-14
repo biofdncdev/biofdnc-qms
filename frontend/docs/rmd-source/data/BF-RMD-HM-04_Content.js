@@ -34,7 +34,7 @@ function BF_RMD_HM_04_Content() {
     <Box sx={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <Box>{/* 작업원 건강관리 규정*/}
-          <Typography>문서번호: BF-RMD-HM-04</Typography>
+          <Typography>문서번호: BF-RM-HM-04</Typography>
           
         </Box>
         <Box>

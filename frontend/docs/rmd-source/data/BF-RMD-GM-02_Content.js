@@ -35,7 +35,7 @@ function BF_RMD_GM_02_Content() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <Box>
           {/* 업무분장 규정*/}
-          <Typography>문서번호: BF-RMD-GM-02</Typography>
+          <Typography>문서번호: BF-RM-GM-02</Typography>
                   </Box>
         <Box>
           <Typography>개정번호: 00</Typography>

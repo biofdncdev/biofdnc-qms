@@ -65,7 +65,7 @@ export class RmdFormsThRecordService {
     this.periodStartSig.set(this.computePeriodStart(v));
     if (pdfCanvas && drawCanvas && container) {
       await this.renderPdf(pdfCanvas, drawCanvas, container);
-      await this.loadRecord('BF-RMD-PM-IR-07');
+      await this.loadRecord('BF-RM-PM-IR-07');
     }
   }
 
@@ -83,7 +83,7 @@ export class RmdFormsThRecordService {
     this.periodStartSig.set(this.computePeriodStart(this.dateValue()));
     if (pdfCanvas && drawCanvas && container) {
       this.renderPdf(pdfCanvas, drawCanvas, container);
-      this.loadRecord('BF-RMD-PM-IR-07');
+      this.loadRecord('BF-RM-PM-IR-07');
     }
   }
 

@@ -18,13 +18,13 @@ export interface RmdFormItem {
 }
 export interface RmdFormCategory { category: string; items: RmdFormItem[]; }
 
-// 코드 규칙: BF-RMD-{GM|HM|PM|QC}-IR-{NN}
+// 코드 규칙: BF-RM-{GM|HM|PM|QC}-IR-{NN}
 // IR = Instruction & Record(지시·기록서)
 export const RMD_FORM_CATEGORIES: RmdFormCategory[] = [
   {
     category: '제조관리기준서',
     items: [
-      { id: 'BF-RMD-PM-IR-07', title: '온습도관리 지시·기록서', department:'원료제조팀', standardCategory:'제조관리기준서' },
+      { id: 'BF-RM-PM-IR-07', title: '온습도관리 지시·기록서', department:'원료제조팀', standardCategory:'제조관리기준서' },
     ],
   },
   {

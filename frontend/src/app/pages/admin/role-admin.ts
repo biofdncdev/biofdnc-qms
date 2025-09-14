@@ -17,7 +17,7 @@ import { MatDialogModule } from '@angular/material/dialog';
 export class RoleAdminComponent implements OnInit {
   displayedColumns = ['name','email','created_at','updated_at','last_sign_in_at','status','role','actions'];
   rows: any[] = [];
-  roles = ['admin','manager','staff','viewer'];
+  roles = ['admin','manager','staff','givaudan_audit','viewer'];
   statuses: Array<'active' | 'inactive'> = ['active','inactive'];
   loading = false;
   pending: Record<string, string> = {};
@@ -43,7 +43,20 @@ export class RoleAdminComponent implements OnInit {
   }
 
   markRole(row: any, role: string) {
+    // Store the role directly - it's already in the correct format
     this.pending[row.id] = role;
+  }
+
+  getRoleDisplay(role: string): string {
+    // Display user-friendly names
+    const displayMap: Record<string, string> = {
+      'admin': 'admin',
+      'manager': 'manager', 
+      'staff': 'staff',
+      'givaudan_audit': 'GIVAUDAN Audit',
+      'viewer': 'viewer'
+    };
+    return displayMap[role] || role;
   }
 
   markName(row: any, name: string){

@@ -9,7 +9,7 @@ export class RmdFormsMetadataService {
   isSavingMeta = signal<boolean>(false);
   isDeletingMeta = signal<boolean>(false);
   metaJustSaved = signal<boolean>(false);
-  infoOpen = signal<boolean>(true);
+  infoOpen = signal<boolean>(false);
   private featuresDirty = false;
 
   constructor(private supabase: SupabaseService) {}

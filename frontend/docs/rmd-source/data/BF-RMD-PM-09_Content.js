@@ -34,7 +34,7 @@ function BF_RMD_PM_09_Content() {
     <Box sx={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <Box>{/*제품 관리 규정*/}
-          <Typography>문서번호: BF-RMD-PM-09</Typography>
+          <Typography>문서번호: BF-RM-PM-09</Typography>
           
         </Box>
         <Box>

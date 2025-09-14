@@ -34,7 +34,7 @@ function BF_RMD_QC_09_Content() {
     <Box sx={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <Box>{/* 표준품관리규정*/}
-          <Typography>문서번호: BF-RMD-QC-09</Typography>
+          <Typography>문서번호: BF-RM-QC-09</Typography>
           
         </Box>
         <Box>

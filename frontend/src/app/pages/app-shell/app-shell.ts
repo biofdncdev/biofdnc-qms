@@ -52,6 +52,7 @@ export class AppShellComponent {
   isManager = false;
   isStaff = false;
   isViewer = false;
+  isGivaudanAudit = false;
   unread = signal<number>(0);
   private notifSubscription: any;
 
@@ -64,6 +65,7 @@ export class AppShellComponent {
         this.isManager = data?.role === 'manager';
         this.isStaff = data?.role === 'staff';
         this.isViewer = data?.role === 'viewer';
+        this.isGivaudanAudit = data?.role === 'givaudan_audit';
       }
       this.buildMenus();
       // Load notifications for staff and above (admin/manager/staff)
@@ -94,23 +96,26 @@ export class AppShellComponent {
 
     if (!this.isViewer) {
       this.menus.push(
-        { key: 'ingredient', icon: 'category', label: 'Ingredient', submenu: [ { label: '성분조회', path: '/app/ingredient' }, { label: '성분등록', path: '/app/ingredient/form' } ] },
-        { key: 'product', icon: 'inventory', label: 'Product', submenu: [ { label: '품목조회', path: '/app/product' }, { label: '품목등록', path: '/app/product/form' }, { label: '품목정보 업데이트', path: '/app/product/update' }, { label: 'BOM TREE', path: '/app/product/bom-tree' }, { label: '기본서류', path: '/app/product/docs' }, { label: '서류양식', path: '/app/product/doc-templates' } ] },
-        { key: 'material', icon: 'eco', label: 'Material', submenu: [
-          { label: '자재조회', path: '/app/material' },
-          { label: '자재등록', path: '/app/material/form' },
-          { label: '자재정보 업데이트', path: '/app/material/update' }
-        ] },
-        {
-          key: 'organization', icon: 'groups', label: 'Organization',
-          submenu: [
-            { label: '조직도', path: '/app/organization/chart' },
-            { label: '조직도2', path: '/app/organization/chart2' },
-            { label: '업무분장 · 원료제조', path: '/app/organization/roles?dept=rm' },
-            { label: '업무분장 · 품질보증', path: '/app/organization/roles?dept=qa' },
-            ...(this.isAdmin ? [{ label: '회사ㆍ부서 코드 등록', path: '/app/organization/departments' }] : []),
-          ]
-        },
+        // Hide these sections for GIVAUDAN Audit role
+        ...(!this.isGivaudanAudit ? [
+          { key: 'ingredient', icon: 'category', label: 'Ingredient', submenu: [ { label: '성분조회', path: '/app/ingredient' }, { label: '성분등록', path: '/app/ingredient/form' } ] },
+          { key: 'product', icon: 'inventory', label: 'Product', submenu: [ { label: '품목조회', path: '/app/product' }, { label: '품목등록', path: '/app/product/form' }, { label: '품목정보 업데이트', path: '/app/product/update' }, { label: 'BOM TREE', path: '/app/product/bom-tree' }, { label: '기본서류', path: '/app/product/docs' }, { label: '서류양식', path: '/app/product/doc-templates' } ] },
+          { key: 'material', icon: 'eco', label: 'Material', submenu: [
+            { label: '자재조회', path: '/app/material' },
+            { label: '자재등록', path: '/app/material/form' },
+            { label: '자재정보 업데이트', path: '/app/material/update' }
+          ] },
+          {
+            key: 'organization', icon: 'groups', label: 'Organization',
+            submenu: [
+              { label: '조직도', path: '/app/organization/chart' },
+              { label: '조직도2', path: '/app/organization/chart2' },
+              { label: '업무분장 · 원료제조', path: '/app/organization/roles?dept=rm' },
+              { label: '업무분장 · 품질보증', path: '/app/organization/roles?dept=qa' },
+              ...(this.isAdmin ? [{ label: '회사ㆍ부서 코드 등록', path: '/app/organization/departments' }] : []),
+            ]
+          },
+        ] : []),
         {
           key: 'standard', icon: 'gavel', label: 'Standard',
           submenu: [
@@ -140,19 +145,11 @@ export class AppShellComponent {
   }
 
   private buildRecordSubmenu(){
+    // Only two fixed submenu items
     const base: Array<{ label: string; path: string }> = [];
-    try{
-      const depts: any[] = (window as any).__app_cached_departments || [];
-      if (depts.length){
-        for (const d of depts){
-          const name = (d as any)?.name || (d as any)?.code || '기록';
-          base.push({ label: `${name} 기록`, path: `/app/record/rmd-forms?dept=${encodeURIComponent((d as any)?.code || '')}` });
-        }
-      }
-    }catch{}
-    if (!base.length){
-      base.push({ label: '기록 관리', path: '/app/record/rmd-forms' });
-    }
+    base.push({ label: '전체 기록', path: '/app/record/rmd-forms' });
+    // 원료제조팀 기록: useDepartments에 원료제조팀 포함 필터 파라미터 사용
+    base.push({ label: '원료제조팀 기록', path: '/app/record/rmd-forms?dept=RM' });
     return base;
   }
 

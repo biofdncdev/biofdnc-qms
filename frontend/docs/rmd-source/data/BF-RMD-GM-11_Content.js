@@ -34,7 +34,7 @@ function BF_RMD_GM_11_Content() {
     <Box sx={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <Box>{/* 회수반품처리규정*/}
-          <Typography>문서번호: BF-RMD-GM-11</Typography>
+          <Typography>문서번호: BF-RM-GM-11</Typography>
           
         </Box>
         <Box>

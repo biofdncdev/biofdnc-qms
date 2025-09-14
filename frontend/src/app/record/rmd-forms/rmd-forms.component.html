@@ -94,7 +94,7 @@
         <ng-container *ngTemplateOutlet="metadataSection; context: { sel: sel }"></ng-container>
         
         <!-- Content Based on Selection -->
-        <ng-container *ngIf="sel.id==='BF-RMD-PM-IR-07'; else genericInfo">
+        <ng-container *ngIf="sel.id==='BF-RM-PM-IR-07'; else genericInfo">
           <ng-container *ngTemplateOutlet="thRecordSection; context: { sel: sel }"></ng-container>
         </ng-container>
         

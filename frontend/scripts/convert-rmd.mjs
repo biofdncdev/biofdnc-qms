@@ -118,7 +118,7 @@ function convertFile(srcPath){
 }
 
 function outName(file){
-  // e.g. BF-RMD-GM-01_Content.js -> BF-RMD-GM-01.html
+  // e.g. BF-RM-GM-01_Content.js -> BF-RM-GM-01.html
   const base = path.basename(file).replace('_Content.js', '').replace('.js','');
   return `${base}.html`;
 }

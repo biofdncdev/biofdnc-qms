@@ -34,7 +34,7 @@ function BF_RMD_QC_01_Content() {
     <Box sx={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <Box>{/* 검체의 채취 및 보관 규정*/}
-          <Typography>문서번호: BF-RMD-QC-01</Typography>
+          <Typography>문서번호: BF-RM-QC-01</Typography>
           
         </Box>
         <Box>

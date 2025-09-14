@@ -34,7 +34,7 @@ function BF_RMD_HM_08_Content() {
     <Box sx={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <Box>{/* 작업장 청소 및 소독관리 규정*/}
-          <Typography>문서번호: BF-RMD-HM-08</Typography>
+          <Typography>문서번호: BF-RM-HM-08</Typography>
           
         </Box>
         <Box>

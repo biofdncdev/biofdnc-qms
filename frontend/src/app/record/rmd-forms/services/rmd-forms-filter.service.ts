@@ -22,7 +22,7 @@ export class RmdFormsFilterService {
 
   filtered = computed(() => {
     const q = this.query().trim().toLowerCase();
-    // Optional route param 'dept' to filter by using department
+    // Optional route param 'dept' from submenu
     try{
       const params = new URLSearchParams(location.search);
       const d = params.get('dept');
@@ -33,7 +33,20 @@ export class RmdFormsFilterService {
       ...cat,
       items: cat.items.filter(i => {
         const byKeyword = !q || i.id.toLowerCase().includes(q) || i.title.toLowerCase().includes(q);
-        const byDept = !this.dept() || ((i as any).department || '원료제조팀') === this.dept();
+        // dept param semantics:
+        //  - if 'all' or empty → no filter
+        //  - if 'RM' → include when useDepartments array contains '원료제조팀'
+        //  - otherwise treat as legacy department equals filter
+        let byDept = true;
+        const depParam = this.dept();
+        if (depParam && depParam !== 'all'){
+          const itemUse = (i as any).useDepartments || [];
+          if (depParam === 'RM'){
+            byDept = Array.isArray(itemUse) ? itemUse.includes('원료제조팀') : false;
+          } else {
+            byDept = ((i as any).department || '원료제조팀') === depParam;
+          }
+        }
         const byOwner = !this.ownerFilter() || ((i as any).owner || '').toLowerCase().includes(this.ownerFilter().toLowerCase());
         const byMethod = !this.method() || (i as any).method === this.method();
         const byPeriod = !this.period() || this.normalizePeriod((i as any).period) === this.normalizePeriod(this.period());

@@ -34,7 +34,7 @@ function BF_RMD_HM_02_Content() {
     <Box sx={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <Box>{/* 위생복 착용 규정*/}
-          <Typography>문서번호: BF-RMD-HM-02</Typography>
+          <Typography>문서번호: BF-RM-HM-02</Typography>
           
         </Box>
         <Box>

@@ -112,7 +112,7 @@ export class RmdFormsComponent {
       for (const cat of RMD_STANDARDS){
         const example = cat.items?.[0]?.id || '';
         const parts = example.split('-');
-        // Expect like BF-RMD-GM-01 -> company(BF), dept(RMD), catCode(GM)
+        // Expect like BF-RM-GM-01 -> company(BF), dept(RMD), catCode(GM)
         const codeLabel = parts.length >= 3 ? `${parts[0]}-${parts[1]}-${parts[2]}` : '';
         options.push({ value: cat.category, label: `${codeLabel} ${cat.category}`.trim() });
       }
@@ -234,7 +234,8 @@ export class RmdFormsComponent {
         record_no: docNo, 
         record_name: title, 
         standard_category: catName, 
-        department: '원료제조팀' 
+        department: '원료제조팀',
+        features: { uploadFiles: true },
       });
       if (!res || res.error){
         throw new Error(res?.error?.message || '저장 실패');
@@ -268,7 +269,7 @@ export class RmdFormsComponent {
     queueMicrotask(async () => {
       await this.thService.checkAdmin();
       this.thService.periodStartSig.set(this.thService.computePeriodStart(this.thService.dateValue()));
-      if (this.selected()?.id === 'BF-RMD-PM-IR-07') {
+      if (this.selected()?.id === 'BF-RM-PM-IR-07') {
         await this.renderPdf();
         await this.loadRecord();
       }
@@ -415,7 +416,7 @@ export class RmdFormsComponent {
     await this.pdfService.refreshPdfList(it.id);
     this.updateLinkedForSelected();
     
-    if (it.id === 'BF-RMD-PM-IR-07') {
+    if (it.id === 'BF-RM-PM-IR-07') {
       try {
         const today = new Date().toISOString().slice(0, 10);
         setTimeout(async () => {

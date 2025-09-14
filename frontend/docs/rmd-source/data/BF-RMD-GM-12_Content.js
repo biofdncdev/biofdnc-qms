@@ -34,7 +34,7 @@ function BF_RMD_GM_12_Content() {
     <Box sx={{ padding: '20px', backgroundColor: '#fff', borderRadius: '8px' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <Box>
-          <Typography>문서번호: BF-RMD-GM-12</Typography>
+          <Typography>문서번호: BF-RM-GM-12</Typography>
         </Box>
         <Box>
           <Typography>개정번호: 00</Typography>

@@ -35,7 +35,7 @@ function BF_RMD_GM_01_Content() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <Box>
           {/* 업무매뉴얼 */}
-          <Typography>문서번호: BF-RMD-GM-01</Typography>
+          <Typography>문서번호: BF-RM-GM-01</Typography>
           
         </Box>
         <Box>
