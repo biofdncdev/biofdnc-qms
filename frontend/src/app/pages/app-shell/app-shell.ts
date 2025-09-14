@@ -121,7 +121,7 @@ export class AppShellComponent {
         {
           key: 'record', icon: 'description', label: 'Record', submenu: [
             { label: '원료제조팀 기록', path: '/app/record/rmd-forms' },
-            { label: '원료제조팀 기록 등록', path: '/app/record/rmd-register' }
+            { label: '기록 등록', path: '/app/record/rmd-register' }
           ]
         },
         {

@@ -1561,11 +1561,24 @@ export class SupabaseService {
   // ===== RMD Standard Categories & Records =====
   // Categories CRUD
   async listRmdCategories(){
-    const { data } = await this.ensureClient()
+    const client = this.ensureClient();
+    const { data } = await client
       .from('rmd_standard_categories')
       .select('*')
       .order('doc_prefix', { ascending: true });
-    return Array.isArray(data) ? data : [];
+    const rows = Array.isArray(data) ? data : [];
+    // Enrich with department/company display info for UI convenience
+    try{
+      const { data: depts } = await client.from('departments').select('code,name,company_code,company_name');
+      const map: Record<string, any> = {};
+      for (const d of (depts as any[])||[]) map[(d as any).code] = d;
+      return rows.map((c:any)=>{
+        const d = c.department_code ? map[c.department_code] : null;
+        return d ? { ...c, department_name: d.name, company_code: d.company_code, company_name: d.company_name } : c;
+      });
+    }catch{
+      return rows;
+    }
   }
   async upsertRmdCategory(row: { id?: string; name: string; doc_prefix: string; department_code?: string | null }){
     const now = new Date().toISOString();
@@ -1590,17 +1603,29 @@ export class SupabaseService {
     return Array.isArray(data) ? data : [];
   }
   async isRecordDocNoTaken(doc_no: string){
-    const { data } = await this.ensureClient().from('rmd_records').select('doc_no').eq('doc_no', doc_no).maybeSingle();
-    return !!(data as any)?.doc_no;
+    const client = this.ensureClient();
+    // Check current records
+    const { data: r1 } = await client.from('rmd_records').select('doc_no').eq('doc_no', doc_no).maybeSingle();
+    if ((r1 as any)?.doc_no) return true;
+    // Check used numbers registry (includes deleted historical numbers)
+    try{
+      const { data: r2 } = await client.from('rmd_record_numbers').select('doc_no').eq('doc_no', doc_no).maybeSingle();
+      if ((r2 as any)?.doc_no) return true;
+    }catch{}
+    return false;
   }
-  async getNextRecordDocNo(docPrefix: string){
-    // Build search prefix: e.g., BF-RMD-GM-FR-
-    const prefix = `${docPrefix}-`;
-    const { data } = await this.ensureClient()
-      .from('rmd_records')
-      .select('doc_no')
-      .ilike('doc_no', `${prefix}%`) as any;
-    const nums = (Array.isArray(data)? data: []).map(r => {
+  async getNextRecordDocNo(prefixWithoutSeq: string){
+    // Ensure fixed '-FR' suffix is present and compute search prefix with trailing '-'
+    const base = prefixWithoutSeq.endsWith('-FR') ? prefixWithoutSeq : `${prefixWithoutSeq}-FR`;
+    const searchPrefix = `${base}-`;
+    const client = this.ensureClient();
+    // Collect existing numbers from both current table and historical registry
+    const [cur, hist] = await Promise.all([
+      client.from('rmd_records').select('doc_no').ilike('doc_no', `${searchPrefix}%`) as any,
+      client.from('rmd_record_numbers').select('doc_no').ilike('doc_no', `${searchPrefix}%`) as any,
+    ]);
+    const all = ([] as any[]).concat((cur.data||[]),(hist.data||[]));
+    const nums = all.map(r => {
       const s = String((r as any).doc_no || '');
       const m = s.match(/^(.*?-FR-)(\d{2})$/);
       return m ? Number(m[2]) : 0;
@@ -1608,9 +1633,21 @@ export class SupabaseService {
     const max = nums.length ? Math.max(...nums) : 0;
     const next = Math.min(99, max + 1);
     const seq = String(next).padStart(2, '0');
-    return `${prefix}${seq}`;
+    return `${searchPrefix}${seq}`;
   }
-  async upsertRmdRecord(row: { id: string; title: string; category_id: string; doc_no: string; }){
+  async getRecordPrefixForCategory(cat: { doc_prefix: string; department_code?: string|null }){
+    const deptCode = (cat as any)?.department_code || null;
+    let company: string | null = null;
+    try{
+      if (deptCode){
+        const { data } = await this.ensureClient().from('departments').select('company_code').eq('code', deptCode).maybeSingle();
+        company = (data as any)?.company_code || null;
+      }
+    }catch{}
+    const parts = [company, deptCode, cat.doc_prefix].filter(Boolean) as string[];
+    return parts.join('-') + '-FR';
+  }
+  async upsertRmdRecord(row: { id: string; title: string; category_id: string; doc_no: string; features?: any }){
     // Duplicate guard on doc_no
     const taken = await this.isRecordDocNoTaken(row.doc_no);
     if (taken){
@@ -1619,7 +1656,11 @@ export class SupabaseService {
     const now = new Date().toISOString();
     const payload: any = { ...row, updated_at: now };
     try{ const { data: u } = await this.ensureClient().auth.getUser(); payload.created_by = u.user?.id || null; payload.created_by_name = (u.user as any)?.user_metadata?.name || null; }catch{}
-    return this.ensureClient().from('rmd_records').upsert(payload, { onConflict: 'id' }).select('*').single();
+    const client = this.ensureClient();
+    const res = await client.from('rmd_records').upsert(payload, { onConflict: 'id' }).select('*').single();
+    // Record doc_no into historical registry to prevent future reuse
+    try{ await client.from('rmd_record_numbers').upsert({ doc_no: row.doc_no, first_used_at: now }, { onConflict: 'doc_no' }); }catch{}
+    return res;
   }
   async deleteRmdRecord(id: string){
     return this.ensureClient().from('rmd_records').delete().eq('id', id);
