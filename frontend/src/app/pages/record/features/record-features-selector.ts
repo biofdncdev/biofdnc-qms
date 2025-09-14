@@ -8,13 +8,10 @@ import { RECORD_FEATURE_DEFS, RecordFeatures, normalizeRecordFeatures } from './
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-  <div style="display:flex; flex-direction:column; gap:6px;">
-    <label>이 기록에 포함될 기능</label>
-    <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center;">
-      <label *ngFor="let def of defs" style="display:flex; gap:6px; align-items:center;">
-        <input type="checkbox" [(ngModel)]="features[def.key]" /> {{ def.label }}
-      </label>
-    </div>
+  <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center;">
+    <label *ngFor="let def of defs" style="display:flex; gap:6px; align-items:center; font-size:13px; color:#475569;">
+      <input type="checkbox" [(ngModel)]="features[def.key]" /> {{ def.label }}
+    </label>
   </div>
   `,
 })

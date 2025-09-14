@@ -88,7 +88,7 @@ export const routes: Routes = [
         loadComponent: () => import('./record/rmd-forms/rmd-forms.component').then(m => m.RmdFormsComponent),
       },
       {
-        path: 'record/rmd-register',
+        path: 'record/register',
         loadComponent: () => import('./pages/record/rmd-register').then(m => m.RmdRegisterComponent),
       },
       {

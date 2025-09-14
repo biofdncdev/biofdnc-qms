@@ -1602,6 +1602,18 @@ export class SupabaseService {
       .order('created_at', { ascending: false });
     return Array.isArray(data) ? data : [];
   }
+  async listActiveStaffManagers(){
+    const client = this.ensureClient();
+    try{
+      const { data } = await client
+        .from('users')
+        .select('id,name,email,role,status')
+        .in('role', ['staff','manager'])
+        .eq('status','active')
+        .order('name',{ ascending: true }) as any;
+      return Array.isArray(data) ? data : [];
+    }catch{ return [] as any[]; }
+  }
   async isRecordDocNoTaken(doc_no: string){
     const client = this.ensureClient();
     // Check current records
@@ -1657,10 +1669,40 @@ export class SupabaseService {
     const payload: any = { ...row, updated_at: now };
     try{ const { data: u } = await this.ensureClient().auth.getUser(); payload.created_by = u.user?.id || null; payload.created_by_name = (u.user as any)?.user_metadata?.name || null; }catch{}
     const client = this.ensureClient();
-    const res = await client.from('rmd_records').upsert(payload, { onConflict: 'id' }).select('*').single();
-    // Record doc_no into historical registry to prevent future reuse
-    try{ await client.from('rmd_record_numbers').upsert({ doc_no: row.doc_no, first_used_at: now }, { onConflict: 'doc_no' }); }catch{}
-    return res;
+    // Try with all fields first
+    try{
+      const res = await client.from('rmd_records').upsert(payload, { onConflict: 'id' }).select('*').single();
+      if ((res as any)?.error) { throw (res as any).error; }
+      try{ await client.from('rmd_record_numbers').upsert({ doc_no: row.doc_no, first_used_at: now }, { onConflict: 'doc_no' }); }catch{}
+      return res;
+    } catch (e: any) {
+      const msg = String(e?.message || e || '');
+      // Fallback: if 'departments' column is missing on current DB, retry without it so save still succeeds
+      if (msg.includes('rmd_records') && msg.includes('departments')){
+        const { departments: _omit, ...withoutDepts } = payload;
+        const res2 = await client.from('rmd_records').upsert(withoutDepts as any, { onConflict: 'id' }).select('*').single();
+        if ((res2 as any)?.error) { throw (res2 as any).error; }
+        try{ await client.from('rmd_record_numbers').upsert({ doc_no: row.doc_no, first_used_at: now }, { onConflict: 'doc_no' }); }catch{}
+        return res2;
+      }
+      // Fallback: if owner_departments column missing
+      if (msg.includes('rmd_records') && msg.includes('owner_departments')){
+        const { owner_departments: _omit2, ...rest } = payload as any;
+        const res3 = await client.from('rmd_records').upsert(rest, { onConflict: 'id' }).select('*').single();
+        if ((res3 as any)?.error) { throw (res3 as any).error; }
+        try{ await client.from('rmd_record_numbers').upsert({ doc_no: row.doc_no, first_used_at: now }, { onConflict: 'doc_no' }); }catch{}
+        return res3;
+      }
+      // Fallback: if owners column missing
+      if (msg.includes('rmd_records') && msg.includes('owners')){
+        const { owners: _omit3, ...rest2 } = payload as any;
+        const res4 = await client.from('rmd_records').upsert(rest2, { onConflict: 'id' }).select('*').single();
+        if ((res4 as any)?.error) { throw (res4 as any).error; }
+        try{ await client.from('rmd_record_numbers').upsert({ doc_no: row.doc_no, first_used_at: now }, { onConflict: 'doc_no' }); }catch{}
+        return res4;
+      }
+      throw e;
+    }
   }
   async deleteRmdRecord(id: string){
     return this.ensureClient().from('rmd_records').delete().eq('id', id);
@@ -1669,6 +1711,7 @@ export class SupabaseService {
   // ===== Departments =====
   async listDepartments(){
     const { data } = await this.ensureClient().from('departments').select('id,name,code,company_code,company_name').order('name', { ascending: true });
+    try{ (window as any).__app_cached_departments = Array.isArray(data)? data: []; }catch{}
     return Array.isArray(data) ? data : [];
   }
   async upsertDepartment(row: { id?: string; name: string; code: string; company_code?: string | null; company_name?: string | null }){

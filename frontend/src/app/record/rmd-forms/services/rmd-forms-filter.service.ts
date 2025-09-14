@@ -16,12 +16,18 @@ export class RmdFormsFilterService {
   auditCompany = signal<string>('');
 
   // Static data
-  departments: string[] = ['원료제조팀','식물세포배양팀','품질팀','연구팀','경영지원팀'];
+  departments: string[] = [];
   methods: string[] = ['ERP','QMS','NAS','OneNote','수기'];
   periods: string[] = ['일','주','월','년','발생시','갱신주기에 따라'];
 
   filtered = computed(() => {
     const q = this.query().trim().toLowerCase();
+    // Optional route param 'dept' to filter by using department
+    try{
+      const params = new URLSearchParams(location.search);
+      const d = params.get('dept');
+      if (d) this.dept.set(d);
+    }catch{}
     const categories = this.getCategories();
     const base = categories.map(cat => ({
       ...cat,
@@ -68,6 +74,13 @@ export class RmdFormsFilterService {
   
   setCategories(categories: RmdFormCategory[]): void {
     this.categories = categories;
+    // refresh dynamic department list from global cache if available
+    try{
+      const ds = (window as any).__app_cached_departments || [];
+      if (Array.isArray(ds) && ds.length){
+        this.departments = ds.map((d:any)=> d.name || d.code).filter(Boolean);
+      }
+    }catch{}
   }
 
   private getCategories(): RmdFormCategory[] {

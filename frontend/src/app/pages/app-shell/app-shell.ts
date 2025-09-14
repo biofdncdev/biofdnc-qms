@@ -119,10 +119,7 @@ export class AppShellComponent {
           ]
         },
         {
-          key: 'record', icon: 'description', label: 'Record', submenu: [
-            { label: '원료제조팀 기록', path: '/app/record/rmd-forms' },
-            { label: '기록 등록', path: '/app/record/rmd-register' }
-          ]
+          key: 'record', icon: 'description', label: 'Record', submenu: this.buildRecordSubmenu()
         },
         {
           key: 'audit', icon: 'rule', label: 'Audit', submenu: [
@@ -140,6 +137,24 @@ export class AppShellComponent {
     if (this.isAdmin && !this.isViewer) {
       this.menus.push({ key: 'user', icon: 'group', label: 'User', submenu: [ { label: '사용자 관리', path: '/app/admin/roles' } ] });
     }
+  }
+
+  private buildRecordSubmenu(){
+    const base: Array<{ label: string; path: string }> = [];
+    try{
+      const depts: any[] = (window as any).__app_cached_departments || [];
+      if (depts.length){
+        for (const d of depts){
+          const name = (d as any)?.name || (d as any)?.code || '기록';
+          base.push({ label: `${name} 기록`, path: `/app/record/rmd-forms?dept=${encodeURIComponent((d as any)?.code || '')}` });
+        }
+      }
+    }catch{}
+    if (!base.length){
+      base.push({ label: '원료제조팀 기록', path: '/app/record/rmd-forms' });
+    }
+    base.push({ label: '기록 등록', path: '/app/record/register' });
+    return base;
   }
 
   private async refreshNotifications(){
