@@ -33,6 +33,10 @@ export class RmdFormsComponent {
   categories: RmdFormCategory[] = [];
   selected = signal<RmdFormItem | null>(null);
   categoriesNoISO: string[] = [];
+  stdCategoryOptions: Array<{ value: string; label: string }> = [];
+  // Edit modal state
+  editOpen = signal(false);
+  edit: { id?: string; title: string; docNo: string; category: string | null } = { title: '', docNo: '', category: null };
   auditCompanies: string[] = [];
   
   // User typeahead
@@ -97,6 +101,61 @@ export class RmdFormsComponent {
         });
       }
     }
+    // Build standard category dropdown options like BF-RM-GM 회사-부서-규정카테고리
+    try{
+      // Build options by pairing company/department codes with regulation category code from first item
+      const options: Array<{ value: string; label: string }> = [];
+      for (const cat of RMD_STANDARDS){
+        const example = cat.items?.[0]?.id || '';
+        const parts = example.split('-');
+        // Expect like BF-RMD-GM-01 -> company(BF), dept(RMD), catCode(GM)
+        const codeLabel = parts.length >= 3 ? `${parts[0]}-${parts[1]}-${parts[2]}` : '';
+        options.push({ value: cat.category, label: `${codeLabel} ${cat.category}`.trim() });
+      }
+      this.stdCategoryOptions = options;
+    }catch{}
+  }
+
+  // Edit modal handlers
+  openEditModal(sel: any){
+    this.edit = {
+      id: sel.id,
+      title: sel.title || sel.id,
+      docNo: sel.id,
+      category: sel.standardCategory || null,
+    };
+    this.editOpen.set(true);
+  }
+  closeEditModal(){ this.editOpen.set(false); }
+  async autoNumberEdit(){
+    try{
+      const cat = (this.allCategoriesForCreate||[]).find((c:any)=> c.category === this.edit.category);
+      if (!cat) return;
+      const d = (await this.supabase.listDepartments()).find((x:any)=> (x?.code||'') === (cat as any)?.department_code);
+      const company = (d?.company_code || '').trim();
+      const dept = (d?.code || '').trim();
+      const prefixNoSeq = [company, dept, cat.doc_prefix, 'FR'].filter(Boolean).join('-');
+      const next = await (this.supabase as any).getNextRecordDocNo(prefixNoSeq);
+      this.edit.docNo = next;
+    }catch{}
+  }
+  async applyEdit(){
+    const sel = this.selected();
+    if (!sel) return;
+    // Update local item
+    sel.title = this.edit.title || sel.title;
+    // Map chosen category id to its display name (same as create flow)
+    if (this.edit.category){
+      const cat = (this.allCategoriesForCreate||[]).find((c:any)=> c.id === this.edit.category);
+      if (cat) sel.standardCategory = cat.name;
+    }
+    if (this.edit.docNo && this.edit.docNo !== sel.id){
+      sel.id = this.edit.docNo;
+    }
+    await this.metadataService.saveMeta(sel);
+    this.closeEditModal();
+    // Refresh list
+    await this.reloadMeta();
   }
 
   // === Create record modal ===

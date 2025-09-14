@@ -151,9 +151,8 @@ export class AppShellComponent {
       }
     }catch{}
     if (!base.length){
-      base.push({ label: '원료제조팀 기록', path: '/app/record/rmd-forms' });
+      base.push({ label: '기록 관리', path: '/app/record/rmd-forms' });
     }
-    base.push({ label: '기록 등록', path: '/app/record/register' });
     return base;
   }
 

@@ -154,13 +154,49 @@
     <div style="display:flex; align-items:center; gap:10px;">
       <span class="saved-badge" *ngIf="metadataService.metaJustSaved()">저장됨</span>
       <button class="action" (click)="metadataService.toggleInfo()">{{ metadataService.infoOpen() ? '간략히 보기' : '자세히 보기' }}</button>
-      <button class="action primary" [disabled]="metadataService.isSavingMeta()" (click)="metadataService.saveMeta(sel)">저장</button>
-      <button class="action" style="background-color: #ef4444; color: white; border-color: #ef4444;" 
-              [disabled]="metadataService.isDeletingMeta()" 
-              (click)="deleteRecord(sel)">{{ metadataService.isDeletingMeta() ? '삭제 중...' : '삭제' }}</button>
+      <button class="action" (click)="openEditModal(sel)">수정</button>
+      <button class="action" [disabled]="metadataService.isSavingMeta()" (click)="metadataService.saveMeta(sel)">저장</button>
+      <button class="action" [disabled]="metadataService.isDeletingMeta()" (click)="deleteRecord(sel)">{{ metadataService.isDeletingMeta() ? '삭제 중...' : '삭제' }}</button>
     </div>
   </div>
   
+  <!-- Edit Modal (reuse create modal layout) -->
+  <div class="modal-overlay" *ngIf="editOpen()" (click)="closeEditModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()" style="max-width:640px;">
+      <div class="modal-header">
+        <h3>기록 수정</h3>
+        <button class="close-btn" (click)="closeEditModal()">×</button>
+      </div>
+      <div class="modal-body" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px 16px; align-items:end;">
+        <div style="grid-column:1 / span 2; display:flex; gap:10px; align-items:center;">
+          <div style="flex:1; display:flex; flex-direction:column;">
+            <label>규정카테고리 선택</label>
+            <select [(ngModel)]="edit.category" style="height:36px;">
+              <option [ngValue]="''">선택</option>
+              <option *ngFor="let c of allCategoriesForCreate" [ngValue]="c.id">{{ c.doc_prefix }} {{ c.name }}</option>
+            </select>
+          </div>
+        </div>
+        <div style="grid-column:1 / span 2; display:flex; gap:10px;">
+          <div style="flex:1; display:flex; flex-direction:column;">
+            <label>기록명</label>
+            <input type="text" [(ngModel)]="edit.title" style="height:36px;">
+          </div>
+        </div>
+        <div style="grid-column:1 / span 2;">
+          <label>문서번호</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="text" style="flex:1; height:36px;" [(ngModel)]="edit.docNo">
+            <button class="action" (click)="autoNumberEdit()" [disabled]="!edit.category">자동채번</button>
+          </div>
+        </div>
+        <div style="grid-column:1 / span 2; display:flex; gap:8px; justify-content:flex-end; margin-top:6px;">
+          <button class="action primary" (click)="applyEdit()">수정</button>
+          <button class="action" (click)="closeEditModal()">닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <ng-container *ngIf="metadataService.infoOpen(); else infoSummary">
     <div class="detail-form" (ngModelChange)="metadataService.persistMeta(sel)">
       <div>
