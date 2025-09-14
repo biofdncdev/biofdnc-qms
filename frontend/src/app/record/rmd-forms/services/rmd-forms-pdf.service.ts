@@ -180,7 +180,7 @@ export class RmdFormsPdfService {
   }
 
   // Public helper to decide and open: image preview vs new tab
-  openFile(file: PdfFile): void {
+  async openFile(file: PdfFile): Promise<void> {
     const name = (file.originalName || file.name || '').toLowerCase();
     if (this.isImageName(name)){
       this.previewImageUrl.set(file.url);
@@ -199,8 +199,26 @@ export class RmdFormsPdfService {
       try{
         const vw = window.innerWidth || 1200;
         const vh = window.innerHeight || 800;
-        const w = Math.min(820, Math.floor(vw * 0.96));
-        const h = Math.min(Math.floor(vh * 0.9), 1000);
+        // Try to size the preview window to the natural image size if available
+        let w = Math.min(820, Math.floor(vw * 0.96));
+        let h = Math.min(Math.floor(vh * 0.9), 1000);
+        try{
+          // Preload image to read natural size
+          const img = new Image();
+          const urlForSize = file.url;
+          const sizeReady = new Promise<{w:number;h:number}>((resolve,reject)=>{
+            img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+            img.onerror = () => reject(null as any);
+          });
+          img.src = urlForSize;
+          const sz = await sizeReady;
+          if (sz && sz.w && sz.h){
+            // Fit image into viewport with small margins
+            const scale = Math.min((vw * 0.96) / sz.w, (vh * 0.96) / sz.h, 1);
+            w = Math.floor(sz.w * scale);
+            h = Math.floor(sz.h * scale);
+          }
+        }catch{}
         this.previewWidth.set(w); this.previewHeight.set(h);
         this.previewPosX.set(Math.max(0, Math.floor((vw - w) / 2)));
         this.previewPosY.set(Math.max(0, Math.floor((vh - h) / 2)));

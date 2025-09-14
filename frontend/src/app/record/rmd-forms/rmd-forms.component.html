@@ -62,12 +62,12 @@
           <span class="record-title">{{ r.title }}</span>
         </div>
         <div class="meta">
-          <span class="chip">{{ r.department || '원료제조팀' }}</span>
-          <span class="chip" *ngIf="r.owner">{{ r.owner }}</span>
+          <span class="chip" *ngIf="!isGivaudanAudit && (r.department || '원료제조팀')">{{ r.department || '원료제조팀' }}</span>
+          <span class="chip" *ngIf="!isGivaudanAudit && r.owner">{{ r.owner }}</span>
           <span class="chip" *ngIf="r.method">{{ r.method }}</span>
           <span class="chip" *ngIf="r.period">{{ r.period }}</span>
           <span class="chip" *ngFor="let c of (r.certs||[])">{{ c }}</span>
-          <span class="chip" *ngFor="let comp of (r.companies||[])">{{ comp }}</span>
+          <span class="chip" *ngFor="let comp of (!isGivaudanAudit ? (r.companies||[]) : [])">{{ comp }}</span>
           <span class="chip" *ngIf="r.standard">규정: {{ r.standard }}</span>
           <span class="chip" *ngIf="r.standardCategory && r.standardCategory !== 'ISO'">{{ r.standardCategory }}</span>
         </div>
