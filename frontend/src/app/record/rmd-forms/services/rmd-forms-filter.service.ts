@@ -70,9 +70,11 @@ export class RmdFormsFilterService {
     return flat.sort((a, b) => a.id.localeCompare(b.id));
   });
 
-  private categories: RmdFormCategory[] = [];
+  private categoriesSig = signal<RmdFormCategory[]>([]);
+  private extraItems: RmdFormItem[] = [];
   
   setCategories(categories: RmdFormCategory[]): void {
+<<<<<<< HEAD
     this.categories = categories;
     // refresh dynamic department list from global cache if available
     try{
@@ -81,10 +83,20 @@ export class RmdFormsFilterService {
         this.departments = ds.map((d:any)=> d.name || d.code).filter(Boolean);
       }
     }catch{}
+=======
+    this.categoriesSig.set(categories || []);
+  }
+  addExtraItem(item: RmdFormItem){
+    this.extraItems = [item, ...this.extraItems];
+>>>>>>> eb97d52 (기록 항목 추가 DB 연결 수정)
   }
 
   private getCategories(): RmdFormCategory[] {
-    return this.categories;
+    const base = this.categoriesSig();
+    if (this.extraItems.length){
+      return [...base, { category: '새 기록', items: this.extraItems } as any];
+    }
+    return base;
   }
 
   onFiltersChanged(): void {

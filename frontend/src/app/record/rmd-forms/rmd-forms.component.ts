@@ -1,7 +1,7 @@
 import { Component, ElementRef, HostListener, signal, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RMD_FORM_CATEGORIES, RmdFormCategory, RmdFormItem } from './rmd-forms-data';
+import { RmdFormCategory, RmdFormItem } from './rmd-forms-data';
 import { RMD_STANDARDS } from '../../standard/rmd/rmd-standards';
 import { SupabaseService } from '../../services/supabase.service';
 import { TabService } from '../../services/tab.service';
@@ -28,9 +28,9 @@ import { AuditLink, StandardLink, UserPair } from './rmd-forms.types';
   ]
 })
 export class RmdFormsComponent {
-  categories: RmdFormCategory[] = RMD_FORM_CATEGORIES;
+  categories: RmdFormCategory[] = [];
   selected = signal<RmdFormItem | null>(null);
-  categoriesNoISO: string[] = this.categories.map(c => c.category).filter(c => c !== 'ISO');
+  categoriesNoISO: string[] = [];
   auditCompanies: string[] = [];
   
   // User typeahead
@@ -85,9 +85,6 @@ export class RmdFormsComponent {
     public metadataService: RmdFormsMetadataService,
     public thService: RmdFormsThRecordService
   ) {
-    // Initialize filter service with categories
-    this.filterService.setCategories(this.categories);
-    
     // Initialize all standards for search
     for (const category of RMD_STANDARDS) {
       for (const item of category.items) {
@@ -100,9 +97,90 @@ export class RmdFormsComponent {
     }
   }
 
+  // === Create record modal ===
+  createOpen = signal<boolean>(false);
+  busyCreate = signal<boolean>(false);
+  dupCreate = signal<boolean>(false);
+  create = { categoryId: '', title: '', docNo: '' } as any;
+  allCategoriesForCreate: Array<{ id: string; name: string; doc_prefix: string }> = [];
+  openCreateModal(){ this.create = { categoryId: '', title: '', docNo: '' }; this.dupCreate.set(false); this.createOpen.set(true); this.loadCatsForCreate(); }
+  closeCreateModal(){ this.createOpen.set(false); }
+  private async loadCatsForCreate(){
+    try{ const cats: any[] = await (this.supabase as any).listRmdCategories(); this.allCategoriesForCreate = cats as any[]; }catch{ this.allCategoriesForCreate = []; }
+  }
+
+  private async reloadMeta(){
+    try{
+      const rows: any[] = await this.supabase.listAllFormMeta();
+      const map: Record<string, RmdFormItem[]> = {};
+      for (const r of (rows||[])){
+        const id = String((r as any).record_no || '').trim();
+        if (!id) continue;
+        const cat = String((r as any).standard_category || '기타');
+        const item: RmdFormItem = {
+          id,
+          title: String((r as any).record_name || id),
+          department: (r as any).department || '원료제조팀',
+          method: (r as any).method || null,
+          period: (r as any).period || null,
+          standard: (r as any).standard || null,
+          standardCategory: cat,
+        } as any;
+        if (!map[cat]) map[cat] = [];
+        map[cat].push(item);
+      }
+      this.categories = Object.keys(map).sort().map(k => ({ category: k, items: map[k] }));
+      this.categoriesNoISO = this.categories.map(c=>c.category).filter(c=>c!=='ISO');
+      this.filterService.setCategories(this.categories);
+    }catch{}
+  }
+  async autoNumberCreate(){
+    const cat = (this.allCategoriesForCreate||[]).find(c=>c.id===this.create.categoryId);
+    if (!cat) return;
+    // 회사-부서-규정카테고리코드-FR-두자리
+    const d = (await this.supabase.listDepartments()).find((x:any)=> (x?.code||'') === (cat as any)?.department_code);
+    const company = (d?.company_code || '').trim();
+    const dept = (d?.code || '').trim();
+    const prefixNoSeq = [company, dept, cat.doc_prefix, 'FR'].filter(Boolean).join('-');
+    this.busyCreate.set(true);
+    try{
+      const next = await (this.supabase as any).getNextRecordDocNo(prefixNoSeq);
+      this.create.docNo = next;
+      this.dupCreate.set(false);
+    } finally { this.busyCreate.set(false); }
+  }
+  async submitCreate(){
+    const title = (this.create.title||'').trim();
+    const docNo = (this.create.docNo||'').trim();
+    const categoryId = this.create.categoryId;
+    if (!title || !docNo || !categoryId){ alert('카테고리/기록명/문서번호를 모두 입력하세요.'); return; }
+    this.busyCreate.set(true);
+    try{
+      const taken = await (this.supabase as any).isRecordDocNoTaken(docNo);
+      if (taken){ this.dupCreate.set(true); alert('이미 사용된 번호입니다. 다른 번호를 입력하세요.'); return; }
+      const id = crypto.randomUUID();
+      await (this.supabase as any).upsertRmdRecord({ id, title, category_id: categoryId, doc_no: docNo });
+      // ensure metadata row also exists (record_no/record_name)
+      try{
+        const catName = this.allCategoriesForCreate.find(c=>c.id===categoryId)?.name || null;
+        await (this.supabase as any).upsertFormMeta({ record_no: docNo, record_name: title, standard_category: catName, department: '원료제조팀' });
+      }catch{}
+      try{ await (this.supabase as any).reserveRecordNumber(docNo); }catch{}
+      this.createOpen.set(false);
+      await this.reloadMeta();
+      try{
+        const it = this.filterService.filteredFlat().find(x=>x.id===docNo);
+        if (it) this.open(it);
+      }catch{}
+    } catch(e: any){
+      alert('생성 중 오류: ' + (e?.message || e));
+    } finally { this.busyCreate.set(false); }
+  }
+
   ngOnInit() {
     this.preloadCompanies();
     this.buildAuditLinkMap();
+    this.reloadMeta();
     this.loadInitialData();
   }
 

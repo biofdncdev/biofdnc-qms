@@ -119,7 +119,14 @@ export class AppShellComponent {
           ]
         },
         {
+<<<<<<< HEAD
           key: 'record', icon: 'description', label: 'Record', submenu: this.buildRecordSubmenu()
+=======
+          key: 'record', icon: 'description', label: 'Record', submenu: [
+            { label: '기록 관리', path: '/app/record/rmd-forms' },
+            { label: '원료제조팀 기록 등록', path: '/app/record/rmd-register' }
+          ]
+>>>>>>> eb97d52 (기록 항목 추가 DB 연결 수정)
         },
         {
           key: 'audit', icon: 'rule', label: 'Audit', submenu: [

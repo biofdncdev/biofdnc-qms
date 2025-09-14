@@ -2,7 +2,10 @@
   <!-- Left Sidebar - Filters -->
   <aside class="left" style="flex:0 0 280px; max-width:280px;">
     <div class="sticky">
-      <div class="page-head"><h2>Record <span class="sub">원료제조팀</span></h2></div>
+      <div class="page-head" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <h2>Record <span class="sub">기록관리</span></h2>
+        <button class="action primary" (click)="openCreateModal()">기록 추가</button>
+      </div>
       <div class="search">
         <input type="search" placeholder="키워드로 검색" [ngModel]="filterService.query()" (ngModelChange)="filterService.query.set($event)">
         <button class="clear" *ngIf="filterService.query()" (click)="filterService.query.set('')">×</button>
@@ -106,6 +109,44 @@
   </main>
 </div>
 
+<!-- Create record modal -->
+<div class="modal-overlay" *ngIf="createOpen()" (click)="closeCreateModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()" style="max-width:640px;">
+    <div class="modal-header">
+      <h3>새 기록 생성</h3>
+      <button class="close-btn" (click)="closeCreateModal()">×</button>
+    </div>
+    <div class="modal-body" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px 16px; align-items:end;">
+      <div style="grid-column:1 / span 2; display:flex; gap:10px; align-items:center;">
+        <div style="flex:1; display:flex; flex-direction:column;">
+          <label>규정카테고리 선택</label>
+          <select [(ngModel)]="create.categoryId" style="height:36px;">
+            <option [ngValue]="''">선택</option>
+            <option *ngFor="let c of allCategoriesForCreate" [ngValue]="c.id">{{ c.doc_prefix }} {{ c.name }}</option>
+          </select>
+        </div>
+      </div>
+      <div style="grid-column:1 / span 2; display:flex; gap:10px;">
+        <div style="flex:1; display:flex; flex-direction:column;">
+          <label>기록명</label>
+          <input type="text" [(ngModel)]="create.title" style="height:36px;">
+        </div>
+      </div>
+      <div style="grid-column:1 / span 2;">
+        <label>문서번호</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="text" style="flex:1; height:36px;" [(ngModel)]="create.docNo">
+          <button class="action" (click)="autoNumberCreate()" [disabled]="busyCreate() || !create.categoryId">자동채번</button>
+          <span *ngIf="dupCreate()" style="color:#ef4444; font-weight:600;">중복 번호</span>
+        </div>
+      </div>
+      <div style="grid-column:1 / span 2; display:flex; gap:8px; justify-content:flex-end; margin-top:6px;">
+        <button class="action primary" (click)="submitCreate()" [disabled]="busyCreate()">{{ busyCreate()? '저장중…' : '추가' }}</button>
+        <button class="action" (click)="closeCreateModal()" [disabled]="busyCreate()">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
 <!-- Metadata Template -->
 <ng-template #metadataSection let-sel="sel">
   <div class="section-row toolbar-line">

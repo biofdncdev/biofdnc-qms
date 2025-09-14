@@ -7,7 +7,7 @@ import { RmdFormItem } from '../rmd-forms-data';
 export class RmdFormsMetadataService {
   isSavingMeta = signal<boolean>(false);
   metaJustSaved = signal<boolean>(false);
-  infoOpen = signal<boolean>(false);
+  infoOpen = signal<boolean>(true);
 
   constructor(private supabase: SupabaseService) {}
 
@@ -17,7 +17,8 @@ export class RmdFormsMetadataService {
       this.metaJustSaved.set(false);
       
       const up = await this.supabase.upsertFormMeta({
-        form_id: sel.id,
+        record_no: sel.id,
+        record_name: sel.title || sel.id,
         department: sel.department || null,
         owner: sel.owner || null,
         method: sel.method || null,
@@ -77,9 +78,9 @@ export class RmdFormsMetadataService {
       const all = await this.supabase.listAllFormMeta();
       const byId: Record<string, any> = {};
       for (const row of all as any[]) {
-        if (!row?.form_id) continue;
+        if (!row?.record_no) continue;
         // Normalize snake_case → camelCase used in UI
-        byId[row.form_id] = {
+        byId[row.record_no] = {
           department: row.department || undefined,
           owner: row.owner || undefined,
           method: row.method || undefined,

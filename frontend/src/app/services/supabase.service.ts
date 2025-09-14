@@ -909,17 +909,24 @@ export class SupabaseService {
 
   // RMD form metadata persistence
   async getFormMeta(form_id: string){
-    return this.ensureClient().from('record_form_meta').select('*').eq('form_id', form_id).maybeSingle();
+    const client = this.ensureClient();
+    // Try legacy by record_no first; fallback to form_id if exists
+    try{
+      const { data, error } = await client.from('record_form_meta').select('*').eq('record_no', form_id).maybeSingle();
+      if (!error && data) return { data, error: null } as any;
+    }catch{}
+    return client.from('record_form_meta').select('*').eq('form_id', form_id).maybeSingle();
   }
-  async upsertFormMeta(row: { form_id: string; department?: string | null; owner?: string | null; method?: string | null; period?: string | null; standard?: string | null; standard_category?: string | null; certs?: string[] | null; }){
+  async upsertFormMeta(row: { record_no?: string; record_name?: string; department?: string | null; owner?: string | null; method?: string | null; period?: string | null; standard?: string | null; standard_category?: string | null; certs?: string[] | null; }){
     const client = this.ensureClient();
     const payload: any = { ...row };
     try{ const { data: u } = await client.auth.getUser(); payload.updated_by = u.user?.id || null; }catch{}
-    return client.from('record_form_meta').upsert(payload, { onConflict: 'form_id' }).select('*').maybeSingle();
+    // Upsert by record_no (text unique)
+    return client.from('record_form_meta').upsert(payload, { onConflict: 'record_no' }).select('*').maybeSingle();
   }
   async listAllFormMeta(){
     try{
-      const { data } = await this.ensureClient().from('record_form_meta').select('*');
+      const { data } = await this.ensureClient().from('record_form_meta').select('record_no,record_name,department,owner,method,period,standard,standard_category');
       return Array.isArray(data) ? data : [];
     }catch(e){
       console.warn('[Supabase] listAllFormMeta failed; fallback to empty', e);
@@ -1562,6 +1569,7 @@ export class SupabaseService {
   // Categories CRUD
   async listRmdCategories(){
     const client = this.ensureClient();
+<<<<<<< HEAD
     const { data } = await client
       .from('rmd_standard_categories')
       .select('*')
@@ -1578,20 +1586,50 @@ export class SupabaseService {
       });
     }catch{
       return rows;
+=======
+    try{
+      const { data, error } = await client
+        .from('rmd_standard_categories')
+        .select('*')
+        .order('doc_prefix', { ascending: true });
+      if (!error && Array.isArray(data)) return data;
+      throw error;
+    }catch{
+      // Fallback for environments where the table was renamed to standard_categories
+      try{
+        const { data } = await client
+          .from('standard_categories')
+          .select('*')
+          .order('doc_prefix', { ascending: true });
+        return Array.isArray(data) ? data : [];
+      }catch{ return [] as any[]; }
+>>>>>>> eb97d52 (기록 항목 추가 DB 연결 수정)
     }
   }
   async upsertRmdCategory(row: { id?: string; name: string; doc_prefix: string; department_code?: string | null }){
+    const client = this.ensureClient();
     const now = new Date().toISOString();
     const payload: any = { ...row, updated_at: now };
     if (!payload.id) payload.id = crypto.randomUUID();
-    return this.ensureClient()
-      .from('rmd_standard_categories')
-      .upsert(payload, { onConflict: 'id' })
-      .select('*')
-      .single();
+    try{
+      return await client
+        .from('rmd_standard_categories')
+        .upsert(payload, { onConflict: 'id' })
+        .select('*')
+        .single();
+    }catch{
+      // Fallback to renamed table
+      return await client
+        .from('standard_categories')
+        .upsert(payload, { onConflict: 'id' })
+        .select('*')
+        .single();
+    }
   }
   async deleteRmdCategory(id: string){
-    return this.ensureClient().from('rmd_standard_categories').delete().eq('id', id);
+    const client = this.ensureClient();
+    try{ return await client.from('rmd_standard_categories').delete().eq('id', id); }
+    catch{ return await client.from('standard_categories').delete().eq('id', id); }
   }
 
   // Records CRUD + helpers
@@ -1602,6 +1640,7 @@ export class SupabaseService {
       .order('created_at', { ascending: false });
     return Array.isArray(data) ? data : [];
   }
+<<<<<<< HEAD
   async listActiveStaffManagers(){
     const client = this.ensureClient();
     try{
@@ -1640,6 +1679,27 @@ export class SupabaseService {
     const nums = all.map(r => {
       const s = String((r as any).doc_no || '');
       const m = s.match(/^(.*?-FR-)(\d{2})$/);
+=======
+  async isRecordDocNoTaken(doc_no: string){
+    const client = this.ensureClient();
+    try{
+      const { data } = await client.from('record_form_meta').select('form_id').eq('form_id', doc_no).maybeSingle();
+      if ((data as any)?.form_id) return true;
+    }catch{}
+    return false;
+  }
+  async getNextRecordDocNo(docPrefix: string){
+    // Build search prefix: e.g., BF-RM-GM-FR-
+    const client = this.ensureClient();
+    const prefix = `${docPrefix}-`;
+    const used: string[] = [];
+    try{
+      const { data } = await client.from('record_form_meta').select('form_id').ilike('form_id', `${prefix}%`) as any;
+      used.push(...((Array.isArray(data)? data: []).map((r:any)=>r.form_id||'')));
+    }catch{}
+    const nums = used.map(str => {
+      const m = String(str || '').match(/^(.*?-FR-)(\d{2})$/);
+>>>>>>> eb97d52 (기록 항목 추가 DB 연결 수정)
       return m ? Number(m[2]) : 0;
     }).filter(n => Number.isFinite(n));
     const max = nums.length ? Math.max(...nums) : 0;
@@ -1647,6 +1707,7 @@ export class SupabaseService {
     const seq = String(next).padStart(2, '0');
     return `${searchPrefix}${seq}`;
   }
+<<<<<<< HEAD
   async getRecordPrefixForCategory(cat: { doc_prefix: string; department_code?: string|null }){
     const deptCode = (cat as any)?.department_code || null;
     let company: string | null = null;
@@ -1661,10 +1722,30 @@ export class SupabaseService {
   }
   async upsertRmdRecord(row: { id: string; title: string; category_id: string; doc_no: string; features?: any }){
     // Duplicate guard on doc_no
+=======
+  async reserveRecordNumber(doc_no: string){ /* no-op in legacy mode */ }
+  async upsertRmdRecord(row: { id: string; title: string; category_id: string; doc_no: string; }){
+    // Legacy mode: persist to record_form_meta only
+>>>>>>> eb97d52 (기록 항목 추가 DB 연결 수정)
     const taken = await this.isRecordDocNoTaken(row.doc_no);
-    if (taken){
-      throw new Error('이미 사용 중인 기록번호입니다.');
+    if (taken){ throw new Error('이미 사용 중인 기록번호입니다.'); }
+    const client = this.ensureClient();
+    // Try by record_no (text, unique) first; fallback to form_id for older schema
+    const base: any = { record_no: row.doc_no, record_name: row.title, category_id: row.category_id };
+    try{ const { data: u } = await client.auth.getUser(); base.updated_by = u.user?.id || null; }catch{}
+    // Attempt 1: onConflict record_no
+    try{
+      const res: any = await client.from('record_form_meta').upsert(base, { onConflict: 'record_no' }).select('*').maybeSingle();
+      if (res?.error) throw res.error;
+      return res;
+    }catch(e){
+      // Attempt 2: some schemas still use form_id; try that
+      const payload2: any = { ...base, form_id: row.doc_no };
+      const res2: any = await client.from('record_form_meta').upsert(payload2, { onConflict: 'form_id' }).select('*').maybeSingle();
+      if (res2?.error) throw res2.error;
+      return res2;
     }
+<<<<<<< HEAD
     const now = new Date().toISOString();
     const payload: any = { ...row, updated_at: now };
     try{ const { data: u } = await this.ensureClient().auth.getUser(); payload.created_by = u.user?.id || null; payload.created_by_name = (u.user as any)?.user_metadata?.name || null; }catch{}
@@ -1703,6 +1784,8 @@ export class SupabaseService {
       }
       throw e;
     }
+=======
+>>>>>>> eb97d52 (기록 항목 추가 DB 연결 수정)
   }
   async deleteRmdRecord(id: string){
     return this.ensureClient().from('rmd_records').delete().eq('id', id);
