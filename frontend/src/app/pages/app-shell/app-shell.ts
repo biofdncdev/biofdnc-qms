@@ -108,7 +108,7 @@ export class AppShellComponent {
             { label: '조직도2', path: '/app/organization/chart2' },
             { label: '업무분장 · 원료제조', path: '/app/organization/roles?dept=rm' },
             { label: '업무분장 · 품질보증', path: '/app/organization/roles?dept=qa' },
-            ...(this.isAdmin ? [{ label: '부서 등록', path: '/app/organization/departments' }] : []),
+            ...(this.isAdmin ? [{ label: '회사ㆍ부서 코드 등록', path: '/app/organization/departments' }] : []),
           ]
         },
         {
