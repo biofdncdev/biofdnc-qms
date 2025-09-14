@@ -302,13 +302,30 @@ export class RmdPageComponent {
     document.addEventListener('keydown', this.onGlobalKeydown, { passive: false });
   }
 
+  private async loadDocWithFallback(id: string): Promise<string | null> {
+    const primary = `/rmd/${id}.html`;
+    try {
+      const html = await this.http.get(primary, { responseType: 'text' }).toPromise();
+      if (html) return html as string;
+    } catch {}
+    // If not found and id uses BF-RM-, try BF-RMD-
+    const alt = id.replace(/^BF-RM-/, 'BF-RMD-');
+    if (alt !== id) {
+      try {
+        const html = await this.http.get(`/rmd/${alt}.html`, { responseType: 'text' }).toPromise();
+        if (html) return html as string;
+      } catch {}
+    }
+    return null;
+  }
+
   async buildIndex(){
     // Load all docs content once; disable search until ready
     try {
       const items: RegulationItem[] = this.categories.flatMap((c: RegulationCategory) => c.items);
       for (const it of items){
         try{
-          const html = await this.http.get(`/rmd/${it.id}.html`, { responseType:'text' }).toPromise();
+          const html = await this.loadDocWithFallback(it.id);
           if (!html) continue;
           const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g,' ').trim();
           this.docs.push({ id: it.id, title: it.title, content: text.toLowerCase() });
@@ -491,7 +508,9 @@ export class RmdPageComponent {
     this.loading.set(true);
     try {
       const q = this.term();
-      const viewer = `/rmd/view.html?id=${encodeURIComponent(item.id)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+      // We pass both current id and an optional fallback id to the viewer, so it can try BF-RMD- if BF-RM- is missing
+      const alt = item.id.replace(/^BF-RM-/, 'BF-RMD-');
+      const viewer = `/rmd/view.html?id=${encodeURIComponent(item.id)}${q ? `&q=${encodeURIComponent(q)}` : ''}&alt=${encodeURIComponent(alt)}`;
       this.docUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(viewer));
       if (resetScroll) setTimeout(() => { this.contentPane?.nativeElement?.scrollTo({ top: 0, behavior: 'auto' }); }, 0);
       // proactively try to restore iframe scroll even if 'ready' races

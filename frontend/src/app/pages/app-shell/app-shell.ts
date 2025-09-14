@@ -120,7 +120,7 @@ export class AppShellComponent {
           key: 'standard', icon: 'gavel', label: 'Standard',
           submenu: [
             { label: '원료제조팀 규정', path: '/app/standard/rmd' },
-            { label: '규정 카테고리 등록', path: '/app/standard/rmd-categories' }
+            ...(this.isGivaudanAudit ? [] : [{ label: '규정 카테고리 등록', path: '/app/standard/rmd-categories' }])
           ]
         },
         {
@@ -128,7 +128,7 @@ export class AppShellComponent {
         },
         {
           key: 'audit', icon: 'rule', label: 'Audit', submenu: [
-            { label: 'Audit 업체 등록', path: '/app/audit/companies' },
+            ...(this.isGivaudanAudit ? [] : [{ label: 'Audit 업체 등록', path: '/app/audit/companies' }]),
             { label: 'Audit 평가 항목', path: '/app/audit' }
           ]
         },
@@ -147,7 +147,7 @@ export class AppShellComponent {
   private buildRecordSubmenu(){
     // Only two fixed submenu items
     const base: Array<{ label: string; path: string }> = [];
-    base.push({ label: '전체 기록', path: '/app/record/rmd-forms' });
+    if (!this.isGivaudanAudit) base.push({ label: '전체 기록', path: '/app/record/rmd-forms' });
     // 원료제조팀 기록: useDepartments에 원료제조팀 포함 필터 파라미터 사용
     base.push({ label: '원료제조팀 기록', path: '/app/record/rmd-forms?dept=RM' });
     return base;
