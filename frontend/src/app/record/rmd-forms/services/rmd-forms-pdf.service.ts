@@ -119,7 +119,9 @@ export class RmdFormsPdfService {
       const uploadInfo = this.getPdfUploadInfo(formId);
       delete uploadInfo[pdf.path];
       this.savePdfUploadInfo(formId, uploadInfo);
-      await this.refreshPdfList(formId);
+      // Optimistic UI: 목록에서 해당 항목만 제거하고 나머지는 유지
+      const next = this.recordPdfs().filter(f => f.path !== pdf.path);
+      this.recordPdfs.set(next);
     } catch(error) {
       console.error('PDF 삭제 실패:', error);
       alert('PDF 삭제에 실패했습니다.');
