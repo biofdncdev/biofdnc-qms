@@ -99,8 +99,10 @@
         </ng-container>
         
         <ng-template #genericInfo>
-          <!-- File Upload Section (DB-driven records) -->
-          <ng-container *ngTemplateOutlet="pdfUploadSection; context: { sel: sel }"></ng-container>
+          <!-- File Upload Section: checkbox controls visibility regardless of file existence -->
+          <ng-container *ngIf="sel.features?.uploadFiles === true">
+            <ng-container *ngTemplateOutlet="pdfUploadSection; context: { sel: sel }"></ng-container>
+          </ng-container>
         </ng-template>
       </div>
     </section>
@@ -153,6 +155,9 @@
       <span class="saved-badge" *ngIf="metadataService.metaJustSaved()">저장됨</span>
       <button class="action" (click)="metadataService.toggleInfo()">{{ metadataService.infoOpen() ? '간략히 보기' : '자세히 보기' }}</button>
       <button class="action primary" [disabled]="metadataService.isSavingMeta()" (click)="metadataService.saveMeta(sel)">저장</button>
+      <button class="action" style="background-color: #ef4444; color: white; border-color: #ef4444;" 
+              [disabled]="metadataService.isDeletingMeta()" 
+              (click)="deleteRecord(sel)">{{ metadataService.isDeletingMeta() ? '삭제 중...' : '삭제' }}</button>
     </div>
   </div>
   
@@ -160,9 +165,37 @@
     <div class="detail-form" (ngModelChange)="metadataService.persistMeta(sel)">
       <div>
         <label>담당부서</label>
-        <select [(ngModel)]="sel.department" (ngModelChange)="metadataService.persistMeta(sel)">
-          <option *ngFor="let d of filterService.departments" [value]="d">{{ d }}</option>
-        </select>
+        <div style="padding:8px; border:1px solid #e5e7eb; border-radius:10px; background:#fff;">
+          <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
+            <span class="chip" *ngFor="let d of (sel.ownerDepartments||[])">
+              {{ d }}
+              <button class="remove" (click)="removeOwnerDeptChip(sel,d)" title="삭제">×</button>
+            </span>
+            <span class="muted" *ngIf="!(sel.ownerDepartments||[]).length">선택 없음</span>
+          </div>
+          <div class="btn-group wrap">
+            <label class="inline" *ngFor="let d of filterService.departments" style="margin-right:10px; margin-bottom:6px; display:inline-flex; align-items:center; gap:6px;">
+              <input type="checkbox" [checked]="(sel.ownerDepartments||[]).includes(d)" (change)="onToggleOwnerDept(sel, d, $any($event.target).checked)" /> {{ d }}
+            </label>
+          </div>
+        </div>
+      </div>
+      <div>
+        <label>사용부서</label>
+        <div style="padding:8px; border:1px solid #e5e7eb; border-radius:10px; background:#fff;">
+          <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
+            <span class="chip" *ngFor="let d of (sel.useDepartments||[])">
+              {{ d }}
+              <button class="remove" (click)="removeUseDeptChip(sel,d)" title="삭제">×</button>
+            </span>
+            <span class="muted" *ngIf="!(sel.useDepartments||[]).length">선택 없음</span>
+          </div>
+          <div class="btn-group wrap" style="max-height:140px; overflow:auto;">
+            <label class="inline" *ngFor="let d of filterService.departments" style="margin-right:10px; margin-bottom:6px; display:inline-flex; align-items:center; gap:6px;">
+              <input type="checkbox" [checked]="(sel.useDepartments||[]).includes(d)" (change)="onToggleUseDept(sel, d, $any($event.target).checked)" /> {{ d }}
+            </label>
+          </div>
+        </div>
       </div>
       <div>
         <label>담당자</label>
@@ -181,6 +214,10 @@
             <button class="remove" (click)="removeOwnerChip(sel,n)" title="삭제">×</button>
           </span>
         </div>
+      </div>
+      <div>
+        <label>이 기록에 포함될 기능</label>
+        <record-features-selector [features]="sel.features || {}" (featuresChange)="onFeaturesChange(sel, $event)"></record-features-selector>
       </div>
       <div>
         <label>기록방법</label>

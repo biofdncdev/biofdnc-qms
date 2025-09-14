@@ -11,6 +11,10 @@ export interface RmdFormItem {
   certs?: string[];      // 인증 체계 배열 (ISO9001, ISO22716, ISO14001, HALAL 등)
   companies?: string[];  // 연결된 Audit 업체들 (목록 칩 표시/필터용)
   selectedLinks?: Array<{ id: string; title: string; kind?: 'record'|'standard' }>;
+  // UI 기능 메타
+  features?: { uploadFiles?: boolean; uploadImages?: boolean };
+  useDepartments?: string[];
+  ownerDepartments?: string[];
 }
 export interface RmdFormCategory { category: string; items: RmdFormItem[]; }
 

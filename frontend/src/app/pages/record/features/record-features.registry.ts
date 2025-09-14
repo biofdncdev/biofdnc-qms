@@ -1,4 +1,4 @@
-export type RecordFeatureKey = 'uploadFiles' | 'uploadImages';
+export type RecordFeatureKey = 'uploadFiles';
 
 export interface RecordFeatureDef {
   key: RecordFeatureKey;
@@ -7,8 +7,7 @@ export interface RecordFeatureDef {
 }
 
 export const RECORD_FEATURE_DEFS: ReadonlyArray<RecordFeatureDef> = [
-  { key: 'uploadFiles', label: '파일 업로드 기능', default: false },
-  { key: 'uploadImages', label: '이미지 업로드 기능', default: false },
+  { key: 'uploadFiles', label: '파일 및 이미지 업로드 기능', default: false },
 ];
 
 export type RecordFeatures = { [K in RecordFeatureKey]: boolean };

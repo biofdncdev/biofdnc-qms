@@ -819,9 +819,10 @@ export class SupabaseService {
   async listRecordPdfs(form_id: string){
     const client = this.ensureClient();
     const results: any[] = [];
-    // Load cross-device index (best-effort)
+    // Load cross-device index (best-effort) - disabled for now to avoid 400 errors
     let index: Record<string, any> = {};
-    try{ index = await this.getRecordFileIndex(form_id); }catch{}
+    // Temporarily disable index loading to prevent console errors
+    // try{ index = await this.getRecordFileIndex(form_id); }catch{}
     
     // rmd_pdfs 버킷에서 먼저 시도 (기본 버킷)
     try{
@@ -893,17 +894,17 @@ export class SupabaseService {
         throw error; // 원래 에러를 throw
       }
     }
-    // Best-effort: remove from cross-device index
-    try{
-      const formId = this.extractFormIdFromPath(path);
-      if (formId){
-        const index = await this.getRecordFileIndex(formId);
-        if (index && index[path]){
-          delete index[path];
-          await this.saveRecordFileIndex(formId, index);
-        }
-      }
-    }catch{}
+    // Best-effort: remove from cross-device index - disabled for now
+    // try{
+    //   const formId = this.extractFormIdFromPath(path);
+    //   if (formId){
+    //     const index = await this.getRecordFileIndex(formId);
+    //     if (index && index[path]){
+    //       delete index[path];
+    //       await this.saveRecordFileIndex(formId, index);
+    //     }
+    //   }
+    // }catch{}
     return { ok: true } as any;
   }
 
@@ -917,20 +918,75 @@ export class SupabaseService {
     }catch{}
     return client.from('record_form_meta').select('*').eq('form_id', form_id).maybeSingle();
   }
-  async upsertFormMeta(row: { record_no?: string; record_name?: string; department?: string | null; owner?: string | null; method?: string | null; period?: string | null; standard?: string | null; standard_category?: string | null; certs?: string[] | null; }){
+  async upsertFormMeta(row: { record_no?: string; record_name?: string; department?: string | null; owner?: string | null; method?: string | null; period?: string | null; standard?: string | null; standard_category?: string | null; certs?: string[] | null; features?: any; use_departments?: string[] | null; }){
     const client = this.ensureClient();
     const payload: any = { ...row };
+    
+    // Ensure record_id for new records
+    if (row.record_no) {
+      // Check if record exists
+      const { data: existing } = await client.from('record_form_meta').select('record_id').eq('record_no', row.record_no).maybeSingle();
+      if (existing?.record_id) {
+        payload.record_id = existing.record_id;
+      } else {
+        // Always generate record_id for new records
+        payload.record_id = crypto.randomUUID();
+      }
+    }
+    
     try{ const { data: u } = await client.auth.getUser(); payload.updated_by = u.user?.id || null; }catch{}
-    // Upsert by record_no (text unique)
-    return client.from('record_form_meta').upsert(payload, { onConflict: 'record_no' }).select('*').maybeSingle();
-  }
-  async listAllFormMeta(){
+    
+    // Try full upsert first
     try{
-      const { data } = await this.ensureClient().from('record_form_meta').select('record_no,record_name,department,owner,method,period,standard,standard_category');
-      return Array.isArray(data) ? data : [];
+      const res: any = await client.from('record_form_meta').upsert(payload).select('*').maybeSingle();
+      if (!res?.error) return res;
+    }catch{}
+    
+    // Fallback: remove optional columns and retry
+    const fallback: any = { ...payload };
+    delete fallback.features;
+    delete fallback.use_departments;
+    
+    // Ensure record_id is always present
+    if (!fallback.record_id && row.record_no) {
+      fallback.record_id = crypto.randomUUID();
+    }
+    
+    try{
+      const res2: any = await client.from('record_form_meta').upsert(fallback).select('*').maybeSingle();
+      if (res2?.error){ console.warn('[Supabase] upsertFormMeta fallback failed', res2?.error); }
+      return res2;
     }catch(e){
-      console.warn('[Supabase] listAllFormMeta failed; fallback to empty', e);
-      return [] as any[];
+      console.error('[Supabase] upsertFormMeta failed', e);
+      throw e;
+    }
+  }
+  async deleteFormMeta(recordNo: string) {
+    const client = this.ensureClient();
+    const { data, error } = await client
+      .from('record_form_meta')
+      .delete()
+      .eq('record_no', recordNo);
+    if (error) throw error;
+    return data;
+  }
+  
+  async listAllFormMeta(){
+    const client = this.ensureClient();
+    try{
+      const { data, error } = await client
+        .from('record_form_meta')
+        .select('record_no,record_name,department,owner,method,period,standard,standard_category,features,use_departments,certs');
+      if (!error && Array.isArray(data)) return data;
+      throw error;
+    }catch{
+      // Fallback for older schemas without features/use_departments
+      try{
+        const { data } = await client
+          .from('record_form_meta')
+          .select('record_no,record_name,department,owner,method,period,standard,standard_category,certs');
+        return Array.isArray(data) ? data : [];
+      }catch{ return [] as any[]; }
     }
   }
 
@@ -1623,6 +1679,11 @@ export class SupabaseService {
   async isRecordDocNoTaken(doc_no: string){
     const client = this.ensureClient();
     try{
+      const { data } = await client.from('record_form_meta').select('record_no').eq('record_no', doc_no).maybeSingle();
+      if ((data as any)?.record_no) return true;
+    }catch{}
+    // Fallback for older schemas with form_id
+    try{
       const { data } = await client.from('record_form_meta').select('form_id').eq('form_id', doc_no).maybeSingle();
       if ((data as any)?.form_id) return true;
     }catch{}
@@ -1632,6 +1693,12 @@ export class SupabaseService {
     const client = this.ensureClient();
     const prefix = `${docPrefix}-`;
     const used: string[] = [];
+    // Try record_no first
+    try{
+      const { data } = await client.from('record_form_meta').select('record_no').ilike('record_no', `${prefix}%`) as any;
+      used.push(...((Array.isArray(data)? data: []).map((r:any)=>r.record_no||'')));
+    }catch{}
+    // Fallback to form_id
     try{
       const { data } = await client.from('record_form_meta').select('form_id').ilike('form_id', `${prefix}%`) as any;
       used.push(...((Array.isArray(data)? data: []).map((r:any)=>r.form_id||'')));
@@ -1746,13 +1813,28 @@ export class SupabaseService {
   async getRecordFileIndex(formId: string): Promise<RecordFileIndexMap>{
     const client = this.ensureClient();
     const path = this.buildRecordIndexPath(formId);
+    
     try{
+      // First check if file exists using list to avoid 400 error
+      const { data: files } = await client.storage.from(this.recordIndexBucketId).list('index', {
+        limit: 1,
+        search: `${formId}.json`
+      });
+      
+      // If file doesn't exist, return empty object
+      if (!files || files.length === 0) {
+        return {} as RecordFileIndexMap;
+      }
+      
+      // File exists, download it
       const { data, error } = await client.storage.from(this.recordIndexBucketId).download(path);
       if (error || !data) return {} as RecordFileIndexMap;
+      
       const text = await (data as any).text();
       const json = JSON.parse(text || '{}');
       return (json && typeof json === 'object') ? json as RecordFileIndexMap : {} as RecordFileIndexMap;
     }catch{
+      // Silently fail - index is optional for functionality
       return {} as RecordFileIndexMap;
     }
   }

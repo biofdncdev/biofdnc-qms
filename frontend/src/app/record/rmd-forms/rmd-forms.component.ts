@@ -8,13 +8,15 @@ import { TabService } from '../../services/tab.service';
 import { RmdFormsPdfService } from './services/rmd-forms-pdf.service';
 import { RmdFormsFilterService } from './services/rmd-forms-filter.service';
 import { RmdFormsMetadataService } from './services/rmd-forms-metadata.service';
+import { RecordFeaturesSelectorComponent } from '../../pages/record/features/record-features-selector';
+import { normalizeRecordFeatures } from '../../pages/record/features/record-features.registry';
 import { RmdFormsThRecordService } from './services/rmd-forms-th-record.service';
 import { AuditLink, StandardLink, UserPair } from './rmd-forms.types';
 
 @Component({
   selector: 'app-rmd-forms',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RecordFeaturesSelectorComponent],
   providers: [
     RmdFormsPdfService,
     RmdFormsFilterService,
@@ -113,9 +115,13 @@ export class RmdFormsComponent {
     try{
       const rows: any[] = await this.supabase.listAllFormMeta();
       const map: Record<string, RmdFormItem[]> = {};
+      const seenIds = new Set<string>(); // Track unique IDs to prevent duplicates
+      
       for (const r of (rows||[])){
         const id = String((r as any).record_no || '').trim();
-        if (!id) continue;
+        if (!id || seenIds.has(id)) continue; // Skip if empty or already processed
+        seenIds.add(id);
+        
         const cat = String((r as any).standard_category || '기타');
         const item: RmdFormItem = {
           id,
@@ -125,6 +131,7 @@ export class RmdFormsComponent {
           period: (r as any).period || null,
           standard: (r as any).standard || null,
           standardCategory: cat,
+          features: normalizeRecordFeatures((r as any).features || {}), // Normalize features here
         } as any;
         if (!map[cat]) map[cat] = [];
         map[cat].push(item);
@@ -158,18 +165,28 @@ export class RmdFormsComponent {
     try{
       const taken = await (this.supabase as any).isRecordDocNoTaken(docNo);
       if (taken){ this.dupCreate.set(true); alert('이미 사용된 번호입니다. 다른 번호를 입력하세요.'); return; }
-      const id = crypto.randomUUID();
-      await (this.supabase as any).upsertRmdRecord({ id, title, category_id: categoryId, doc_no: docNo });
-      // ensure metadata row also exists (record_no/record_name)
-      try{
-        const catName = this.allCategoriesForCreate.find(c=>c.id===categoryId)?.name || null;
-        await (this.supabase as any).upsertFormMeta({ record_no: docNo, record_name: title, standard_category: catName, department: '원료제조팀' });
-      }catch{}
-      try{ await (this.supabase as any).reserveRecordNumber(docNo); }catch{}
+      // Create directly in record_form_meta (legacy approach)
+      const catName = this.allCategoriesForCreate.find(c=>c.id===categoryId)?.name || null;
+      const res = await (this.supabase as any).upsertFormMeta({ 
+        record_no: docNo, 
+        record_name: title, 
+        standard_category: catName, 
+        department: '원료제조팀' 
+      });
+      if (!res || res.error){
+        throw new Error(res?.error?.message || '저장 실패');
+      }
       this.createOpen.set(false);
       await this.reloadMeta();
       try{
-        const it = this.filterService.filteredFlat().find(x=>x.id===docNo);
+        let it = this.filterService.filteredFlat().find(x=>x.id===docNo);
+        if (!it){
+          // Fallback: inject client-side item if DB propagation delayed
+          const catName = this.allCategoriesForCreate.find(c=>c.id===categoryId)?.name || '기타';
+          const item: RmdFormItem = { id: docNo, title, department: '원료제조팀', standardCategory: catName } as any;
+          this.filterService.addExtraItem(item);
+          it = item as any;
+        }
         if (it) this.open(it);
       }catch{}
     } catch(e: any){
@@ -329,6 +346,8 @@ export class RmdFormsComponent {
 
   // === Open item ===
   async open(it: RmdFormItem) {
+    // Ensure features is always an object
+    (it as any).features = normalizeRecordFeatures((it as any).features || {});
     this.selected.set(it);
     await this.pdfService.refreshPdfList(it.id);
     this.updateLinkedForSelected();
@@ -343,6 +362,38 @@ export class RmdFormsComponent {
       } catch {}
     }
     this.persistUiState();
+  }
+
+  // === Use Departments helper ===
+  onToggleUseDept(sel: any, dept: string, checked: boolean){
+    try{
+      const current = Array.isArray(sel.useDepartments) ? [...sel.useDepartments] : [];
+      const idx = current.indexOf(dept);
+      if (checked){ if (idx < 0) current.push(dept); }
+      else { if (idx >= 0) current.splice(idx, 1); }
+      sel.useDepartments = current;
+      this.metadataService.persistMeta(sel);
+    }catch{}
+  }
+
+  // === Owner Departments helper (담당부서 다중 선택 칩)
+  onToggleOwnerDept(sel: any, dept: string, checked: boolean){
+    try{
+      const current = Array.isArray(sel.ownerDepartments) ? [...sel.ownerDepartments] : [];
+      const idx = current.indexOf(dept);
+      if (checked){ if (idx < 0) current.push(dept); }
+      else { if (idx >= 0) current.splice(idx, 1); }
+      sel.ownerDepartments = current;
+      // department 필드는 첫 칩을 대표값으로 유지(기존 화면 호환)
+      sel.department = (sel.ownerDepartments[0] || sel.department || null);
+      this.metadataService.persistMeta(sel);
+    }catch{}
+  }
+  removeOwnerDeptChip(sel: any, dept: string){
+    this.onToggleOwnerDept(sel, dept, false);
+  }
+  removeUseDeptChip(sel: any, dept: string){
+    this.onToggleUseDept(sel, dept, false);
   }
 
   // === Audit connections ===
@@ -452,6 +503,73 @@ export class RmdFormsComponent {
       const url = `/app/audit/givaudan?open=${encodeURIComponent(String(num))}`;
       this.tabs.requestOpen('Audit 평가 항목', 'audit:givaudan', url);
     } catch {}
+  }
+
+  // Delete record
+  async deleteRecord(sel: any) {
+    if (!sel) return;
+    
+    const confirmMsg = `정말로 "${sel.title}" 기록을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`;
+    if (!confirm(confirmMsg)) return;
+    
+    try {
+      this.metadataService.setDeletingMeta(true);
+      
+      // Delete from database
+      await this.supabase.deleteFormMeta(sel.id);
+      
+      // Remove from local categories
+      for (const cat of this.categories) {
+        const idx = cat.items.findIndex(item => item.id === sel.id);
+        if (idx !== -1) {
+          cat.items.splice(idx, 1);
+          break;
+        }
+      }
+      
+      // Remove any locally persisted metadata for this record
+      try { this.metadataService.removePersistedMeta(sel.id); } catch {}
+
+      // Force-refresh the left list by updating categories signal with new references
+      try {
+        // Also remove empty categories to keep UI tidy
+        const refreshed = this.categories
+          .map(c => ({ category: c.category, items: [...c.items] } as any))
+          .filter(c => c.items.length > 0);
+        this.categories = refreshed as any;
+        this.filterService.setCategories(refreshed);
+      } catch {}
+
+      // Clear selection
+      this.selected.set(null);
+      
+      // Update filter
+      this.filterService.onFiltersChanged();
+      
+      alert('기록이 삭제되었습니다.');
+    } catch (error) {
+      console.error('Failed to delete record:', error);
+      alert('기록 삭제에 실패했습니다.');
+    } finally {
+      this.metadataService.setDeletingMeta(false);
+    }
+  }
+
+  // Handle features change with proper persistence
+  async onFeaturesChange(sel: any, features: any) {
+    // Ensure features is always an object
+    sel.features = features || {};
+    
+    // Persist to localStorage immediately
+    this.metadataService.persistMeta(sel);
+    
+    // Auto-save to DB immediately when checkbox changes
+    try {
+      await this.metadataService.saveMeta(sel);
+      console.log('Features saved to DB:', sel.id, features);
+    } catch (error) {
+      console.error('Failed to save features:', error);
+    }
   }
 
   openStandardTab(stdId: string) {

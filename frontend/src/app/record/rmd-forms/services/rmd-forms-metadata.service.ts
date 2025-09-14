@@ -1,13 +1,16 @@
 import { Injectable, signal } from '@angular/core';
 import { SupabaseService } from '../../../services/supabase.service';
+import { normalizeRecordFeatures } from '../../../pages/record/features/record-features.registry';
 import { FormMetadata, UiState } from '../rmd-forms.types';
 import { RmdFormItem } from '../rmd-forms-data';
 
 @Injectable()
 export class RmdFormsMetadataService {
   isSavingMeta = signal<boolean>(false);
+  isDeletingMeta = signal<boolean>(false);
   metaJustSaved = signal<boolean>(false);
   infoOpen = signal<boolean>(true);
+  private featuresDirty = false;
 
   constructor(private supabase: SupabaseService) {}
 
@@ -19,13 +22,15 @@ export class RmdFormsMetadataService {
       const up = await this.supabase.upsertFormMeta({
         record_no: sel.id,
         record_name: sel.title || sel.id,
-        department: sel.department || null,
+        department: Array.isArray(sel.ownerDepartments) ? sel.ownerDepartments.join(', ') : (sel.department || null),
         owner: sel.owner || null,
         method: sel.method || null,
         period: sel.period || null,
         standard: sel.standard || null,
         standard_category: (sel.standardCategory === 'ISO') ? null : (sel.standardCategory || null),
-        certs: (sel.certs || [])
+        certs: (sel.certs || []),
+        features: sel.features ? JSON.parse(JSON.stringify(sel.features)) : {},
+        use_departments: Array.isArray(sel.useDepartments) ? sel.useDepartments : []
       });
       
       // Re-fetch canonical row and patch UI to ensure persistence actually reflected
@@ -39,6 +44,8 @@ export class RmdFormsMetadataService {
           sel.standard = fresh.standard || sel.standard;
           sel.standardCategory = fresh.standard_category || sel.standardCategory;
           sel.certs = Array.isArray(fresh.certs) ? fresh.certs : (sel.certs || []);
+          if (fresh.features && typeof fresh.features === 'object') sel.features = normalizeRecordFeatures(fresh.features);
+          if (Array.isArray(fresh.use_departments)) sel.useDepartments = fresh.use_departments;
         }
       } catch {}
       
@@ -60,6 +67,8 @@ export class RmdFormsMetadataService {
       const raw = localStorage.getItem('rmd_forms_meta');
       const map = raw ? JSON.parse(raw) : {};
       const sc = (it.standardCategory === 'ISO') ? undefined : it.standardCategory;
+      // Ensure features is always saved as an object
+      const featuresToSave = it.features && typeof it.features === 'object' ? it.features : {};
       map[it.id] = {
         department: it.department,
         owner: it.owner,
@@ -67,9 +76,23 @@ export class RmdFormsMetadataService {
         period: it.period,
         standard: it.standard,
         standardCategory: sc,
-        certs: (it.certs || [])
+        certs: (it.certs || []),
+        features: featuresToSave,
+        useDepartments: Array.isArray(it.useDepartments) ? it.useDepartments : undefined
       };
       localStorage.setItem('rmd_forms_meta', JSON.stringify(map));
+    } catch {}
+  }
+
+  removePersistedMeta(recordId: string): void {
+    try {
+      const raw = localStorage.getItem('rmd_forms_meta');
+      if (!raw) return;
+      const map = JSON.parse(raw) as Record<string, any>;
+      if (map && recordId in map) {
+        delete map[recordId];
+        localStorage.setItem('rmd_forms_meta', JSON.stringify(map));
+      }
     } catch {}
   }
 
@@ -88,6 +111,8 @@ export class RmdFormsMetadataService {
           standard: row.standard || undefined,
           standardCategory: row.standard_category || undefined,
           certs: Array.isArray(row.certs) ? row.certs : [],
+          features: normalizeRecordFeatures(row.features || {}), // Always normalize features
+          useDepartments: Array.isArray(row.use_departments) ? row.use_departments : undefined,
         };
       }
       for (const cat of categories) {
@@ -102,6 +127,10 @@ export class RmdFormsMetadataService {
             const sc = m.standardCategory === 'ISO' ? undefined : m.standardCategory;
             it.standardCategory = sc ?? it.standardCategory;
             it.certs = Array.isArray(m.certs) ? m.certs : (it.certs || []);
+            // Always set features, normalized with defaults
+            const loadedFeatures = (m.features && typeof m.features === 'object') ? normalizeRecordFeatures(m.features) : normalizeRecordFeatures({});
+            (it as any).features = loadedFeatures;
+            if (Array.isArray(m.useDepartments)) (it as any).useDepartments = m.useDepartments;
           }
         }
       }
@@ -141,6 +170,14 @@ export class RmdFormsMetadataService {
 
   toggleInfo(): void {
     this.infoOpen.set(!this.infoOpen());
+  }
+
+  setDeletingMeta(value: boolean): void {
+    this.isDeletingMeta.set(value);
+  }
+
+  markFeaturesDirty(): void {
+    this.featuresDirty = true;
   }
 
   // UI state persistence
