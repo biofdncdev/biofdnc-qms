@@ -1,5 +1,6 @@
 export interface RmdFormItem {
-  id: string;
+  id: string;  // record_no (can be changed)
+  recordId?: string;  // record_id (permanent UUID)
   title: string;
   // Optional metadata used for filtering/list rendering
   department?: string;   // ex) 원료제조팀

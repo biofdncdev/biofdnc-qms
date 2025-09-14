@@ -202,6 +202,7 @@ export class RmdFormsComponent {
         const cat = String((r as any).standard_category || '기타');
         const item: RmdFormItem = {
           id,
+          recordId: (r as any).record_id || undefined,  // Store the permanent record_id
           title: String((r as any).record_name || id),
           department: (r as any).department || '원료제조팀',
           method: (r as any).method || null,
@@ -437,7 +438,9 @@ export class RmdFormsComponent {
     // Ensure features is always an object
     (it as any).features = normalizeRecordFeatures((it as any).features || {});
     this.selected.set(it);
-    await this.pdfService.refreshPdfList(it.id);
+    // Use recordId for file operations if available, fallback to record_no
+    const fileId = it.recordId || it.id;
+    await this.pdfService.refreshPdfList(fileId);
     this.updateLinkedForSelected();
     
     if (it.id === 'BF-RM-PM-IR-07') {
@@ -445,7 +448,8 @@ export class RmdFormsComponent {
         const today = new Date().toISOString().slice(0, 10);
         setTimeout(async () => {
           await this.setDate(today);
-          await this.thService.loadWeeks(it.id);
+          // Use recordId for th_record if available
+          await this.thService.loadWeeks(it.recordId || it.id);
         }, 0);
       } catch {}
     }
@@ -926,8 +930,10 @@ export class RmdFormsComponent {
 
   async saveRecord() {
     if (!this.selected() || !this.pdfCanvasRef || !this.drawCanvasRef) return;
+    const sel = this.selected()!;
+    // Use recordId for th_record operations if available
     await this.thService.saveRecord(
-      this.selected()!.id,
+      sel.recordId || sel.id,
       this.pdfCanvasRef.nativeElement,
       this.drawCanvasRef.nativeElement
     );
@@ -935,7 +941,9 @@ export class RmdFormsComponent {
 
   async loadRecord() {
     if (!this.selected()) return;
-    await this.thService.loadRecord(this.selected()!.id);
+    const sel = this.selected()!;
+    // Use recordId for th_record operations if available
+    await this.thService.loadRecord(sel.recordId || sel.id);
   }
 
   printRecord() {

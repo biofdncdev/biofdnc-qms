@@ -986,7 +986,7 @@ export class SupabaseService {
     try{
       const { data, error } = await client
         .from('record_form_meta')
-        .select('record_no,record_name,department,owner,method,period,standard,standard_category,features,use_departments,certs');
+        .select('record_id,record_no,record_name,department,owner,method,period,standard,standard_category,features,use_departments,certs');
       if (!error && Array.isArray(data)) return data;
       throw error;
     }catch{
@@ -994,14 +994,26 @@ export class SupabaseService {
       try{
         const { data } = await client
           .from('record_form_meta')
-          .select('record_no,record_name,department,owner,method,period,standard,standard_category,certs');
+          .select('record_id,record_no,record_name,department,owner,method,period,standard,standard_category,certs');
         return Array.isArray(data) ? data : [];
       }catch{ return [] as any[]; }
     }
   }
 
   async getThRecord(formId: string, weekStart: string) {
-    return this.ensureClient()
+    const client = this.ensureClient();
+    // Try by record_id first (UUID format)
+    if (formId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      const res = await client
+        .from('rmd_th_record')
+        .select('*')
+        .eq('record_id', formId)
+        .eq('week_start', weekStart)
+        .maybeSingle();
+      if (res.data) return res;
+    }
+    // Fallback to form_id (record_no) for backward compatibility
+    return client
       .from('rmd_th_record')
       .select('*')
       .eq('form_id', formId)
@@ -1010,15 +1022,37 @@ export class SupabaseService {
   }
 
   async upsertThRecord(row: { form_id: string; week_start: string; image_url?: string | null; strokes?: any; }) {
-    return this.ensureClient()
+    const client = this.ensureClient();
+    const payload: any = { ...row };
+    
+    // If form_id looks like a UUID, use it as record_id
+    if (row.form_id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      payload.record_id = row.form_id;
+      // Also keep form_id for backward compatibility
+    }
+    
+    return client
       .from('rmd_th_record')
-      .upsert(row, { onConflict: 'form_id,week_start' })
+      .upsert(payload, { onConflict: payload.record_id ? 'record_id,week_start' : 'form_id,week_start' })
       .select()
       .maybeSingle();
   }
 
   async getLatestThRecord(formId: string){
-    return this.ensureClient()
+    const client = this.ensureClient();
+    // Try by record_id first (UUID format)
+    if (formId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      const res = await client
+        .from('rmd_th_record')
+        .select('*')
+        .eq('record_id', formId)
+        .order('week_start', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (res.data) return res;
+    }
+    // Fallback to form_id for backward compatibility
+    return client
       .from('rmd_th_record')
       .select('*')
       .eq('form_id', formId)
@@ -1028,7 +1062,18 @@ export class SupabaseService {
   }
 
   async listThWeeks(formId: string){
-    return this.ensureClient()
+    const client = this.ensureClient();
+    // Try by record_id first (UUID format)
+    if (formId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      const res = await client
+        .from('rmd_th_record')
+        .select('week_start')
+        .eq('record_id', formId)
+        .order('week_start', { ascending: true });
+      if (res.data && res.data.length > 0) return res;
+    }
+    // Fallback to form_id for backward compatibility
+    return client
       .from('rmd_th_record')
       .select('week_start')
       .eq('form_id', formId)

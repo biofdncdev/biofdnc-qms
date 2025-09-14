@@ -36,7 +36,7 @@
           <option *ngFor="let c of categoriesNoISO" [value]="c">{{ c }}</option>
         </select>
 
-        <label class="f-title" style="margin-top:8px;">수저ㅇ으로로 검색</label>
+        <label class="f-title" style="margin-top:8px;">인증 체계로 검색</label>
         <select [ngModel]="filterService.cert()" (ngModelChange)="filterService.setCert($event)">
           <option value="">전체</option>
           <option value="ISO9001">ISO9001</option>
@@ -439,7 +439,7 @@
           <div style="display:flex; gap:8px; align-items:center;">
             <input type="text" [ngModel]="pdfService.pastedFileName()" (ngModelChange)="pdfService.setPastedFileName($event)" style="height:30px; border:1px solid #e5e7eb; border-radius:8px; padding:0 8px;" />
             <button class="action" (click)="pdfService.clearPastedImage()">지우기</button>
-            <button class="action primary" [disabled]="pdfService.isSavingPasted()" (click)="pdfService.savePastedImage(sel.id, sel.title)">{{ pdfService.isSavingPasted()? '저장 중...' : '저장' }}</button>
+            <button class="action primary" [disabled]="pdfService.isSavingPasted()" (click)="pdfService.savePastedImage(sel.recordId || sel.id, sel.title)">{{ pdfService.isSavingPasted()? '저장 중...' : '저장' }}</button>
           </div>
         </div>
       </ng-container>
@@ -458,7 +458,7 @@
       class="action primary" 
       style="margin-top: 12px; min-width: 120px; display: flex; align-items: center; justify-content: center; gap: 8px;"
       [disabled]="pdfService.isUploadingPdf()"
-      (click)="pdfService.savePdf(sel.id)">
+      (click)="pdfService.savePdf(sel.recordId || sel.id)">
       <svg *ngIf="pdfService.isUploadingPdf()" class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" opacity="0.25"/>
         <path d="M12 2a10 10 0 0 1 0 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
