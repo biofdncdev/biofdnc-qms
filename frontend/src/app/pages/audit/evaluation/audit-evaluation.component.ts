@@ -54,13 +54,13 @@ interface AuditDate { value: string; label: string; }
             <option [ngValue]="'ALL'">전체</option>
             <option *ngFor="let c of companies" [ngValue]="c">{{ c }}</option>
           </select>
-          <label style="margin-left:12px">부서</label>
-          <select class="dept-select" [(ngModel)]="filterDept" (ngModelChange)="onFilterChange()">
+          <label *ngIf="!isGivaudanAudit" style="margin-left:12px">부서</label>
+          <select *ngIf="!isGivaudanAudit" class="dept-select" [(ngModel)]="filterDept" (ngModelChange)="onFilterChange()">
             <option [ngValue]="'ALL'">전체</option>
             <option *ngFor="let d of departments" [ngValue]="d">{{ d }}</option>
           </select>
-          <label style="margin-left:12px">담당자</label>
-          <select class="dept-select" [(ngModel)]="filterOwner" (ngModelChange)="onFilterChange()">
+          <label *ngIf="!isGivaudanAudit" style="margin-left:12px">담당자</label>
+          <select *ngIf="!isGivaudanAudit" class="dept-select" [(ngModel)]="filterOwner" (ngModelChange)="onFilterChange()">
             <option [ngValue]="'ALL'">전체</option>
             <option *ngFor="let u of userOptions" [ngValue]="u">{{ u }}</option>
           </select>
@@ -94,25 +94,25 @@ interface AuditDate { value: string; label: string; }
                     <button class="remove" (click)="removeCompany(it, c); $event.stopPropagation()">×</button>
                   </span>
                 </div>
-                <div class="chips depts" *ngIf="it.departments?.length">
+                <div class="chips depts" *ngIf="!isGivaudanAudit && it.departments?.length">
                   <span class="chip" *ngFor="let d of it.departments; trackBy: trackByValue" [ngClass]="teamClass(d)">{{ displayDeptName(d) }}
                     <button class="remove" (click)="removeDept(it, d); $event.stopPropagation()">×</button>
                   </span>
                 </div>
               </div>
-              <select class="dept-select" [ngModel]="''" (ngModelChange)="addDept(it, $event)" (blur)="saveProgress(it)" title="담당 부서 추가" (click)="$event.stopPropagation()">
+              <select *ngIf="!isGivaudanAudit" class="dept-select" [ngModel]="''" (ngModelChange)="addDept(it, $event)" (blur)="saveProgress(it)" title="담당 부서 추가" (click)="$event.stopPropagation()">
                 <option value="" disabled>담당 부서 추가</option>
                 <option *ngFor="let d of departments" [value]="d" [disabled]="it.departments.includes(d)">{{ d }}</option>
               </select>
               <span class="save-badge saved-inline" *ngIf="rowSaving[it.id]==='saving'"><span class="spinner inline"></span></span>
               
               <!-- 3열 하단: 담당자 추가 -->
-              <select class="dept-select owner-select" [ngModel]="''" (ngModelChange)="addOwner(it, $event)" (blur)="saveProgress(it)" title="담당자 추가" (click)="$event.stopPropagation()">
+              <select *ngIf="!isGivaudanAudit" class="dept-select owner-select" [ngModel]="''" (ngModelChange)="addOwner(it, $event)" (blur)="saveProgress(it)" title="담당자 추가" (click)="$event.stopPropagation()">
                 <option value="" disabled>담당자 추가</option>
                 <option *ngFor="let u of userOptions" [value]="u" [disabled]="(it.owners||[]).includes(u)">{{ u }}</option>
               </select>
               <!-- 4열 하단: 담당자 칩 -->
-              <div class="chips owners" *ngIf="it.owners?.length">
+              <div class="chips owners" *ngIf="!isGivaudanAudit && it.owners?.length">
                 <span class="chip" *ngFor="let u of it.owners; trackBy: trackByValue">{{ u }}
                   <button class="remove" (click)="removeOwner(it, u); $event.stopPropagation()">×</button>
                 </span>
@@ -514,6 +514,7 @@ export class AuditEvaluationComponent {
   userDisplay = '사용자';
   currentUserId: string | null = null;
   isAdmin = false;
+  isGivaudanAudit = false;
   hover: boolean = false;
   resourceHover: boolean[] = [];
   companies: string[] = [];
@@ -555,6 +556,7 @@ export class AuditEvaluationComponent {
         this.userDisplay = data?.name || data?.email || '사용자';
         this.currentUserId = u.id;
         this.isAdmin = (data?.role === 'admin');
+        this.isGivaudanAudit = (data?.role === 'givaudan_audit');
       }
       await this.loadSavedDates();
       // 기본 선택값: 가장 최근 저장일

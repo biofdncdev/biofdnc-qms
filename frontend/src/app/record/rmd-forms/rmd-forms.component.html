@@ -199,7 +199,7 @@
   </div>
   <ng-container *ngIf="metadataService.infoOpen(); else infoSummary">
     <div class="detail-form" (ngModelChange)="metadataService.persistMeta(sel)">
-      <div>
+      <div *ngIf="!isGivaudanAudit">
         <label>담당부서</label>
         <div style="display:flex; gap:8px; align-items:center;">
           <select [(ngModel)]="ownerDeptToAdd" style="flex:1; height:36px; border:1px solid #e5e7eb; border-radius:8px;">
@@ -215,7 +215,7 @@
           <span class="muted" *ngIf="!(sel.ownerDepartments||[]).length">선택 없음</span>
         </div>
       </div>
-      <div>
+      <div *ngIf="!isGivaudanAudit">
         <label>사용부서</label>
         <div style="display:flex; gap:8px; align-items:center;">
           <select [(ngModel)]="useDeptToAdd" style="flex:1; height:36px; border:1px solid #e5e7eb; border-radius:8px;">
@@ -231,7 +231,7 @@
           <span class="muted" *ngIf="!(sel.useDepartments||[]).length">선택 없음</span>
         </div>
       </div>
-      <div>
+      <div *ngIf="!isGivaudanAudit">
         <label>담당자</label>
         <div class="typeahead">
           <input #ownerInput type="text" [ngModel]="ownerTyping" (ngModelChange)="onOwnerInputText($event)" (keydown)="onOwnerKeydown($event, sel)" placeholder="이름/이메일" spellcheck="false">
@@ -249,7 +249,7 @@
           </span>
         </div>
       </div>
-      <div>
+      <div *ngIf="!isGivaudanAudit">
         <label>이 기록에 포함될 기능</label>
         <record-features-selector [features]="sel.features || {}" (featuresChange)="onFeaturesChange(sel, $event)"></record-features-selector>
       </div>

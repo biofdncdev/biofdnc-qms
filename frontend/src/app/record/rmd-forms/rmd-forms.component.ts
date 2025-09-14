@@ -56,6 +56,7 @@ export class RmdFormsComponent {
   departments: Array<{ id: string; name: string; code: string; company_code?: string|null; company_name?: string|null }> = [];
   ownerDeptToAdd: string = '';
   useDeptToAdd: string = '';
+  isGivaudanAudit = false;
   
   // Standard search modal
   showStandardSearchModal = signal(false);
@@ -263,6 +264,16 @@ export class RmdFormsComponent {
     this.buildAuditLinkMap();
     this.reloadMeta();
     this.loadInitialData();
+    // Resolve current user role for conditional UI
+    queueMicrotask(async () => {
+      try{
+        const u = await this.supabase.getCurrentUser();
+        if (u){
+          const { data } = await this.supabase.getUserProfile(u.id);
+          this.isGivaudanAudit = (data?.role === 'givaudan_audit');
+        }
+      }catch{}
+    });
   }
 
   ngAfterViewInit() {
