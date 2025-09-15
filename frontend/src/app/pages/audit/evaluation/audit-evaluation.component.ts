@@ -1120,7 +1120,13 @@ export class AuditEvaluationComponent {
       const targetId = (it.id as number) + (goPrev ? -1 : 1);
       const targetItem = this.items().find(x => (x as any).id === targetId);
       if (targetItem){
-        if (this.openItemId !== targetId){ this.toggleDetails(targetItem as any); }
+        if (this.openItemId !== targetId){
+          // Keep current slide open and open the next one without closing others
+          const prevId = this.openItemId as any;
+          if (typeof prevId === 'number'){ this.openExtra.add(prevId); }
+          // Open target as extra without awaiting
+          this.toggleExtra(targetItem as any);
+        }
         this.openItemId = targetId;
         setTimeout(()=>{
           this.centerRow(targetId);

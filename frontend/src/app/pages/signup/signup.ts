@@ -144,7 +144,7 @@ export class SignupComponent {
           // 비밀번호 재설정 메일을 발송하여 계정 복구를 유도
           try {
             await this.supabaseService.getClient().auth.resetPasswordForEmail(email, {
-              redirectTo: `${location.origin}/login`
+              redirectTo: 'https://biofdnc-qms.vercel.app/login'
             });
             alert('이미 가입된 이메일입니다. 비밀번호 재설정 링크를 이메일로 발송했습니다. 메일함을 확인해주세요.');
             return;

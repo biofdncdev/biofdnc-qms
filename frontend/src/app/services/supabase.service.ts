@@ -51,6 +51,12 @@ export class SupabaseService {
   async signIn(email: string, password: string) {
     return this.ensureClient().auth.signInWithPassword({ email, password });
   }
+  // Public app base URL for email redirects (always route through deployed domain)
+  private getPublicAppUrl(): string {
+    // Use explicit deployment URL to avoid localhost links when admin triggers emails from dev
+    return 'https://biofdnc-qms.vercel.app';
+  }
+
 
   async signOut() {
     // 모든 탭/기기에서 로그아웃
@@ -153,7 +159,7 @@ export class SupabaseService {
   async sendPasswordResetEmail(email: string) {
     const e = String(email || '').trim().toLowerCase();
     if (!e) throw new Error('email is required');
-    return this.ensureClient().auth.resetPasswordForEmail(e, { redirectTo: location.origin + '/forgot-credentials' });
+    return this.ensureClient().auth.resetPasswordForEmail(e, { redirectTo: this.getPublicAppUrl() + '/login' });
   }
 
   async updateLoginState(id: string, isOnline: boolean) {

@@ -61,7 +61,7 @@ export class ForgotCredentialsComponent {
   async startReset(){
     const e = (this.email || '').trim().toLowerCase();
     if (!e){ alert('이메일을 입력하세요.'); return; }
-    await this.supabase.getClient().auth.resetPasswordForEmail(e, { redirectTo: location.origin + '/forgot-credentials' });
+    await this.supabase.getClient().auth.resetPasswordForEmail(e, { redirectTo: 'https://biofdnc-qms.vercel.app/login' });
     alert('이메일로 비밀번호 변경 링크를 보냈습니다. 메일함/스팸함을 확인해주세요.');
   }
 
