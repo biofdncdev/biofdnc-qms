@@ -1272,6 +1272,18 @@ export class AuditEvaluationComponent {
       ev.preventDefault();
       if (this.pickerIndex >= 0 && list[this.pickerIndex]){ this.chooseRecord(list[this.pickerIndex]); }
     }
+    else if (ev.key === 'Escape'){
+      // ESC 동작: 검색어가 있으면 비우고 입력창 포커스, 비어 있으면 모달 닫기
+      ev.preventDefault();
+      const hasQuery = (this.pickerQuery || '').trim().length > 0;
+      if (hasQuery){
+        this.pickerQuery = '';
+        this.pickerIndex = -1;
+        setTimeout(()=> this.pickerInput?.nativeElement?.focus(), 0);
+      } else {
+        this.closeRecordPicker();
+      }
+    }
   }
   chooseRecord(r: any){
     if (!this.pickerTargetItem) return;
@@ -1881,8 +1893,20 @@ export class AuditEvaluationComponent {
     // ESC는 슬라이드를 닫지 않습니다. 열린 팝업만 처리합니다.
     if(this.previewing){ this.previewing=false; return; }
     if(this.linkPopup){ this.linkPopup=null; return; }
-    // 규정/기록 선택 팝업이 열려있을 때는 검색창 초기화
-    if(this.recordPickerOpen){ this.pickerQuery=''; this.pickerIndex = -1; setTimeout(()=> this.pickerInput?.nativeElement?.focus(), 0); }
+    // 규정/기록 선택 팝업이 열려있을 때:
+    if(this.recordPickerOpen){
+      const hasQuery = (this.pickerQuery || '').trim().length > 0;
+      if (hasQuery){
+        // 검색어가 있으면 삭제하고 입력창 포커스
+        this.pickerQuery='';
+        this.pickerIndex = -1;
+        setTimeout(()=> this.pickerInput?.nativeElement?.focus(), 0);
+        return;
+      }
+      // 검색어가 비어있으면 모달 닫기
+      this.closeRecordPicker();
+      return;
+    }
   }
 
   // UI helpers
