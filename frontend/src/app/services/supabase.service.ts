@@ -159,7 +159,7 @@ export class SupabaseService {
   async sendPasswordResetEmail(email: string) {
     const e = String(email || '').trim().toLowerCase();
     if (!e) throw new Error('email is required');
-    return this.ensureClient().auth.resetPasswordForEmail(e, { redirectTo: this.getPublicAppUrl() + '/login' });
+    return this.ensureClient().auth.resetPasswordForEmail(e, { redirectTo: this.getPublicAppUrl() + '/forgot-credentials' });
   }
 
   async updateLoginState(id: string, isOnline: boolean) {
@@ -426,7 +426,7 @@ export class SupabaseService {
   // Resend confirmation email for signups
   async resendConfirmationEmail(email: string) {
     const client = this.ensureClient();
-    const redirectTo = `${location.origin}/login`;
+    const redirectTo = this.getPublicAppUrl() + '/login';
     // 1) 가입 인증 메일 재발송만 시도
     const { error } = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: redirectTo } as any });
     if (!error) return { ok: true } as any;

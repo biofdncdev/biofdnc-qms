@@ -105,7 +105,7 @@ export class ProfileComponent implements OnInit {
 
 	async sendPasswordReset() {
 		if (!this.profile?.email) return;
-		await this.supabase.getClient().auth.resetPasswordForEmail(this.profile.email, { redirectTo: 'https://biofdnc-qms.vercel.app/login' });
+		await this.supabase.getClient().auth.resetPasswordForEmail(this.profile.email, { redirectTo: 'https://biofdnc-qms.vercel.app/forgot-credentials' });
 		alert('비밀번호 변경 메일을 보냈습니다. 메일의 링크를 눌러 새 비밀번호를 설정하세요.');
 	}
 
