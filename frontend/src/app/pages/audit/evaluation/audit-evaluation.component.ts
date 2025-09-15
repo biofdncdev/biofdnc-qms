@@ -197,7 +197,7 @@ interface AuditDate { value: string; label: string; }
   
   <!-- Record picker modal -->
   <div class="preview-backdrop" *ngIf="recordPickerOpen" (click)="closeRecordPicker()">
-    <div class="preview draggable" #pickerRoot (click)="$event.stopPropagation()" (keydown)="onPickerKeydown($event)" tabindex="0">
+    <div class="preview draggable" #pickerRoot (click)="$event.stopPropagation()" (keydown)="onPickerKeydown($event)" tabindex="0" style="position:relative;">
       <header (mousedown)="startPickerDrag($event)">
         <div class="name">규정/기록 선택</div>
         <button (click)="closeRecordPicker()">×</button>
@@ -215,6 +215,10 @@ interface AuditDate { value: string; label: string; }
           <div *ngIf="!pickerResults().length" style="padding:12px; color:#94a3b8;">결과가 없습니다.</div>
         </div>
         <!-- 하단 닫기 버튼 제거 -->
+      </div>
+      <!-- In-modal mini toast -->
+      <div *ngIf="pickerNotice" style="position:absolute; right:12px; bottom:12px; background:#10b981; color:#ffffff; padding:6px 10px; border-radius:999px; font-size:12px; box-shadow:0 6px 16px rgba(0,0,0,.2); display:flex; align-items:center; gap:6px;">
+        <span style="font-weight:700;">✓</span> {{ pickerNotice }}
       </div>
     </div>
   </div>
@@ -1198,6 +1202,8 @@ export class AuditEvaluationComponent {
   pickerPeriod = '';
   pickerIndex = 0;
   hoverPickerIndex = -1;
+  pickerNotice: string | null = null;
+  private pickerNoticeTimer: any = null;
   methods: string[] = ['ERP','QMS','NAS','OneNote','Paper'];
   periods: string[] = ['일','주','월','년','발생시','갱신주기에 따라'];
   recordData: (RmdFormItem & { kind?: 'record'|'standard' })[] = ([] as any);
@@ -1292,6 +1298,10 @@ export class AuditEvaluationComponent {
     if (!exists){
       this.pickerTargetItem.selectedLinks.push({ id: r.id, title: r.title || r.name || '', kind: (r.kind || 'record') });
       this.saveProgress(this.pickerTargetItem);
+      // Show inline confirmation inside the picker
+      this.pickerNotice = '추가되었습니다';
+      if (this.pickerNoticeTimer) { clearTimeout(this.pickerNoticeTimer); }
+      this.pickerNoticeTimer = setTimeout(()=>{ this.pickerNotice = null; }, 1000);
     }
     this.pickerIndex = 0;
     // keep picker open for multiple adds; re-focus input
