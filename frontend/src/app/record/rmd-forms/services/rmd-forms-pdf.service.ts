@@ -55,10 +55,11 @@ export class RmdFormsPdfService {
       const uploadInfo = this.getPdfUploadInfo(formId);
       const pdfList = pdfs.map((pdf: any) => {
         const info = uploadInfo[pdf.path] || {};
-        const originalName = info.originalName || pdf.originalName || '알 수 없는 파일';
+        // 우선순위: 서버 인덱스(originalName) → 로컬 저장 → 스토리지 파일명
+        const originalName = pdf.originalName || info.originalName || pdf.name || '알 수 없는 파일';
         return {
           ...pdf,
-          originalName: originalName,
+          originalName,
           uploadedBy: pdf.uploadedBy || info.uploadedBy || '알 수 없음',
           uploadedAt: pdf.uploadedAt || info.uploadedAt || new Date().toISOString()
         };
@@ -425,7 +426,20 @@ export class RmdFormsPdfService {
     const blob = this.pastedImageBlob();
     if (!blob) { this.pasteError.set('붙여넣은 이미지가 없습니다.'); return; }
     const fileName = this.pastedFileName() || this.defaultImageName(recordTitle||'기록');
-    const safeFolder = String(formId).replace(/[^a-zA-Z0-9._-]/g,'-');
+    
+    // formId가 UUID 형식인지 확인 (record_id) 아니면 record_no
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(formId);
+    let record_id = formId;
+    
+    // record_no인 경우 record_id를 조회
+    if (!isUuid) {
+      const fetchedId = await this.supabase.getRecordIdFromRecordNo(formId);
+      if (fetchedId) {
+        record_id = fetchedId;
+      }
+    }
+    
+    const safeFolder = String(record_id).replace(/[^a-zA-Z0-9._-]/g,'-');
     const storageName = `${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`;
     const storagePath = `pdfs/${safeFolder}/${storageName}`;
     this.isSavingPasted.set(true);
@@ -433,24 +447,14 @@ export class RmdFormsPdfService {
       // Upload blob as PNG
       const pngBlob = blob.type === 'image/png' ? blob : await this.convertToPng(blob);
       const { path, publicUrl } = await this.supabase.uploadRecordImage(pngBlob, storagePath);
-      // Map originalName for display
+      // Persist to cross-device index using record_id
       try{
         const user = await this.supabase.getCurrentUser();
-        const uploadInfo = this.getPdfUploadInfo(formId);
-        uploadInfo[path] = {
-          uploadedBy: user?.email || '알 수 없음',
-          uploadedAt: new Date().toISOString(),
-          originalName: fileName
-        };
-        this.savePdfUploadInfo(formId, uploadInfo);
-        // Persist to cross-device index immediately
-        try{
-          await this.supabase.updateRecordFileIndexEntry(formId, path, {
-            originalName: fileName,
-            uploadedBy: (user as any)?.email || (user as any)?.id || null,
-            uploadedAt: new Date().toISOString()
-          });
-        }catch{}
+        await this.supabase.updateRecordFileIndexEntry(record_id, path, {
+          originalName: fileName,
+          uploadedBy: (user as any)?.email || (user as any)?.id || null,
+          uploadedAt: new Date().toISOString()
+        });
       }catch{}
       this.clearPastedImage();
       await this.refreshPdfList(formId);

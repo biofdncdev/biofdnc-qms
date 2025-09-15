@@ -746,6 +746,23 @@ export class SupabaseService {
   async uploadRecordPdf(file: File, form_id: string){
     const client = this.ensureClient();
     
+    // form_id가 UUID 형식인지 확인 (record_id) 아니면 record_no
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(form_id);
+    let record_id = form_id;
+    
+    // record_no인 경우 record_id를 조회
+    if (!isUuid) {
+      try {
+        const { data } = await client.from('record_form_meta')
+          .select('record_id')
+          .eq('record_no', form_id)
+          .maybeSingle();
+        if (data?.record_id) {
+          record_id = data.record_id;
+        }
+      } catch {}
+    }
+    
     // 원본 파일명 저장
     const original = file.name || 'document';
     
@@ -764,7 +781,8 @@ export class SupabaseService {
     // 원본 파일명은 그대로 유지 (UI 표시용)
     const cleanFileName = original;
     
-    const safeFolder = String(form_id).replace(/[^a-zA-Z0-9._-]/g,'-');
+    // record_id를 폴더명으로 사용
+    const safeFolder = String(record_id).replace(/[^a-zA-Z0-9._-]/g,'-');
     
     // rmd_pdfs: PDF 전용, rmd_records: 그 외 파일 (이미지/오피스/한글 등)
     const pdfsPath = `${safeFolder}/${storageFileName}`;
@@ -782,7 +800,7 @@ export class SupabaseService {
         if (!pdfsError && pdfsData){
           const { data: pub } = client.storage.from('rmd_pdfs').getPublicUrl(pdfsData.path);
           // Persist cross-device metadata
-          try{ const { data: u } = await client.auth.getUser(); const who = (u as any)?.user?.email || (u as any)?.user?.id || null; await this.updateRecordFileIndexEntry(form_id, pdfsData.path, { originalName: cleanFileName, uploadedBy: who, uploadedAt: new Date().toISOString() }); }catch{}
+          try{ const { data: u } = await client.auth.getUser(); const who = (u as any)?.user?.email || (u as any)?.user?.id || null; await this.updateRecordFileIndexEntry(record_id, pdfsData.path, { originalName: cleanFileName, uploadedBy: who, uploadedAt: new Date().toISOString() }); }catch{}
           return { path: pdfsData.path, publicUrl: pub.publicUrl, bucket: 'rmd_pdfs', originalName: cleanFileName } as any;
         }
         // 실패 시 일반 버킷으로
@@ -795,7 +813,7 @@ export class SupabaseService {
           throw pdfsError || error;
         }
         const { data: pub } = client.storage.from('rmd_records').getPublicUrl(data.path);
-        try{ const { data: u } = await client.auth.getUser(); const who = (u as any)?.user?.email || (u as any)?.user?.id || null; await this.updateRecordFileIndexEntry(form_id, data.path, { originalName: cleanFileName, uploadedBy: who, uploadedAt: new Date().toISOString() }); }catch{}
+        try{ const { data: u } = await client.auth.getUser(); const who = (u as any)?.user?.email || (u as any)?.user?.id || null; await this.updateRecordFileIndexEntry(record_id, data.path, { originalName: cleanFileName, uploadedBy: who, uploadedAt: new Date().toISOString() }); }catch{}
         return { path: data.path, publicUrl: pub.publicUrl, bucket: 'rmd_records', originalName: cleanFileName } as any;
       } else {
         // 2) 비-PDF는 바로 rmd_records에 저장
@@ -808,7 +826,7 @@ export class SupabaseService {
           throw error;
         }
         const { data: pub } = client.storage.from('rmd_records').getPublicUrl(data.path);
-        try{ const { data: u } = await client.auth.getUser(); const who = (u as any)?.user?.email || (u as any)?.user?.id || null; await this.updateRecordFileIndexEntry(form_id, data.path, { originalName: cleanFileName, uploadedBy: who, uploadedAt: new Date().toISOString() }); }catch{}
+        try{ const { data: u } = await client.auth.getUser(); const who = (u as any)?.user?.email || (u as any)?.user?.id || null; await this.updateRecordFileIndexEntry(record_id, data.path, { originalName: cleanFileName, uploadedBy: who, uploadedAt: new Date().toISOString() }); }catch{}
         return { path: data.path, publicUrl: pub.publicUrl, bucket: 'rmd_records', originalName: cleanFileName } as any;
       }
       
@@ -825,57 +843,112 @@ export class SupabaseService {
   async listRecordPdfs(form_id: string){
     const client = this.ensureClient();
     const results: any[] = [];
-    // Load cross-device index (best-effort) - disabled for now to avoid 400 errors
-    let index: Record<string, any> = {};
-    // Temporarily disable index loading to prevent console errors
-    // try{ index = await this.getRecordFileIndex(form_id); }catch{}
     
-    // rmd_pdfs 버킷에서 먼저 시도 (기본 버킷)
-    try{
-      const { data: list, error } = await client.storage.from('rmd_pdfs').list(form_id, { limit: 100 });
-      if (!error && list) {
-        const items = (Array.isArray(list)? list: []);
-        const pdfItems = await Promise.all(items.map(async (o:any)=>{
-          const full = `${form_id}/${o.name}`;
-          const { data } = client.storage.from('rmd_pdfs').getPublicUrl(full);
-          return { 
-            name: o.name, 
-            originalName: index[full]?.originalName || null,
-            path: full, 
-            url: data.publicUrl, 
-            bucket: 'rmd_pdfs',
-            uploadedBy: index[full]?.uploadedBy || null,
-            uploadedAt: index[full]?.uploadedAt || null,
-          };
-        }));
-        results.push(...pdfItems);
-      }
-    }catch(e){
-      // 에러가 있어도 대체 버킷 시도를 위해 계속 진행
+    // form_id가 UUID 형식인지 확인 (record_id) 아니면 record_no
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(form_id);
+    let record_id = form_id;
+    
+    // record_no인 경우 record_id를 조회
+    if (!isUuid) {
+      try {
+        const { data } = await client.from('record_form_meta')
+          .select('record_id')
+          .eq('record_no', form_id)
+          .maybeSingle();
+        if (data?.record_id) {
+          record_id = data.record_id;
+        }
+      } catch {}
     }
     
-    // rmd_records 버킷의 pdfs 폴더에서도 확인 (대체 버킷)
+    // Load cross-device index using record_id
+    let index: Record<string, any> = {};
+    try{ 
+      index = await this.getRecordFileIndex(record_id);
+    }catch{ 
+      index = {};
+    }
+    
+    // rmd_pdfs 버킷에서 record_id 폴더 확인 (with timeout and retry)
     try{
-      const { data: list, error } = await client.storage.from('rmd_records').list(`pdfs/${form_id}`, { limit: 100 });
-      if (!error && list) {
-        const items = (Array.isArray(list)? list: []);
-        const pdfItems = await Promise.all(items.map(async (o:any)=>{
-          const full = `pdfs/${form_id}/${o.name}`;
-          const { data } = client.storage.from('rmd_records').getPublicUrl(full);
-          return { 
-            name: o.name, 
-            originalName: index[full]?.originalName || null,
-            path: full, 
-            url: data.publicUrl, 
-            bucket: 'rmd_records',
-            uploadedBy: index[full]?.uploadedBy || null,
-            uploadedAt: index[full]?.uploadedAt || null,
-          };
-        }));
-        results.push(...pdfItems);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
+      try {
+        const { data: list, error } = await client.storage
+          .from('rmd_pdfs')
+          .list(record_id, { limit: 100 });
+        
+        clearTimeout(timeoutId);
+        
+        if (!error && list) {
+          const items = (Array.isArray(list)? list: []);
+          const pdfItems = await Promise.all(items.map(async (o:any)=>{
+            const full = `${record_id}/${o.name}`;
+            const { data } = client.storage.from('rmd_pdfs').getPublicUrl(full);
+            const metadata = index[full];
+            return { 
+              name: o.name, 
+              originalName: metadata?.originalName || null,
+              path: full, 
+              url: data.publicUrl, 
+              bucket: 'rmd_pdfs',
+              uploadedBy: metadata?.uploadedBy || null,
+              uploadedAt: metadata?.uploadedAt || null,
+            };
+          }));
+          results.push(...pdfItems);
+        }
+      } catch (timeoutError) {
+        clearTimeout(timeoutId);
+        console.warn('Timeout fetching from rmd_pdfs bucket, skipping...');
       }
-    }catch(e){
-      // 에러가 있어도 조용히 처리 (둘 다 실패한 경우에만 빈 배열 반환)
+    }catch(e: any){
+      // Log error but continue
+      if (e?.message?.includes('504') || e?.message?.includes('timeout')) {
+        console.warn('Gateway timeout when fetching PDFs, continuing with rmd_records...');
+      }
+    }
+    
+    // rmd_records 버킷의 pdfs 폴더에서 record_id 폴더 확인 (with timeout)
+    try{
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
+      try {
+        const { data: list, error } = await client.storage
+          .from('rmd_records')
+          .list(`pdfs/${record_id}`, { limit: 100 });
+        
+        clearTimeout(timeoutId);
+        
+        if (!error && list) {
+          const items = (Array.isArray(list)? list: []);
+          const pdfItems = await Promise.all(items.map(async (o:any)=>{
+            const full = `pdfs/${record_id}/${o.name}`;
+            const { data } = client.storage.from('rmd_records').getPublicUrl(full);
+            const metadata = index[full];
+            return { 
+              name: o.name, 
+              originalName: metadata?.originalName || null,
+              path: full, 
+              url: data.publicUrl, 
+              bucket: 'rmd_records',
+              uploadedBy: metadata?.uploadedBy || null,
+              uploadedAt: metadata?.uploadedAt || null,
+            };
+          }));
+          results.push(...pdfItems);
+        }
+      } catch (timeoutError) {
+        clearTimeout(timeoutId);
+        console.warn('Timeout fetching from rmd_records bucket, skipping...');
+      }
+    }catch(e: any){
+      // Log error but continue
+      if (e?.message?.includes('504') || e?.message?.includes('timeout')) {
+        console.warn('Gateway timeout when fetching from rmd_records, returning partial results...');
+      }
     }
     
     return results;
@@ -1794,6 +1867,20 @@ export class SupabaseService {
     return this.ensureClient().from('rmd_records').delete().eq('id', id);
   }
 
+  // Helper method to get record_id from record_no
+  async getRecordIdFromRecordNo(record_no: string): Promise<string | null> {
+    const client = this.ensureClient();
+    try {
+      const { data } = await client.from('record_form_meta')
+        .select('record_id')
+        .eq('record_no', record_no)
+        .maybeSingle();
+      return data?.record_id || null;
+    } catch {
+      return null;
+    }
+  }
+
   // ===== Departments =====
   async listDepartments(){
     const { data } = await this.ensureClient().from('departments').select('id,name,code,company_code,company_name').order('name', { ascending: true });
@@ -1876,26 +1963,21 @@ export class SupabaseService {
     const path = this.buildRecordIndexPath(formId);
     
     try{
-      // First check if file exists using list to avoid 400 error
-      const { data: files } = await client.storage.from(this.recordIndexBucketId).list('index', {
-        limit: 1,
-        search: `${formId}.json`
-      });
+      // Try to download the index file directly
+      const { data, error } = await client.storage.from(this.recordIndexBucketId).download(path);
       
-      // If file doesn't exist, return empty object
-      if (!files || files.length === 0) {
+      // If file doesn't exist (404) or any error, return empty object
+      if (error || !data) {
+        // This is normal for new records without index yet
         return {} as RecordFileIndexMap;
       }
-      
-      // File exists, download it
-      const { data, error } = await client.storage.from(this.recordIndexBucketId).download(path);
-      if (error || !data) return {} as RecordFileIndexMap;
       
       const text = await (data as any).text();
       const json = JSON.parse(text || '{}');
       return (json && typeof json === 'object') ? json as RecordFileIndexMap : {} as RecordFileIndexMap;
-    }catch{
+    }catch(e){
       // Silently fail - index is optional for functionality
+      // This could be a 404 (file not found) which is normal
       return {} as RecordFileIndexMap;
     }
   }
