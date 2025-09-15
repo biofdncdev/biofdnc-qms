@@ -40,6 +40,8 @@ export class RmdPageComponent {
   term = signal<string>('');
   results = signal<RegulationItem[]>([]);
   private docs: SearchDoc[] = [];
+  private static cachedDocs: SearchDoc[] | null = null;  // Static cache for search index
+  private static indexBuilding = false;  // Prevent multiple builds
 
   // highlight nav state
   matchTotal = signal<number>(0);
@@ -288,7 +290,14 @@ export class RmdPageComponent {
   @ViewChild('contentPane', { static: false }) contentPane?: ElementRef<HTMLElement>;
 
   constructor(){
-    this.buildIndex();
+    // Only build index if not already cached
+    if (RmdPageComponent.cachedDocs) {
+      this.docs = RmdPageComponent.cachedDocs;
+      this.indexReady.set(true);
+    } else {
+      this.buildIndex();
+    }
+    
     window.addEventListener('message', (e: MessageEvent) => this.onFrameMessage(e));
     // Build record pool for linker search
     this.recordPool = RMD_FORM_CATEGORIES.flatMap((c:any)=> (c.items||[]).map((it:RmdFormItem)=> ({ id: it.id, title: it.title })));
@@ -320,6 +329,18 @@ export class RmdPageComponent {
   }
 
   async buildIndex(){
+    // Prevent multiple simultaneous builds
+    if (RmdPageComponent.indexBuilding) return;
+    
+    // Check again if cached while waiting
+    if (RmdPageComponent.cachedDocs) {
+      this.docs = RmdPageComponent.cachedDocs;
+      this.indexReady.set(true);
+      return;
+    }
+    
+    RmdPageComponent.indexBuilding = true;
+    
     // Load all docs content once; disable search until ready
     try {
       const items: RegulationItem[] = this.categories.flatMap((c: RegulationCategory) => c.items);
@@ -331,24 +352,38 @@ export class RmdPageComponent {
           this.docs.push({ id: it.id, title: it.title, content: text.toLowerCase() });
         }catch{}
       }
+      
+      // Cache the built index
+      RmdPageComponent.cachedDocs = this.docs;
       this.indexReady.set(true);
+      
       setTimeout(() => {
         const el = document.querySelector('input[type=search]') as HTMLInputElement | null;
         if (el) el.focus();
       }, 0);
-    } catch { this.indexReady.set(true); }
+    } catch { 
+      this.indexReady.set(true); 
+    } finally {
+      RmdPageComponent.indexBuilding = false;
+    }
   }
 
   private persistUiState(){
     try{
-      if (!this.selected() || !this.contentPane?.nativeElement) return; // avoid clobbering saved state when nothing selected
       const prevRaw = localStorage.getItem('rmd_page_state');
       const prev = prevRaw ? JSON.parse(prevRaw) : {};
       const s = {
         selectedId: this.selected()?.id || null,
         rightScroll: this.contentPane?.nativeElement?.scrollTop || 0,
+        leftScroll: document.querySelector('aside.left')?.scrollTop || 0,
         expanded: this.linkedExpanded(),
-        iframeTop: typeof prev?.iframeTop === 'number' ? prev.iframeTop : 0
+        iframeTop: typeof prev?.iframeTop === 'number' ? prev.iframeTop : 0,
+        // Persist search state
+        searchQuery: this.query(),
+        searchDraft: this.queryDraft(),
+        searchTerm: this.term(),
+        searching: this.searching(),
+        searchResults: this.searching() ? this.results().map(r => ({ id: r.id, title: r.title })) : []
       } as any;
       localStorage.setItem('rmd_page_state', JSON.stringify(s));
     }catch{}
@@ -358,6 +393,29 @@ export class RmdPageComponent {
       const raw = localStorage.getItem('rmd_page_state');
       if(!raw) return;
       const s = JSON.parse(raw);
+      
+      // Restore search state first
+      if (s?.searchQuery !== undefined) {
+        this.query.set(s.searchQuery);
+        this.queryDraft.set(s.searchDraft || s.searchQuery);
+      }
+      if (s?.searchTerm) {
+        this.term.set(s.searchTerm);
+      }
+      if (s?.searching && s?.searchResults) {
+        this.searching.set(true);
+        // Reconstruct full RegulationItem objects from saved results
+        const fullResults = s.searchResults.map((saved: any) => {
+          for (const cat of this.categories) {
+            const found = cat.items.find(it => it.id === saved.id);
+            if (found) return found;
+          }
+          return null;
+        }).filter((it: any) => it !== null);
+        this.results.set(fullResults);
+      }
+      
+      // Then restore selected item
       if(s?.selectedId){
         // find and select target doc without resetting scroll
         for(const cat of this.categories){
@@ -365,8 +423,18 @@ export class RmdPageComponent {
           if(it){ this.select(it, { resetScroll: false }); break; }
         }
       }
+      
       if(typeof s?.expanded === 'boolean') this.linkedExpanded.set(!!s.expanded);
-      setTimeout(()=>{ this.contentPane?.nativeElement?.scrollTo({ top: Number(s?.rightScroll||0), behavior:'auto' }); }, 50);
+      
+      // Restore scroll positions
+      setTimeout(()=>{ 
+        this.contentPane?.nativeElement?.scrollTo({ top: Number(s?.rightScroll||0), behavior:'auto' });
+        const leftPane = document.querySelector('aside.left') as HTMLElement;
+        if (leftPane && s?.leftScroll) {
+          leftPane.scrollTo({ top: Number(s.leftScroll), behavior: 'auto' });
+        }
+      }, 50);
+      
       // also try to push iframe saved scroll once after restore
       setTimeout(()=> this.applySavedIframeScroll(), 120);
     }catch{}
@@ -391,6 +459,15 @@ export class RmdPageComponent {
       const el = this.contentPane?.nativeElement; if(!el) return;
       el.addEventListener('scroll', () => this.persistUiState(), { passive: true });
     });
+    
+    // Track left pane scroll to persist state
+    queueMicrotask(()=>{
+      const leftPane = document.querySelector('aside.left') as HTMLElement | null;
+      if(leftPane){
+        leftPane.addEventListener('scroll', () => this.persistUiState(), { passive: true });
+      }
+    });
+    
     // Deep link: if ?open=ID or sessionStorage.standard.forceOpen exists, select that doc immediately
     setTimeout(()=>{
       try{
@@ -417,9 +494,16 @@ export class RmdPageComponent {
     // also persist on visibility change (e.g., before switching tabs)
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') this.persistUiState();
-      if (document.visibilityState === 'visible') setTimeout(()=> this.applySavedIframeScroll(), 50);
+      if (document.visibilityState === 'visible') {
+        // Restore state when tab becomes visible again
+        setTimeout(()=> this.restoreUiState(), 50);
+        setTimeout(()=> this.applySavedIframeScroll(), 100);
+      }
     });
-    window.addEventListener('focus', () => setTimeout(()=> this.applySavedIframeScroll(), 50));
+    window.addEventListener('focus', () => {
+      setTimeout(()=> this.restoreUiState(), 50);
+      setTimeout(()=> this.applySavedIframeScroll(), 100);
+    });
     // restore after view exists
     setTimeout(()=> this.restoreUiState(), 0);
     setTimeout(()=> this.restoreUiState(), 200); // second pass to ensure after iframe/layout settles
