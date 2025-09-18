@@ -129,7 +129,7 @@ interface AuditDate { value: string; label: string; }
                   <button class="btn mini pick-btn" style="align-self:flex-start; margin:4px 0;" (click)="openRecordPicker(it)">규정/기록 선택</button>
                   <div class="link-list" style="display:flex; flex-direction:column; gap:6px; width:100%;"
                        (dragover)="onLinkListDragOver($event, it)" (drop)="onLinkListDrop($event, it)">
-                    <button *ngFor="let l of (it.selectedLinks||[]); let i = index" class="link-button"
+                    <button *ngFor="let l of (it.selectedLinks||[]); let i = index" class="link-button" [class.link-standard]="l.kind==='standard'" [class.link-record]="l.kind==='record'"
                             draggable="true"
                             [class.dragging]="linkDragItemId===it.id && linkDragIndex===i"
                             [class.drag-over]="linkDragItemId===it.id && linkDragOverIndex===i"
@@ -139,6 +139,7 @@ interface AuditDate { value: string; label: string; }
                             (drop)="onLinkDrop($event, it, i)"
                             (dragend)="onLinkDragEnd()"
                             (click)="openLinkPopup(l)">
+                      <span class="kind-dot" [class.dot-standard]="l.kind==='standard'" [class.dot-record]="l.kind==='record'"></span>
                       <span class="text">{{ l.id }} · {{ l.title }}</span>
                       <span class="close-x" title="삭제" (click)="$event.stopPropagation(); removeSelectedLink(it, l)">×</span>
                     </button>
@@ -376,9 +377,16 @@ interface AuditDate { value: string; label: string; }
     .chip.team-logi{ background:#cff7e6; color:#0f766e; border-color:#99f6e4; } /* 물류팀: Teal */
     /* 내부 resources 편집 섹션 제거로 관련 스타일 삭제 */
 
-    .link-button{ width:100%; text-align:left; padding:8px 10px; border-radius:10px; border:1px solid #e5e7eb; background:#ffffff; font-weight:600; color:#0f172a; display:flex; align-items:center; justify-content:space-between; }
-    .link-button .text{ font-weight:600; opacity:.9; }
-    .link-button .close-x{ font-weight:700; font-size:14px; color:#64748b; padding:0 6px; }
+    .link-button{ width:100%; text-align:left; padding:8px 10px; border-radius:10px; border:1px solid #e5e7eb; background:#ffffff; font-weight:600; color:#0f172a; display:flex; align-items:flex-start; gap:8px; white-space:normal; line-height:1.4; height:auto; min-height:36px; }
+    /* readable color tints by kind (non-neutral) */
+    .link-button.link-standard{ background:#eaf2ff; border-color:#c7ddff; }
+    .link-button.link-record{ background:#eafdf5; border-color:#bff1d8; }
+    /* leading dot aligned to first line */
+    .link-button .kind-dot{ width:6px; height:6px; border-radius:999px; margin-top:7px; flex:0 0 auto; }
+    .link-button .kind-dot.dot-standard{ background:#3b82f6; }
+    .link-button .kind-dot.dot-record{ background:#10b981; }
+    .link-button .text{ font-weight:600; opacity:.9; flex:1; min-width:0; white-space:normal; word-break:break-word; overflow-wrap:anywhere; line-height:1.4; }
+    .link-button .close-x{ font-weight:700; font-size:14px; color:#64748b; padding:0 6px; align-self:flex-start; flex:0 0 auto; }
     .link-button:hover{ background:#f8fafc; }
     /* Drag styles for link chips */
     .link-button.dragging{ opacity:.5; }
@@ -1222,27 +1230,34 @@ export class AuditEvaluationComponent {
 
   async openRecordPicker(it: any){
     this.pickerTargetItem = it;
-    // Load once from DB for records + static standards
-    if (!(this.recordData && (this.recordData as any).length)){
-      try{
-        const rows: any[] = await this.supabase.listAllFormMeta();
-        const recs = (rows||[]).map(r => ({
-          id: String((r as any).record_no || '').trim(),
-          title: (r as any).record_name || (r as any).name || '',
-          department: (r as any).department || undefined,
-          method: (r as any).method || undefined,
-          period: (r as any).period || undefined,
-          standard: (r as any).standard || undefined,
-          standardCategory: (r as any).standard_category || '기타',
-          kind: 'record' as const,
-        })).filter(r => !!r.id);
-        const stds = RMD_STANDARDS.flatMap(c => c.items.map(i => ({ id: i.id, title: i.title, standardCategory: c.category, kind: 'standard' as const })));
-        this.recordData = ([] as any).concat(recs, stds);
-      }catch{}
-    }
+    // 먼저 모달을 즉시 열어 첫 클릭에 바로 표시되도록 함
     this.recordPickerOpen = true;
     this.pickerIndex = -1; // 처음에는 입력창에 포커스
     setTimeout(()=> this.pickerInput?.nativeElement?.focus(), 0);
+    // 데이터는 백그라운드에서 1회만 로드
+    if (!(this.recordData && (this.recordData as any).length)){
+      this.loadRecordPickerDataOnce();
+    }
+  }
+
+  private recordDataLoading = false;
+  private async loadRecordPickerDataOnce(){
+    if (this.recordDataLoading) return; this.recordDataLoading = true;
+    try{
+      const rows: any[] = await this.supabase.listAllFormMeta();
+      const recs = (rows||[]).map(r => ({
+        id: String((r as any).record_no || '').trim(),
+        title: (r as any).record_name || (r as any).name || '',
+        department: (r as any).department || undefined,
+        method: (r as any).method || undefined,
+        period: (r as any).period || undefined,
+        standard: (r as any).standard || undefined,
+        standardCategory: (r as any).standard_category || '기타',
+        kind: 'record' as const,
+      })).filter(r => !!r.id);
+      const stds = RMD_STANDARDS.flatMap(c => c.items.map(i => ({ id: i.id, title: i.title, standardCategory: c.category, kind: 'standard' as const })));
+      this.recordData = ([] as any).concat(recs, stds);
+    }catch{} finally { this.recordDataLoading = false; }
   }
   closeRecordPicker(){ this.recordPickerOpen = false; this.pickerIndex = 0; }
   pickerResults(){
