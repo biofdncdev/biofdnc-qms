@@ -415,8 +415,8 @@ export class RmdPageComponent {
         this.results.set(fullResults);
       }
       
-      // Then restore selected item
-      if(s?.selectedId){
+      // Then restore selected item (but do not override an explicit pending open)
+      if(s?.selectedId && !(this as any)._pendingOpenId){
         // find and select target doc without resetting scroll
         for(const cat of this.categories){
           const it = cat.items.find((i:any)=> i.id === s.selectedId);
@@ -476,6 +476,8 @@ export class RmdPageComponent {
         const fromSession = sessionStorage.getItem('standard.forceOpen');
         const target = (fromQuery || fromSession || '').trim();
         if (target){
+          // mark as pending so state restoration won't override this explicit request
+          (this as any)._pendingOpenId = target;
           for(const cat of this.categories){
             const it = cat.items.find((i:any)=> i.id === target);
             if (it){

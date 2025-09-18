@@ -138,7 +138,7 @@ interface AuditDate { value: string; label: string; }
                             (dragleave)="onLinkDragLeave($event, it, i)"
                             (drop)="onLinkDrop($event, it, i)"
                             (dragend)="onLinkDragEnd()"
-                            (click)="openLinkPopup(l)">
+                            (click)="onLinkChipClick($event, it, l)">
                       <span class="kind-dot" [class.dot-standard]="l.kind==='standard'" [class.dot-record]="l.kind==='record'"></span>
                       <span class="text">{{ l.id }} · {{ l.title }}</span>
                       <span class="close-x" title="삭제" (click)="$event.stopPropagation(); removeSelectedLink(it, l)">×</span>
@@ -208,7 +208,8 @@ interface AuditDate { value: string; label: string; }
           <input #pickerInput type="text" placeholder="규정/기록 (공백=AND)" [(ngModel)]="pickerQuery" (keydown)="onPickerKeydown($event); $event.stopPropagation()" style="flex:1; height:36px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px; background:rgba(255,255,255,.65); backdrop-filter: blur(6px);" />
         </div>
         <div class="picker-list" style="max-height:55vh; overflow:auto; border:1px solid #eee; border-radius:12px;">
-          <div *ngFor="let r of pickerResults(); let i = index" (mouseenter)="hoverPickerIndex=i" (mouseleave)="hoverPickerIndex=-1" (click)="chooseRecord(r)" [class.active]="i===pickerIndex" [class.hovered]="i===hoverPickerIndex" [id]="'picker-item-'+i" class="picker-item" style="padding:10px 12px; cursor:pointer; display:flex; gap:12px; align-items:center;">
+          <div *ngFor="let r of pickerResults(); let i = index" (mouseenter)="hoverPickerIndex=i" (mouseleave)="hoverPickerIndex=-1" (click)="chooseRecord(r)" [class.active]="i===pickerIndex" [class.hovered]="i===hoverPickerIndex" [class.standard-bg]="r.kind==='standard'" [class.record-bg]="r.kind==='record'" [id]="'picker-item-'+i" class="picker-item" style="padding:10px 12px; cursor:pointer; display:flex; gap:12px; align-items:center;">
+            <span class="kind-dot" [class.dot-standard]="r.kind==='standard'" [class.dot-record]="r.kind==='record'"></span>
             <span style="font-family:monospace; font-size:12px; color:#475569; min-width:120px;">{{ r.id }}</span>
             <span style="font-weight:600;">{{ r.title }}</span>
             <span style="margin-left:auto; font-size:12px; color:#64748b;">{{ r.standardCategory || '-' }}</span>
@@ -394,9 +395,12 @@ interface AuditDate { value: string; label: string; }
     .link-drop-end{ height:8px; border-radius:6px; }
     .link-drop-end.active{ outline:2px dashed #6366f1; outline-offset:2px; }
 
-    /* Picker highlight */
-    .picker-item.hovered{ background:#f8fafc; box-shadow: inset 0 0 0 1px #e5e7eb, 0 2px 8px rgba(59,130,246,.12); border-radius:10px; transition: box-shadow .15s ease, background .15s ease; }
-    .picker-item.active{ background:#eef2ff; box-shadow: inset 0 0 0 2px #6366f1, 0 4px 12px rgba(99,102,241,.18); border-radius:12px; transition: box-shadow .15s ease, background .15s ease; }
+    /* Picker highlight + kind tinting */
+    .picker-item{ border-radius:12px; }
+    .picker-item.hovered{ background:#f8fafc; box-shadow: inset 0 0 0 1px #e5e7eb, 0 2px 8px rgba(59,130,246,.12); transition: box-shadow .15s ease, background .15s ease; }
+    .picker-item.active{ background:#eef2ff; box-shadow: inset 0 0 0 2px #6366f1, 0 4px 12px rgba(99,102,241,.18); transition: box-shadow .15s ease, background .15s ease; }
+    .picker-item.standard-bg{ background:#f0f6ff; }
+    .picker-item.record-bg{ background:#f0fff7; }
 
     @keyframes slideDown { from{ opacity:0; transform: translateY(-6px); } to{ opacity:1; transform:none; } }
 
@@ -1346,13 +1350,26 @@ export class AuditEvaluationComponent {
     }
     // Open/replace a single 'Standard' tab
     const stdTab = '/app/standard/rmd';
-    const stdUrl = `/app/standard/rmd?open=${encodeURIComponent(l.id)}&ts=${Date.now()}`;
+    const ts = Date.now();
+    // Set forceOpen BEFORE navigating so that the destination prefers this over any saved state
     try{ sessionStorage.setItem('standard.forceOpen', String(l.id)); }catch{}
+    const stdUrl = `/app/standard/rmd?open=${encodeURIComponent(l.id)}&ts=${ts}`;
     this.persistUi();
     this.tabBus.requestOpen('원료제조팀 규정', stdTab, stdUrl);
   }
   removeSelectedLink(it: any, l: { id: string }){
     if(!it?.selectedLinks) return; it.selectedLinks = (it.selectedLinks as any[]).filter(x => x.id !== l.id); this.saveProgress(it);
+  }
+  onLinkChipClick(ev: MouseEvent, it: any, l: { id: string; title: string; kind?: 'record'|'standard' }){
+    ev.stopPropagation();
+    // 현재 선택된 항목과 다르면 포커스를 이 칩이 속한 항목으로 이동
+    if (this.openItemId !== it.id){
+      this.selectItem(it);
+      // 선택 후 스크롤 보정
+      setTimeout(()=> this.centerRow(it.id), 0);
+    }
+    // 원래 동작(관련 탭 열기) 실행
+    this.openLinkPopup(l);
   }
   private buildLinkUrl(l: { id: string; title: string }): string | null {
     try{
