@@ -24,20 +24,19 @@ interface AuditDate { value: string; label: string; }
       <div class="controls">
         <label>Audit Date</label>
         <input class="date-input" type="date" [ngModel]="selectedDate()" (ngModelChange)="setDate($event)" />
-        <button class="btn" (click)="setToday()">오늘</button>
         <button class="btn info" [disabled]="saving() || isDateCreated()" (click)="onCreateClick()">{{ saving() ? '생성중...' : '생성' }} <span *ngIf="saving()" class="spinner inline" style="margin-left:6px"></span></button>
         <span class="created-note" *ngIf="isDateCreated()">생성됨: {{ createdDateOnly() }}
-          <button class="btn mini danger" style="margin-left:6px" (click)="confirmDeleteDate()" [disabled]="deleting()">{{ deleting() ? '삭제중...' : '삭제' }} <span *ngIf="deleting()" class="spinner inline" style="margin-left:4px"></span></button>
+          <button class="btn mini danger outline-red" style="margin-left:6px" (click)="confirmDeleteDate()" [disabled]="deleting()">{{ deleting() ? '삭제중...' : '삭제' }} <span *ngIf="deleting()" class="spinner inline" style="margin-left:4px"></span></button>
         </span>
         <div class="saved-wrap">
           <label>저장된 날짜</label>
           <button class="btn dropdown" (click)="toggleSavedOpen($event)">{{ savedSelectedDate || (savedDates[0] || '날짜 선택') }}</button>
           <div class="saved-menu" *ngIf="savedOpen" (click)="$event.stopPropagation()">
-            <div class="saved-item" *ngFor="let d of savedDates" (click)="selectSavedDate(d)">{{ d }}</div>
+            <div class="saved-item" *ngFor="let d of savedDates" (click)="selectSavedDate(d)">{{ d }}<span class="hint-inline" *ngIf="savedMeta[d]"> · {{ savedMeta[d]?.company || 'ALL' }} · {{ savedMeta[d]?.memo || '' }}</span></div>
             <div class="saved-empty" *ngIf="!savedDates?.length">저장된 날짜가 없습니다</div>
           </div>
         </div>
-        <button class="btn success" (click)="loadFromSaved()" [disabled]="loadingSaved()">불러오기</button>
+        <button class="btn success outline-blue" (click)="loadFromSaved()" [disabled]="loadingSaved()">불러오기</button>
         <span *ngIf="loadingSaved()" class="spinner inline" title="불러오는 중…"></span>
         <button class="btn" title="복사" (click)="openCopyModal()">복사</button>
       </div>
@@ -54,6 +53,8 @@ interface AuditDate { value: string; label: string; }
             <option [ngValue]="'ALL'">전체</option>
             <option *ngFor="let c of companies" [ngValue]="c">{{ c }}</option>
           </select>
+          <label style="margin-left:12px">메모</label>
+          <input class="kw-input" style="width:260px;" type="text" [(ngModel)]="headerMemo" placeholder="이 스냅샷 설명 메모" />
           <label *ngIf="!isGivaudanAudit" style="margin-left:12px">부서</label>
           <select *ngIf="!isGivaudanAudit" class="dept-select" [(ngModel)]="filterDept" (ngModelChange)="onFilterChange()">
             <option [ngValue]="'ALL'">전체</option>
@@ -279,6 +280,8 @@ interface AuditDate { value: string; label: string; }
     .controls .btn:disabled{ background:#e5e7eb !important; color:#9ca3af !important; border-color:#e5e7eb !important; cursor:not-allowed; box-shadow:none; }
     .controls .btn.info:disabled{ background:#e5e7eb !important; color:#9ca3af !important; border-color:#e5e7eb !important; }
     .controls .btn:disabled:hover{ filter:none; }
+    .btn.outline-red{ background:#fff !important; color:#dc2626 !important; border:1px solid #fca5a5 !important; }
+    .btn.outline-blue{ background:#fff !important; color:#2563eb !important; border:1px solid #93c5fd !important; }
 
     .layout{ display:grid; grid-template-rows: auto 1fr; gap:8px; height:100%; min-height:0; }
     .filters{ position:sticky; top:0; z-index:8; background:#fff; }
@@ -469,9 +472,9 @@ interface AuditDate { value: string; label: string; }
     .created-note{ font-size:12px; color:#6b7280; margin-left:8px; }
     .toast{ position:fixed; top:12px; right:12px; background:#111827; color:#fff; padding:8px 12px; border-radius:10px; z-index:10000; font-size:12px; box-shadow:0 6px 16px rgba(0,0,0,.2); }
 
-    /* Delete button to light orange */
-    .btn.danger{ background:#fed7aa !important; border-color:#fed7aa !important; color:#7c2d12 !important; }
-    .btn.danger:hover{ background:#fdba74 !important; border-color:#fdba74 !important; }
+    /* Delete button: white bg + red outline/text */
+    .btn.danger{ background:#ffffff !important; color:#dc2626 !important; border:1px solid #fca5a5 !important; }
+    .btn.danger:hover{ background:#fff5f5 !important; border-color:#f87171 !important; }
   `]
 })
 export class AuditEvaluationComponent {
@@ -514,6 +517,7 @@ export class AuditEvaluationComponent {
       const s = JSON.parse(raw);
       if (s?.selectedDate) this.selectedDate.set(s.selectedDate);
       if (s?.companyFilter) this.companyFilter = s.companyFilter;
+      if (s?.headerMemo) this.headerMemo = s.headerMemo;
       if (s?.filterDept) this.filterDept = s.filterDept;
       if (s?.filterOwner) this.filterOwner = s.filterOwner;
       // restore open extras early to minimize flicker
@@ -540,6 +544,8 @@ export class AuditEvaluationComponent {
   resourceHover: boolean[] = [];
   companies: string[] = [];
   companyFilter: 'ALL' | string = 'ALL';
+  headerMemo: string = '';
+  savedMeta: Record<string, { company?: string; memo?: string }> = {};
   @ViewChild('listRef') listRef?: ElementRef<HTMLDivElement>;
   // UI pre-hydration
   private preHydrated: boolean = false;
@@ -599,6 +605,7 @@ export class AuditEvaluationComponent {
           const openId: number | null = s?.openItemId ?? null;
           if (s?.selectedDate) this.selectedDate.set(s.selectedDate);
           if (s?.companyFilter) this.companyFilter = s.companyFilter;
+          if (s?.headerMemo) this.headerMemo = s.headerMemo;
           if (s?.filterDept) this.filterDept = s.filterDept;
           if (s?.filterOwner) this.filterOwner = s.filterOwner;
           // 복원: 이전 세션에서 열려 있던 항목들 유지
@@ -860,6 +867,12 @@ export class AuditEvaluationComponent {
     const d = this.savedSelectedDate || this.savedDates?.[0];
     if (!d) return;
     this.loadingSaved.set(true);
+    // 반영: 저장 당시 메타를 헤더에 적용
+    const meta = this.savedMeta[d];
+    if (meta){
+      if (meta.company) this.companyFilter = meta.company as any;
+      if (typeof meta.memo === 'string') this.headerMemo = meta.memo as any;
+    }
     try{
       this.savedSelectedDate = d;
       this.setDate(d);
@@ -961,6 +974,8 @@ export class AuditEvaluationComponent {
     try{
       const latest = await this.supabase.listSavedAuditDates();
       this.savedDates = Array.from(new Set([date, ...(latest||[])]));
+      // 저장 메타: 현재 업체 필터/메모를 저장 목록과 함께 보이도록 보관
+      this.savedMeta[date] = { company: this.companyFilter, memo: this.headerMemo };
     }catch{}
   }
 
@@ -1795,6 +1810,7 @@ export class AuditEvaluationComponent {
       const st = {
         selectedDate: this.selectedDate(),
         companyFilter: this.companyFilter,
+        headerMemo: this.headerMemo,
         filterDept: this.filterDept,
         filterOwner: this.filterOwner,
         scrollTop: this.listRef?.nativeElement?.scrollTop || 0,
