@@ -504,6 +504,11 @@ export class AuditEvaluationComponent {
       if (s?.companyFilter) this.companyFilter = s.companyFilter;
       if (s?.filterDept) this.filterDept = s.filterDept;
       if (s?.filterOwner) this.filterOwner = s.filterOwner;
+      // restore open extras early to minimize flicker
+      try{
+        const extra = Array.isArray(s?.openExtra) ? (s.openExtra as number[]) : [];
+        if (extra && extra.length){ this.openExtra = new Set<number>(extra); }
+      }catch{}
       // items cache
       const d = s?.selectedDate;
       if (d){
@@ -584,6 +589,11 @@ export class AuditEvaluationComponent {
           if (s?.companyFilter) this.companyFilter = s.companyFilter;
           if (s?.filterDept) this.filterDept = s.filterDept;
           if (s?.filterOwner) this.filterOwner = s.filterOwner;
+          // 복원: 이전 세션에서 열려 있던 항목들 유지
+          try{
+            const extra = Array.isArray(s?.openExtra) ? (s.openExtra as number[]) : [];
+            this.openExtra = new Set<number>(extra);
+          }catch{}
           const dateReady = !!this.selectedDate();
           if (!dateReady) { this.setToday(); }
           // 1) 즉시 화면 복원: 캐시에 저장된 items가 있으면 선반영
@@ -1468,10 +1478,9 @@ export class AuditEvaluationComponent {
   async selectItem(it: any){
     // 105번 이후 항목은 사용하지 않음
     if (it && Number(it.id) > 104) return;
-    // 단일 선택: 기존 임시 열림을 모두 닫고 선택 항목만 열림 상태 유지
+    // 단일 선택: 선택만 변경. 슬라이드 열림 상태는 유지하며, 현재 항목이 닫혀 있으면 연다.
     this.openItemId = it.id;
-    this.openExtra.clear();
-    this.openExtra.add(it.id);
+    if (!this.openExtra.has(it.id)) this.openExtra.add(it.id);
     // 선택 즉시 UI 상태 저장해 탭 이동 후 복귀 시 동일 항목 복원
     this.persistUi();
     // Load assessment master
@@ -1757,7 +1766,8 @@ export class AuditEvaluationComponent {
         filterDept: this.filterDept,
         filterOwner: this.filterOwner,
         scrollTop: this.listRef?.nativeElement?.scrollTop || 0,
-        openItemId: this.openItemId
+        openItemId: this.openItemId,
+        openExtra: Array.from(this.openExtra)
       };
       sessionStorage.setItem('audit.eval.ui.v1', JSON.stringify(st));
       const d = this.selectedDate(); if(d){ sessionStorage.setItem(`audit.eval.items.${d}`, JSON.stringify(this.items())); }
