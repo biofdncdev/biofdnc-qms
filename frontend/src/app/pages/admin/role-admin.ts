@@ -17,7 +17,7 @@ import { MatDialogModule } from '@angular/material/dialog';
 export class RoleAdminComponent implements OnInit {
   displayedColumns = ['name','email','created_at','updated_at','last_sign_in_at','status','role','actions'];
   rows: any[] = [];
-  roles = ['admin','manager','staff','givaudan_audit','viewer'];
+  roles = ['admin','manager','staff','audit','viewer'];
   statuses: Array<'active' | 'inactive'> = ['active','inactive'];
   loading = false;
   pending: Record<string, string> = {};
@@ -35,7 +35,11 @@ export class RoleAdminComponent implements OnInit {
     const { data, error } = await this.supabase.listUsers();
     if (!error && data) {
       const rowsRaw = (data as any[]);
-      let rows = rowsRaw.map((r: any) => ({ ...r, status: (r && r.status) ? r.status : 'active' }));
+      let rows = rowsRaw.map((r: any) => ({
+        ...r,
+        status: (r && r.status) ? r.status : 'active',
+        role: (r && r.role === 'givaudan_audit') ? 'audit' : r.role
+      }));
       if (this.statusFilter !== 'all') rows = rows.filter(r => r.status === this.statusFilter);
       this.rows = rows;
     }
@@ -53,7 +57,7 @@ export class RoleAdminComponent implements OnInit {
       'admin': 'admin',
       'manager': 'manager', 
       'staff': 'staff',
-      'givaudan_audit': 'GIVAUDAN Audit',
+      'audit': 'Audit',
       'viewer': 'viewer'
     };
     return displayMap[role] || role;

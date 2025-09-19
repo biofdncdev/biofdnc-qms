@@ -54,7 +54,7 @@ interface AuditDate { value: string; label: string; }
             <option *ngFor="let c of companies" [ngValue]="c">{{ c }}</option>
           </select>
           <label style="margin-left:12px">메모</label>
-          <input class="kw-input" style="width:260px;" type="text" [(ngModel)]="headerMemo" placeholder="이 스냅샷 설명 메모" />
+          <input class="kw-input" style="width:260px;" type="text" [(ngModel)]="headerMemo" (ngModelChange)="onHeaderMemoChange()" placeholder="이 스냅샷 설명 메모" />
           <label *ngIf="!isGivaudanAudit" style="margin-left:12px">부서</label>
           <select *ngIf="!isGivaudanAudit" class="dept-select" [(ngModel)]="filterDept" (ngModelChange)="onFilterChange()">
             <option [ngValue]="'ALL'">전체</option>
@@ -583,7 +583,7 @@ export class AuditEvaluationComponent {
         this.userDisplay = data?.name || data?.email || '사용자';
         this.currentUserId = u.id;
         this.isAdmin = (data?.role === 'admin');
-        this.isGivaudanAudit = (data?.role === 'givaudan_audit');
+        this.isGivaudanAudit = (data?.role === 'audit' || data?.role === 'givaudan_audit');
       }
       await this.loadSavedDates();
       // 기본 선택값: 가장 최근 저장일
@@ -859,7 +859,18 @@ export class AuditEvaluationComponent {
   setDate(value: string){ this.selectedDate.set(value); this.loadByDate(); }
   today(){ const d = new Date(); const mm = String(d.getMonth()+1).padStart(2,'0'); const dd = String(d.getDate()).padStart(2,'0'); return `${d.getFullYear()}-${mm}-${dd}`; }
   setToday(){ this.setDate(this.today()); }
-  async loadSavedDates(){ try{ this.savedDates = await this.supabase.listSavedAuditDates(); }catch{ this.savedDates = []; } }
+  async loadSavedDates(){
+    try{
+      this.savedDates = await this.supabase.listSavedAuditDates();
+      // 함께 메타도 조회하여 드롭다운 보조 텍스트로 표시
+      try{
+        const rows = await this.supabase.listAllAuditDateMeta();
+        const map: Record<string, { company?: string; memo?: string }> = {};
+        for (const r of rows){ map[r.audit_date] = { company: (r.company || undefined) as any, memo: r.memo || '' }; }
+        this.savedMeta = map;
+      }catch{}
+    }catch{ this.savedDates = []; }
+  }
   toggleSavedOpen(ev: MouseEvent){ ev.stopPropagation(); this.savedOpen = !this.savedOpen; }
   selectSavedDate(d: string){ this.savedSelectedDate = d; this.savedOpen = false; /* 불러오기 버튼을 눌러야 실제 로드 */ }
   @HostListener('document:click') closeSaved(){ this.savedOpen = false; }
@@ -888,6 +899,8 @@ export class AuditEvaluationComponent {
     // 아직 생성되지 않은 날짜라면 화면을 초기화하고 수정 가드를 켭니다
     const created = this.savedDates.includes(date);
     try{
+      // 날짜 메타 불러와 헤더 반영
+      try{ const meta = await this.supabase.getAuditDateMeta(date); if (meta){ if (meta.company) this.companyFilter = meta.company as any; this.headerMemo = meta.memo || ''; this.savedMeta[date] = { company: meta.company || undefined, memo: meta.memo || '' }; } }catch{}
       const { data: all } = created ? await this.supabase.listGivaudanProgressByDate(date) : { data: [] } as any;
       // 생성일(최초 저장 시간) 표시
       try{ this.createdAt = (await this.supabase.getAuditDateCreatedAt(date)) || null; }catch{ this.createdAt = null; }
@@ -1802,7 +1815,26 @@ export class AuditEvaluationComponent {
     if (!date || !this.savedDates.includes(date)) { this.showToast('먼저 생성 버튼으로 이 날짜를 생성해 주세요'); return; }
     it.companies = (it.companies||[]).filter((x:string)=>x!==c); this.saveProgress(it);
   }
-  onCompanyFilterChange(_: any){}
+  onCompanyFilterChange(_: any){
+    // 날짜 단위 메타에 즉시 반영하여 드롭다운에도 표시
+    const d = this.selectedDate(); if (!d) return;
+    this.savedMeta[d] = { ...(this.savedMeta[d]||{}), company: this.companyFilter, memo: this.headerMemo };
+    // DB 저장
+    this.supabase.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo });
+    this.persistUi();
+  }
+  private headerMemoTimer: any = null;
+  onHeaderMemoChange(){
+    const d = this.selectedDate(); if (!d) return;
+    // 즉시 로컬 메타 반영
+    this.savedMeta[d] = { ...(this.savedMeta[d]||{}), company: this.companyFilter, memo: this.headerMemo };
+    // 약간의 디바운스로 저장 호출 빈도 절감
+    clearTimeout(this.headerMemoTimer);
+    this.headerMemoTimer = setTimeout(()=>{
+      this.supabase.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo });
+      this.persistUi();
+    }, 400);
+  }
 
   @HostListener('window:beforeunload')
   persistUi(){

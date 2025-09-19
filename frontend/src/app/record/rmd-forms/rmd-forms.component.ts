@@ -284,7 +284,7 @@ export class RmdFormsComponent {
         const u = await this.supabase.getCurrentUser();
         if (u){
           const { data } = await this.supabase.getUserProfile(u.id);
-          this.isGivaudanAudit = (data?.role === 'givaudan_audit');
+          this.isGivaudanAudit = (data?.role === 'audit' || data?.role === 'givaudan_audit');
         }
       }catch{}
     });

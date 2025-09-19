@@ -618,6 +618,61 @@ export class SupabaseService {
     return Array.from(set);
   }
 
+  // Audit date-level meta (persist company filter and memo per date)
+  async upsertAuditDateMeta(audit_date: string, meta: { company?: string | null; memo?: string | null }){
+    const client = this.ensureClient();
+    try{
+      // Read existing meta row (number = 0 used as date-level meta container)
+      const { data } = await client
+        .from('audit_progress')
+        .select('comments')
+        .eq('audit_date', audit_date)
+        .eq('number', 0)
+        .maybeSingle();
+      let comments: any[] = Array.isArray((data as any)?.comments) ? ((data as any).comments as any[]) : [];
+      // Remove previous meta entries
+      comments = comments.filter((c: any)=> !(c && c.type === 'date_meta'));
+      comments.push({ type: 'date_meta', company: meta.company ?? null, memo: meta.memo ?? '' });
+      // Upsert meta row
+      return client
+        .from('audit_progress')
+        .upsert({ number: 0, audit_date, comments }, { onConflict: 'number,audit_date', ignoreDuplicates: false });
+    }catch(err){ return { error: err } as any; }
+  }
+
+  async getAuditDateMeta(audit_date: string): Promise<{ company?: string | null; memo?: string | null } | null>{
+    try{
+      const { data } = await this.ensureClient()
+        .from('audit_progress')
+        .select('comments')
+        .eq('audit_date', audit_date)
+        .eq('number', 0)
+        .maybeSingle();
+      const arr: any[] = Array.isArray((data as any)?.comments) ? ((data as any).comments as any[]) : [];
+      const meta = arr.find((c:any)=> c && c.type === 'date_meta');
+      if (meta) return { company: meta.company ?? null, memo: meta.memo ?? '' };
+      return null;
+    }catch{ return null; }
+  }
+
+  async listAllAuditDateMeta(): Promise<Array<{ audit_date: string; company?: string | null; memo?: string | null }>>{
+    try{
+      const { data } = await this.ensureClient()
+        .from('audit_progress')
+        .select('audit_date, comments')
+        .eq('number', 0)
+        .order('audit_date', { ascending: false });
+      const rows: Array<{ audit_date: string; company?: string | null; memo?: string | null }> = [];
+      for (const r of (Array.isArray(data) ? data : [])){
+        const d = (r as any)?.audit_date; if (!d) continue;
+        const arr: any[] = Array.isArray((r as any)?.comments) ? ((r as any).comments as any[]) : [];
+        const meta = arr.find((c:any)=> c && c.type === 'date_meta');
+        if (meta) rows.push({ audit_date: String(d), company: meta.company ?? null, memo: meta.memo ?? '' });
+      }
+      return rows;
+    }catch{ return []; }
+  }
+
   // Audit items upsert from JSON (best-effort)
   async upsertAuditItems(items: Array<{ number: number; titleKo: string; titleEn?: string | null }>) {
     if (!Array.isArray(items) || items.length === 0) return { ok: true } as any;

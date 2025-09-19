@@ -69,7 +69,7 @@ interface Cat { id: string; name: string; doc_prefix: string; department_code?: 
         <div (click)="toggleSort('category')" style="cursor:pointer;">규정카테고리명 {{ sort.icon('category') }}</div>
         <div (click)="toggleSort('title')" style="cursor:pointer;">기록명 {{ sort.icon('title') }}</div>
         <div>포함 기능</div>
-        <div (click)="toggleSort('departments')" style="cursor:pointer;">사용 부서 {{ sort.icon('departments') }}</div>
+        <div (click)="toggleSort('departments')" style="cursor:pointer;">사용부서 {{ sort.icon('departments') }}</div>
         <div (click)="toggleSort('owner_departments')" style="cursor:pointer;">담당 부서 {{ sort.icon('owner_departments') }}</div>
         <div>수정</div><div>삭제</div>
       </div>
