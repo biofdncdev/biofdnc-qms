@@ -96,6 +96,11 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/audit/evaluation/audit-evaluation.component').then(m => m.AuditEvaluationComponent),
       },
       {
+        path: 'audit/items-management',
+        loadComponent: () => import('./pages/audit/items-management/audit-items-management.component').then(m => m.AuditItemsManagementComponent),
+        canActivate: [authGuard],
+      },
+      {
         path: 'audit/amorepacific',
         loadComponent: () => import('./pages/home/home').then(m => m.HomeComponent),
       },

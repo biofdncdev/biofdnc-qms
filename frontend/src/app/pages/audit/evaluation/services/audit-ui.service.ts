@@ -76,10 +76,8 @@ export class AuditUiService {
       };
       sessionStorage.setItem('audit.eval.ui.v1', JSON.stringify(st));
       
-      const d = this.state.selectedDate();
-      if (d) {
-        sessionStorage.setItem(`audit.eval.items.${d}`, JSON.stringify(this.state.items()));
-      }
+      // Note: 항목 배열(items)은 세션에 캐시하지 않습니다.
+      // isActive 등의 서버 플래그 변경 시 초기 렌더에서 지연/불일치가 발생하므로 캐싱을 비활성화합니다.
     } catch {}
   }
   
@@ -106,17 +104,7 @@ export class AuditUiService {
         }
       } catch {}
       
-      // Items cache
-      const d = s?.selectedDate;
-      if (d) {
-        const cache = sessionStorage.getItem(`audit.eval.items.${d}`);
-        if (cache) {
-          const rows = JSON.parse(cache);
-          if (Array.isArray(rows) && rows.length) {
-            this.state.items.set(rows);
-          }
-        }
-      }
+      // Items cache 복원 비활성화: 서버 상태와의 불일치 방지
     } catch {}
   }
 }

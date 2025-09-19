@@ -52,9 +52,8 @@ export class AuditDataService {
         .filter(Boolean);
     } catch {}
     
-    // 템플릿 적용
-    await this.applyTitlesFromJsonOrExcel();
-    this.refreshTitlesFromDb();
+    // CSV 템플릿 사용 중지: 항상 DB 기준으로 제목/부제목 로드
+    await this.refreshTitlesFromDb();
   }
   
   async loadSavedDates() {
@@ -150,11 +149,8 @@ export class AuditDataService {
       }
       this.state.items.set(curr);
       
-      if (!created) {
-        try {
-          await this.applyTitlesFromJsonOrExcel();
-        } catch {}
-      }
+      // 새로 생성한 날짜라도 항목 타이틀은 DB 기준으로 동기화
+      await this.refreshTitlesFromDb();
     } catch {
       this.state.resetItems();
     }
@@ -416,19 +412,24 @@ export class AuditDataService {
   private async refreshTitlesFromDb() {
     try {
       const rows = await this.audit.listAuditItems();
-      const map = new Map<number, { title_ko: string; title_en: string }>();
+      const map = new Map<number, { title_ko: string; title_en: string; is_active: boolean }>();
       
       for (const r of rows as any[]) {
         map.set(r.number, {
           title_ko: r.title_ko,
-          title_en: r.title_en
+          title_en: r.title_en,
+          is_active: r.is_active !== false // Default to true if undefined
         });
       }
       
       const updated = this.state.items().map((it: any) => {
         const t = map.get(it.id);
         return t 
-          ? { ...it, titleKo: t.title_ko || it.titleKo, titleEn: t.title_en || it.titleEn } 
+          ? { ...it, 
+              titleKo: t.title_ko || it.titleKo, 
+              titleEn: t.title_en || it.titleEn,
+              isActive: t.is_active
+            } 
           : it;
       });
       

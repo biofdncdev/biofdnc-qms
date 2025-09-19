@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, OnDestroy } from '@angular/core';
 // Avoid animations dependency for Netlify build; simple JS/CSS transitions are used
 import { CommonModule } from '@angular/common';
 import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
@@ -31,7 +31,7 @@ import { TabService } from '../../services/tab.service';
   styleUrls: ['./app-shell.scss'],
   animations: []
 })
-export class AppShellComponent {
+export class AppShellComponent implements OnDestroy {
   selected = signal<string>('home');
   leftOpen = false;
   drawerCompact = false;
@@ -53,8 +53,10 @@ export class AppShellComponent {
   isStaff = false;
   isViewer = false;
   isGivaudanAudit = false;
+  isAudit = false;
   unread = signal<number>(0);
   private notifSubscription: any;
+  private menuHoverTimer: any = null;
 
   constructor(private router: Router, private auth: AuthService, private tabBus: TabService) {
     // Determine admin on boot
@@ -66,6 +68,8 @@ export class AppShellComponent {
         this.isStaff = data?.role === 'staff';
         this.isViewer = data?.role === 'viewer';
         this.isGivaudanAudit = data?.role === 'audit' || data?.role === 'givaudan_audit';
+        this.isAudit = data?.role === 'audit' || data?.role === 'givaudan_audit';
+        console.log('[AppShell] User roles:', { isAdmin: this.isAdmin, isAudit: this.isAudit, role: data?.role });
       }
       this.buildMenus();
       // Load notifications for staff and above (admin/manager/staff)
@@ -129,7 +133,8 @@ export class AppShellComponent {
         {
           key: 'audit', icon: 'rule', label: 'Audit', submenu: [
             ...(this.isGivaudanAudit ? [] : [{ label: 'Audit 업체 등록', path: '/app/audit/companies' }]),
-            { label: 'Audit 평가 항목', path: '/app/audit' }
+            { label: 'Audit 평가 항목', path: '/app/audit' },
+            ...(this.isAdmin ? [{ label: 'Audit 평가 항목 관리', path: '/app/audit/items-management' }] : [])
           ]
         },
       );
@@ -189,15 +194,31 @@ export class AppShellComponent {
   }
 
   onRailMouseEnter(key: string) {
-    const menu = this.menus.find(m => m.key === key);
-    if (menu?.submenu && menu.submenu.length > 0) {
-      this.openLeftForKey(key);
-    } else {
-      this.selected.set(key);
+    // Clear any pending timer
+    if (this.menuHoverTimer) {
+      clearTimeout(this.menuHoverTimer);
+      this.menuHoverTimer = null;
     }
+    
+    // Add delay before changing menu to prevent accidental switches
+    this.menuHoverTimer = setTimeout(() => {
+      const menu = this.menus.find(m => m.key === key);
+      if (menu?.submenu && menu.submenu.length > 0) {
+        this.openLeftForKey(key);
+      } else {
+        this.selected.set(key);
+      }
+      this.menuHoverTimer = null;
+    }, 200); // 200ms delay to prevent accidental menu switches
   }
 
   onContentMouseEnter(){
+    // Clear any pending timer
+    if (this.menuHoverTimer) {
+      clearTimeout(this.menuHoverTimer);
+      this.menuHoverTimer = null;
+    }
+    
     // When moving into the page content, restore to the actual current route
     const path = this.router.url || this.tabs[this.activeTabIndex]?.path || '/app/home';
     this.syncMenuSelectionByPath(path);
@@ -395,6 +416,16 @@ export class AppShellComponent {
       this.leftOpen = true;
     } else {
       this.sectionMenu = [];
+    }
+  }
+
+  ngOnDestroy() {
+    if (this.notifSubscription) {
+      this.notifSubscription.unsubscribe();
+    }
+    if (this.menuHoverTimer) {
+      clearTimeout(this.menuHoverTimer);
+      this.menuHoverTimer = null;
     }
   }
 }

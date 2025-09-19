@@ -21,14 +21,6 @@ export class AuditService {
       .single();
   }
 
-  async listAuditItems() {
-    const { data, error } = await this.client
-      .from('audit_items')
-      .select('number,title_ko,title_en')
-      .order('number', { ascending: true });
-    if (error) throw error;
-    return Array.isArray(data) ? data : [];
-  }
 
   async upsertAuditItems(items: Array<{ 
     number: number; 
@@ -144,6 +136,56 @@ export class AuditService {
       .from('audit_progress')
       .delete()
       .eq('audit_date', audit_date);
+  }
+
+  // ===== Audit Items Management =====
+  async listAuditItems(): Promise<any> {
+    const { data, error } = await this.client
+      .from('audit_items')
+      .select('number,title_ko,title_en,is_active,category_no,question,translation')
+      .order('number', { ascending: true });
+    
+    if (error) throw error;
+    // Ensure is_active has a default value
+    return (data || []).map((item: any) => ({
+      ...item,
+      is_active: item.is_active !== false // Default to true if undefined
+    }));
+  }
+
+  async getActiveAuditItems(): Promise<any> {
+    const { data, error } = await this.client
+      .from('audit_items')
+      .select('*')
+      .eq('is_active', true)
+      .order('number', { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
+  }
+
+  async updateAuditItem(number: number, updates: any): Promise<any> {
+    const { data, error } = await this.client
+      .from('audit_items')
+      .update(updates)
+      .eq('number', number)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  }
+
+  async toggleAuditItemActive(number: number, isActive: boolean): Promise<any> {
+    const { data, error } = await this.client
+      .from('audit_items')
+      .update({ is_active: isActive })
+      .eq('number', number)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
   }
 
   async upsertGivaudanProgress(row: {

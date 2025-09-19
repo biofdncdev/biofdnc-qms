@@ -200,7 +200,10 @@ export class AuditItemListComponent {
   ) {}
   
   visibleItems(): AuditItem[] {
-    const base = this.state.items().filter((it: any) => Number(it.id) !== 25);
+    const base = this.state.items().filter((it: any) => {
+      // Filter out item 25 and inactive items
+      return Number(it.id) !== 25 && it.isActive !== false;
+    });
     const uniqMap = new Map<number, any>();
     
     for (const it of base) {
