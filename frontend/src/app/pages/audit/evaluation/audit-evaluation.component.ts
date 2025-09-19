@@ -58,7 +58,12 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
           (onSaveProgress)="saveProgress($event)"
           (onToggleExtra)="toggleExtra($event)"
           (onAddComment)="addComment($event)"
-          (onOpenRecordPicker)="openRecordPicker($event)">
+          (onOpenRecordPicker)="openRecordPicker($event)"
+          (onRemoveComment)="removeComment($event.it, $event.index)"
+          (onStartEditComment)="startEditComment($event.it, $event.index, $event.text)"
+          (onSaveEditComment)="saveEditComment($event.it, $event.index)"
+          (onCancelEditComment)="cancelEditComment($event.it, $event.index)"
+          (onEditCommentKeydown)="onEditCommentKeydown($event.ev, $event.it, $event.index)">
         </app-audit-item-list>
       </div>
 

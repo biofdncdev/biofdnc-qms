@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewInit, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuditItem, LinkItem } from '../types/audit.types';
@@ -12,7 +12,7 @@ import { AuditUiService } from '../services/audit-ui.service';
   template: `
     <div class="details-inner comments-on">
       <!-- Column 1: Assessment details -->
-      <textarea class="status-select slide-input" 
+      <textarea #slide1 class="status-select slide-input" 
                style="grid-row:1; grid-column:1; width:100%;" 
                [attr.id]="'input-'+item.id+'-1'" 
                [attr.data-col]="1" 
@@ -69,7 +69,7 @@ import { AuditUiService } from '../services/audit-ui.service';
       </div>
 
       <!-- Column 3: Progress -->
-      <textarea class="owner-select slide-input" 
+      <textarea #slide3 class="owner-select slide-input" 
                style="grid-row:1; grid-column:3; width:100%;" 
                [attr.id]="'input-'+item.id+'-3'" 
                [attr.data-col]="3" 
@@ -89,8 +89,10 @@ import { AuditUiService } from '../services/audit-ui.service';
           <textarea [(ngModel)]="ui.newComment[item.id]" 
                    [attr.id]="'comment-input-'+item.id" 
                    (keydown)="onCommentKeydown.emit($event)" 
+                   (input)="autoGrow($event)"
                    placeholder="댓글을 입력..." 
-                   [disabled]="!isDateCreated">
+                   [disabled]="!isDateCreated"
+                   class="comment-input">
           </textarea>
           <button class="btn" 
                   (click)="onAddComment.emit()" 
@@ -101,29 +103,34 @@ import { AuditUiService } from '../services/audit-ui.service';
         <div class="list">
           <div class="comment" 
                *ngFor="let c of (item.comments||[]); let i = index; trackBy: trackByComment">
-            <button class="close-x" 
-                    *ngIf="canDeleteComment(c)" 
-                    (click)="$event.stopPropagation(); onRemoveComment.emit(i)" 
-                    title="삭제">×</button>
-            <button class="edit-btn" 
-                    *ngIf="canEditComment(c)" 
-                    (click)="$event.stopPropagation(); onStartEditComment.emit({index: i, text: c.text})" 
-                    title="수정">✎</button>
-            <div class="meta">{{ c.user }} · {{ c.time }}</div>
-            <ng-container *ngIf="ui.editingComment[item.id]===i; else viewCmt">
-              <textarea class="edit-area" 
-                       [(ngModel)]="ui.editCommentText[ui.keyFor(item.id,i)]" 
-                       (keydown)="onEditCommentKeydown.emit({event: $event, index: i})" 
-                       spellcheck="false">
-              </textarea>
-              <div class="edit-actions">
-                <button class="btn mini" (click)="onSaveEditComment.emit(i)">저장</button>
-                <button class="btn mini" (click)="onCancelEditComment.emit(i)">취소</button>
-              </div>
-            </ng-container>
-            <ng-template #viewCmt>
-              <div class="text">{{ c.text }}</div>
-            </ng-template>
+            <div class="content">
+              <div class="meta">{{ c.user }} · {{ c.time }}</div>
+              <ng-container *ngIf="ui.editingComment[item.id]===i; else viewCmt">
+                <textarea class="edit-area" 
+                         [(ngModel)]="ui.editCommentText[ui.keyFor(item.id,i)]" 
+                         (keydown)="onEditCommentKeydown.emit({event: $event, index: i})" 
+                         (input)="autoGrow($event)"
+                         spellcheck="false">
+                </textarea>
+                <div class="edit-actions">
+                  <button class="btn mini" (click)="onSaveEditComment.emit(i)">저장</button>
+                  <button class="btn mini" (click)="onCancelEditComment.emit(i)">취소</button>
+                </div>
+              </ng-container>
+              <ng-template #viewCmt>
+                <div class="text">{{ c.text }}</div>
+              </ng-template>
+            </div>
+            <div class="actions">
+              <button class="icon-btn edit" 
+                      *ngIf="canEditComment(c)" 
+                      (click)="$event.stopPropagation(); onStartEditComment.emit({index: i, text: c.text})" 
+                      title="수정">✎</button>
+              <button class="icon-btn close" 
+                      *ngIf="canDeleteComment(c)" 
+                      (click)="$event.stopPropagation(); onRemoveComment.emit(i)" 
+                      title="삭제">×</button>
+            </div>
           </div>
         </div>
       </div>
@@ -141,6 +148,18 @@ import { AuditUiService } from '../services/audit-ui.service';
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
     
+    .comments { grid-column: 4; }
+    .comments .new { display:flex; gap:8px; align-items:flex-start; }
+    .comments .new .comment-input { flex:1; min-width:0; max-width:100%; resize:vertical; min-height:64px; }
+    .comments .list { display:flex; flex-direction:column; gap:8px; max-height:300px; overflow:auto; }
+    .comment { position:relative; border:1px solid #e5e7eb; border-radius:10px; padding:8px; background:#f9fafb; display:flex; align-items:flex-start; font-size:13.5px; }
+    .comment .content { flex:1 1 auto; min-width:0; }
+    .comment .actions { flex:0 0 auto; display:flex; gap:6px; margin-left:8px; }
+    .comment .icon-btn { width:20px; height:20px; border-radius:6px; border:1px solid #e5e7eb; background:#fff; color:#334155; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; line-height:1; padding:0; }
+    .comment .icon-btn.edit:hover { background:#eef2ff; border-color:#c7d2fe; color:#3730a3; }
+    .comment .icon-btn.close:hover { background:#fee2e2; border-color:#fecaca; color:#991b1b; }
+    .comment .edit-area { width:100%; max-width:100%; min-width:100%; box-sizing:border-box; }
+    
     @media (max-width: 1200px) {
       .details-inner {
         grid-template-columns: 1fr;
@@ -148,7 +167,7 @@ import { AuditUiService } from '../services/audit-ui.service';
     }
   `]
 })
-export class AuditItemDetailsComponent {
+export class AuditItemDetailsComponent implements AfterViewInit, OnChanges {
   @Input() item!: AuditItem;
   @Input() isDateCreated: boolean = false;
   
@@ -209,5 +228,37 @@ export class AuditItemDetailsComponent {
     try {
       (this.item as any)[key] = finalH;
     } catch {}
+  }
+
+  autoGrow(ev: Event) {
+    const ta = ev?.target as HTMLTextAreaElement;
+    if (!ta) return;
+    ta.style.overflowY = 'hidden';
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(480, Math.max(ta.scrollHeight, 64)) + 'px';
+  }
+
+  // Refs for initial height calculation
+  @ViewChild('slide1') slide1?: ElementRef<HTMLTextAreaElement>;
+  @ViewChild('slide3') slide3?: ElementRef<HTMLTextAreaElement>;
+
+  ngAfterViewInit(): void {
+    // Measure immediately after view init to avoid initial clipping
+    setTimeout(() => this.measureInitialHeights(), 0);
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['item']) {
+      // Re-measure when item content changes programmatically
+      setTimeout(() => this.measureInitialHeights(), 0);
+    }
+  }
+
+  private measureInitialHeights(){
+    try{
+      const base = 120; const cap = 480;
+      const ta1 = this.slide1?.nativeElement; if (ta1){ ta1.style.height='auto'; ta1.style.overflowY='hidden'; const h=Math.min(cap, Math.max(base, ta1.scrollHeight)); ta1.style.height=h+'px'; (this.item as any).__h1=h; }
+      const ta3 = this.slide3?.nativeElement; if (ta3){ ta3.style.height='auto'; ta3.style.overflowY='hidden'; const h=Math.min(cap, Math.max(base, ta3.scrollHeight)); ta3.style.height=h+'px'; (this.item as any).__h3=h; }
+    }catch{}
   }
 }

@@ -58,7 +58,7 @@ import { AuditItemDetailsComponent } from './audit-item-details.component';
             <!-- Note input -->
             <textarea class="note-input" 
                       [(ngModel)]="it.note" 
-                      placeholder="비고" 
+                      placeholder="보완 요청 코드" 
                       spellcheck="false" 
                       (ngModelChange)="onNoteChange(it)" 
                       (input)="autoResize($event)" 
@@ -144,11 +144,11 @@ import { AuditItemDetailsComponent } from './audit-item-details.component';
               (onOpenRecordPicker)="onOpenRecordPicker.emit(it)"
               (onTextareaKeydown)="$event"
               (onAddComment)="onAddComment.emit(it)"
-              (onRemoveComment)="$event"
-              (onStartEditComment)="$event"
-              (onSaveEditComment)="$event"
-              (onCancelEditComment)="$event"
-              (onEditCommentKeydown)="$event"
+              (onRemoveComment)="onRemoveComment.emit({ it: it, index: $event })"
+              (onStartEditComment)="onStartEditComment.emit({ it: it, index: $event.index, text: $event.text })"
+              (onSaveEditComment)="onSaveEditComment.emit({ it: it, index: $event })"
+              (onCancelEditComment)="onCancelEditComment.emit({ it: it, index: $event })"
+              (onEditCommentKeydown)="onEditCommentKeydown.emit({ ev: $event.event, it: it, index: $event.index })"
               (onLinkChipClick)="$event"
               (onRemoveSelectedLink)="$event"
               (onLinkDragStart)="$event"
@@ -177,6 +177,11 @@ export class AuditItemListComponent {
   @Output() onToggleExtra = new EventEmitter<AuditItem>();
   @Output() onAddComment = new EventEmitter<AuditItem>();
   @Output() onOpenRecordPicker = new EventEmitter<AuditItem>();
+  @Output() onRemoveComment = new EventEmitter<{ it: AuditItem; index: number }>();
+  @Output() onStartEditComment = new EventEmitter<{ it: AuditItem; index: number; text: string }>();
+  @Output() onSaveEditComment = new EventEmitter<{ it: AuditItem; index: number }>();
+  @Output() onCancelEditComment = new EventEmitter<{ it: AuditItem; index: number }>();
+  @Output() onEditCommentKeydown = new EventEmitter<{ ev: KeyboardEvent; it: AuditItem; index: number }>();
   
   private noteTimers: Record<number, any> = {};
   
