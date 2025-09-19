@@ -48,15 +48,20 @@ interface AuditDate { value: string; label: string; }
       <!-- Detached sticky filter header -->
       <div class="filters">
         <div class="filterbar">
-          <label>키워드</label>
-          <input #kwInput class="kw-input" type="text" [(ngModel)]="keyword" (ngModelChange)="onFilterChange()" placeholder="제목/비고/입력/링크/댓글 검색" />
           <label style="margin-left:12px">업체</label>
-          <select class="dept-select" [(ngModel)]="companyFilter" (ngModelChange)="onCompanyFilterChange($event)">
+          <select #companySelect class="dept-select" [class.readonly]="!isCompanyEditing"
+                  (mousedown)="onCompanyMouseDown($event)" (blur)="onCompanyBlur()"
+                  [(ngModel)]="companyFilter" (ngModelChange)="onCompanyFilterChange($event)">
             <option [ngValue]="'ALL'">전체</option>
             <option *ngFor="let c of companies" [ngValue]="c">{{ c }}</option>
           </select>
           <label style="margin-left:12px">메모</label>
-          <input class="kw-input" style="width:260px;" type="text" [(ngModel)]="headerMemo" (ngModelChange)="onHeaderMemoChange()" (blur)="onHeaderMemoBlur()" placeholder="이 스냅샷 설명 메모" />
+          <input class="kw-input" [class.readonly]="!isMemoEditing" [style.background]="isMemoEditing ? '#ffffff' : ''" [style.color]="isMemoEditing ? '#111827' : ''" [readOnly]="!isMemoEditing"
+                 style="width:260px;" type="text"
+                 (mousedown)="onMemoMouseDown($event)" (keydown.enter)="onMemoEnter($event)" (blur)="onMemoBlur()"
+                 [(ngModel)]="headerMemoDraft" placeholder="이 스냅샷 설명 메모" />
+          <label style="margin-left:12px">키워드</label>
+          <input #kwInput class="kw-input" type="text" [(ngModel)]="keyword" (ngModelChange)="onFilterChange()" placeholder="제목/비고/입력/링크/댓글 검색" />
           <span *ngIf="headerSavingMeta" class="spinner inline" title="저장중"></span>
           <label *ngIf="!isGivaudanAudit" style="margin-left:12px">부서</label>
           <select *ngIf="!isGivaudanAudit" class="dept-select" [(ngModel)]="filterDept" (ngModelChange)="onFilterChange()">
@@ -295,6 +300,7 @@ interface AuditDate { value: string; label: string; }
     .filterbar{ display:flex; align-items:center; gap:10px; margin:0; padding:8px 10px; flex-wrap:wrap; background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 4px 10px rgba(2,6,23,.04); transition: filter .15s ease; }
     .audit-page.modal-open .filterbar{ filter: grayscale(1) brightness(.92); }
     .kw-input{ width:220px; height:32px; border:1px solid #d1d5db; border-radius:10px; padding:6px 10px; font-family: var(--font-sans-kr); font-size:13.5px; }
+    .kw-input.readonly, .dept-select.readonly{ background:#f8fafc; color:#94a3b8; cursor:not-allowed; }
     .item{ display:grid; grid-template-columns: 54px 1fr 1.6fr; gap:12px; padding:10px; border-radius:10px; border:1px solid #f1f5f9; margin:8px; background:linear-gradient(180deg,rgba(241,245,249,.35),rgba(255,255,255,1)); position:relative; align-items:start; min-width:0; transition: box-shadow .18s ease, transform .18s ease; }
     .item.selected{ box-shadow: 0 10px 28px rgba(2,6,23,.10), inset 0 0 0 1px rgba(99,102,241,.22); transform: translateZ(0); }
     .item.selected::after{ content:''; position:absolute; left:8px; right:8px; bottom:-2px; height:4px; border-radius:999px; background:linear-gradient(90deg,rgba(99,102,241,.22),rgba(99,102,241,.08)); }
@@ -1834,6 +1840,9 @@ export class AuditEvaluationComponent {
   }
   private companyFilterSaveTimer: any = null;
   onCompanyFilterChange(_: any){
+    // 편집 모드가 아니면 저장하지 않음
+    if (!this.isCompanyEditing) return;
+    
     // 날짜 단위 메타에 즉시 반영하여 드롭다운에도 표시
     const d = this.selectedDate(); if (!d) return;
     this.savedMeta[d] = { ...(this.savedMeta[d]||{}), company: this.companyFilter, memo: this.headerMemo };
@@ -1855,26 +1864,103 @@ export class AuditEvaluationComponent {
     this.persistUi();
   }
   private headerMemoTimer: any = null;
-  onHeaderMemoChange(){
-    const d = this.selectedDate(); if (!d) return;
-    // 즉시 로컬 메타 반영
-    this.savedMeta[d] = { ...(this.savedMeta[d]||{}), company: this.companyFilter, memo: this.headerMemo };
-    // 약간의 디바운스로 저장 호출 빈도 절감
-    clearTimeout(this.headerMemoTimer);
-    this.headerMemoTimer = setTimeout(()=>{
+  isCompanyEditing = false;
+  isMemoEditing = false;
+  headerMemoDraft = '';
+  previousCompanyFilter = 'ALL';
+  @ViewChild('companySelect', { static: false }) companySelect?: ElementRef<HTMLSelectElement>;
+  onCompanyMouseDown(ev: MouseEvent){
+    if (!this.isCompanyEditing){
+      ev.preventDefault();
+      if (confirm('업체를 수정하시겠습니까?')){
+        this.isCompanyEditing = true;
+        this.previousCompanyFilter = this.companyFilter;
+        // 드롭다운을 즉시 열기
+        setTimeout(()=> {
+          const el = this.companySelect?.nativeElement;
+          if (el) {
+            el.focus();
+            // 네이티브 select 드롭다운 열기
+            const event = new MouseEvent('mousedown', { 
+              view: window, 
+              bubbles: true, 
+              cancelable: true 
+            });
+            el.dispatchEvent(event);
+            el.click();
+          }
+        }, 0);
+      }
+    }
+  }
+  onCompanyBlur(){ 
+    if (this.isCompanyEditing && this.companyFilter !== this.previousCompanyFilter) {
+      // 변경사항이 있으면 저장 확인
+      if (confirm('업체 필터를 저장하시겠습니까?')) {
+        // 저장 진행 (onCompanyFilterChange가 자동 호출됨)
+        this.previousCompanyFilter = this.companyFilter;
+      } else {
+        // 취소 - 이전 값으로 복원
+        this.companyFilter = this.previousCompanyFilter;
+      }
+    }
+    this.isCompanyEditing = false;
+  }
+  onMemoMouseDown(ev: MouseEvent){
+    if (!this.isMemoEditing){
+      ev.preventDefault();
+      if (confirm('메모를 수정하시겠습니까?')){
+        this.isMemoEditing = true;
+        this.headerMemoDraft = this.headerMemo;
+        // 입력창에 포커스를 주고 편집 가능하게 함
+        setTimeout(() => {
+          const input = ev.target as HTMLInputElement;
+          if (input) {
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
+          }
+        }, 0);
+      }
+    }
+  }
+  onMemoEnter(ev: Event){ 
+    if (!this.isMemoEditing) return; 
+    ev.preventDefault(); 
+    this.onMemoBlur(); 
+  }
+  onMemoBlur(){ 
+    if (!this.isMemoEditing) return;
+    
+    // 변경사항이 있는 경우에만 저장 확인
+    if (this.headerMemoDraft !== this.headerMemo) {
+      this.confirmSaveMemo();
+    } else {
+      // 변경사항이 없으면 그냥 편집 모드 종료
+      this.isMemoEditing = false;
+    }
+  }
+  private confirmSaveMemo(){
+    const ok = confirm('메모를 저장하시겠습니까?');
+    if (ok){
+      const d = this.selectedDate(); 
+      if (!d){ 
+        this.isMemoEditing = false; 
+        this.headerMemoDraft = this.headerMemo; // 복원
+        return; 
+      }
+      this.headerMemo = this.headerMemoDraft;
       this.headerSavingMeta = true;
       this.audit.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo })
         .finally(()=>{ this.headerSavingMeta = false; });
       this.persistUi();
-    }, 400);
+    } else {
+      // 취소 시 이전 값으로 복원
+      this.headerMemoDraft = this.headerMemo;
+    }
+    this.isMemoEditing = false;
   }
-  onHeaderMemoBlur(){
-    const d = this.selectedDate(); if (!d) return;
-    // 입력 중 새로고침 등에 대비하여 blur 시점에 즉시 한번 더 저장
-    this.headerSavingMeta = true;
-    this.audit.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo })
-      .finally(()=>{ this.headerSavingMeta = false; });
-  }
+  onHeaderMemoChange(){}
+  onHeaderMemoBlur(){}
 
   @HostListener('window:beforeunload')
   persistUi(){
