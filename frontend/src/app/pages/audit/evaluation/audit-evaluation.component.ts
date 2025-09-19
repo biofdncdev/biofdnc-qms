@@ -532,7 +532,7 @@ export class AuditEvaluationComponent {
       const s = JSON.parse(raw);
       if (s?.selectedDate) this.selectedDate.set(s.selectedDate);
       if (s?.companyFilter) this.companyFilter = s.companyFilter;
-      if (s?.headerMemo) this.headerMemo = s.headerMemo;
+      if (s?.headerMemo) { this.headerMemo = s.headerMemo; this.syncHeaderMemoDraft(); }
       if (s?.filterDept) this.filterDept = s.filterDept;
       if (s?.filterOwner) this.filterOwner = s.filterOwner;
       // restore open extras early to minimize flicker
@@ -560,6 +560,9 @@ export class AuditEvaluationComponent {
   companies: string[] = [];
   companyFilter: 'ALL' | string = 'ALL';
   headerMemo: string = '';
+  // memo 입력창은 읽기 전용일 땐 headerMemoDraft를 표시하므로,
+  // 실제 값(headerMemo)이 갱신될 때마다 편집 중이 아닐 경우 동기화한다.
+  private syncHeaderMemoDraft(){ if (!this.isMemoEditing) this.headerMemoDraft = this.headerMemo; }
   savedMeta: Record<string, { company?: string; memo?: string }> = {};
   headerSavingMeta: boolean = false;
   @ViewChild('listRef') listRef?: ElementRef<HTMLDivElement>;
@@ -621,7 +624,7 @@ export class AuditEvaluationComponent {
           const openId: number | null = s?.openItemId ?? null;
           if (s?.selectedDate) this.selectedDate.set(s.selectedDate);
           if (s?.companyFilter) this.companyFilter = s.companyFilter;
-          if (s?.headerMemo) this.headerMemo = s.headerMemo;
+          if (s?.headerMemo) { this.headerMemo = s.headerMemo; this.syncHeaderMemoDraft(); }
           if (s?.filterDept) this.filterDept = s.filterDept;
           if (s?.filterOwner) this.filterOwner = s.filterOwner;
           // 복원: 이전 세션에서 열려 있던 항목들 유지
@@ -923,6 +926,7 @@ export class AuditEvaluationComponent {
         this.companyFilter = (meta?.company as any) || 'ALL';
         this.headerMemo = meta?.memo || '';
         this.savedMeta[date] = { company: this.companyFilter !== 'ALL' ? this.companyFilter : undefined, memo: this.headerMemo };
+        this.syncHeaderMemoDraft();
       }catch{}
       const { data: all } = created ? await this.audit.listGivaudanProgressByDate(date) : { data: [] } as any;
       // 생성일(최초 저장 시간) 표시
@@ -1860,6 +1864,7 @@ export class AuditEvaluationComponent {
     }, 100);
     
     this.persistUi();
+    this.syncHeaderMemoDraft();
   }
   private headerMemoTimer: any = null;
   isCompanyEditing = false;
@@ -1949,7 +1954,7 @@ export class AuditEvaluationComponent {
       this.headerMemo = this.headerMemoDraft;
       this.headerSavingMeta = true;
       this.audit.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo })
-        .finally(()=>{ this.headerSavingMeta = false; });
+        .finally(()=>{ this.headerSavingMeta = false; this.syncHeaderMemoDraft(); });
       this.persistUi();
     } else {
       // 취소 시 이전 값으로 복원
