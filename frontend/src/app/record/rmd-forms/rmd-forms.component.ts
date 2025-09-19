@@ -3,7 +3,10 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RmdFormCategory, RmdFormItem } from './rmd-forms-data';
 import { RMD_STANDARDS } from '../../standard/rmd/rmd-standards';
-import { SupabaseService } from '../../services/supabase.service';
+import { RecordService } from '../../services/record.service';
+import { AuthService } from '../../services/auth.service';
+import { AuditService } from '../../services/audit.service';
+import { OrganizationService } from '../../services/organization.service';
 import { TabService } from '../../services/tab.service';
 import { RmdFormsPdfService } from './services/rmd-forms-pdf.service';
 import { RmdFormsFilterService } from './services/rmd-forms-filter.service';
@@ -89,7 +92,10 @@ export class RmdFormsComponent {
   @ViewChild('drawCanvas', { static: false }) drawCanvasRef?: ElementRef<HTMLCanvasElement>;
   
   constructor(
-    private supabase: SupabaseService,
+    private record: RecordService,
+    private auth: AuthService,
+    private audit: AuditService,
+    private org: OrganizationService,
     private tabs: TabService,
     public pdfService: RmdFormsPdfService,
     public filterService: RmdFormsFilterService,
@@ -141,11 +147,11 @@ export class RmdFormsComponent {
     try{
       const cat = (this.allCategoriesForCreate||[]).find((c:any)=> c.id === this.edit.category);
       if (!cat) return;
-      const d = (await this.supabase.listDepartments()).find((x:any)=> (x?.code||'') === (cat as any)?.department_code);
+      const d = (await this.org.listDepartments()).find((x:any)=> (x?.code||'') === (cat as any)?.department_code);
       const company = (d?.company_code || '').trim();
       const dept = (d?.code || '').trim();
       const prefixNoSeq = [company, dept, cat.doc_prefix, 'FR'].filter(Boolean).join('-');
-      const next = await (this.supabase as any).getNextRecordDocNo(prefixNoSeq);
+      const next = await this.record.getNextRecordDocNo(prefixNoSeq);
       this.edit.docNo = next;
     }catch{}
   }
@@ -168,7 +174,7 @@ export class RmdFormsComponent {
       sel.id = this.edit.docNo;
     }
     // Persist changes directly without creating a new row
-    try{ await (this.supabase as any).updateFormMetaByRecordNo(prevRecordNo, update); }catch{}
+    try{ await this.record.updateFormMetaByRecordNo(prevRecordNo, update); }catch{}
     // Keep other meta values untouched but ensure local state is saved
     await this.metadataService.persistMeta(sel);
     this.closeEditModal();
@@ -185,12 +191,12 @@ export class RmdFormsComponent {
   openCreateModal(){ this.create = { categoryId: '', title: '', docNo: '' }; this.dupCreate.set(false); this.createOpen.set(true); this.loadCatsForCreate(); }
   closeCreateModal(){ this.createOpen.set(false); }
   private async loadCatsForCreate(){
-    try{ const cats: any[] = await (this.supabase as any).listRmdCategories(); this.allCategoriesForCreate = cats as any[]; }catch{ this.allCategoriesForCreate = []; }
+    try{ const cats: any[] = await this.record.listRmdCategories(); this.allCategoriesForCreate = cats as any[]; }catch{ this.allCategoriesForCreate = []; }
   }
 
   private async reloadMeta(){
     try{
-      const rows: any[] = await this.supabase.listAllFormMeta();
+      const rows: any[] = await this.record.listAllFormMeta();
       const map: Record<string, RmdFormItem[]> = {};
       const seenIds = new Set<string>(); // Track unique IDs to prevent duplicates
       
@@ -223,13 +229,13 @@ export class RmdFormsComponent {
     const cat = (this.allCategoriesForCreate||[]).find(c=>c.id===this.create.categoryId);
     if (!cat) return;
     // 회사-부서-규정카테고리코드-FR-두자리
-    const d = (await this.supabase.listDepartments()).find((x:any)=> (x?.code||'') === (cat as any)?.department_code);
+    const d = (await this.org.listDepartments()).find((x:any)=> (x?.code||'') === (cat as any)?.department_code);
     const company = (d?.company_code || '').trim();
     const dept = (d?.code || '').trim();
     const prefixNoSeq = [company, dept, cat.doc_prefix, 'FR'].filter(Boolean).join('-');
     this.busyCreate.set(true);
     try{
-      const next = await (this.supabase as any).getNextRecordDocNo(prefixNoSeq);
+      const next = await this.record.getNextRecordDocNo(prefixNoSeq);
       this.create.docNo = next;
       this.dupCreate.set(false);
     } finally { this.busyCreate.set(false); }
@@ -241,11 +247,11 @@ export class RmdFormsComponent {
     if (!title || !docNo || !categoryId){ alert('카테고리/기록명/문서번호를 모두 입력하세요.'); return; }
     this.busyCreate.set(true);
     try{
-      const taken = await (this.supabase as any).isRecordDocNoTaken(docNo);
+      const taken = await this.record.isRecordDocNoTaken(docNo);
       if (taken){ this.dupCreate.set(true); alert('이미 사용된 번호입니다. 다른 번호를 입력하세요.'); return; }
       // Create directly in record_form_meta (legacy approach)
       const catName = this.allCategoriesForCreate.find(c=>c.id===categoryId)?.name || null;
-      const res = await (this.supabase as any).upsertFormMeta({ 
+      const res = await this.record.upsertFormMeta({ 
         record_no: docNo, 
         record_name: title, 
         standard_category: catName, 
@@ -281,9 +287,9 @@ export class RmdFormsComponent {
     // Resolve current user role for conditional UI
     queueMicrotask(async () => {
       try{
-        const u = await this.supabase.getCurrentUser();
+        const u = await this.auth.getCurrentUser();
         if (u){
-          const { data } = await this.supabase.getUserProfile(u.id);
+          const { data } = await this.auth.getUserProfile(u.id);
           this.isGivaudanAudit = (data?.role === 'audit' || data?.role === 'givaudan_audit');
         }
       }catch{}
@@ -491,7 +497,7 @@ export class RmdFormsComponent {
   // === Audit connections ===
   private async preloadCompanies() {
     try {
-      this.auditCompanies = (await this.supabase.listAuditCompanies())
+      this.auditCompanies = (await this.audit.listAuditCompanies())
         .map((r: any) => r.name)
         .filter(Boolean);
     } catch {}
@@ -499,7 +505,7 @@ export class RmdFormsComponent {
 
   private async buildAuditLinkMap() {
     try {
-      const prog = await this.supabase.listAllGivaudanProgress();
+      const prog = await this.audit.listAllGivaudanProgress();
       const map: Record<string, Array<{ number: number; company?: string | null }>> = {};
       const rows = (prog as any)?.data || [];
       
@@ -525,7 +531,7 @@ export class RmdFormsComponent {
       
       // Load titles
       try {
-        const items = await this.supabase.listAuditItems();
+        const items = await this.audit.listAuditItems();
         const tmap: Record<number, string> = {};
         for (const it of (items as any[] || [])) {
           tmap[(it as any).number] = (it as any).title_ko || (it as any).title_en || '';
@@ -608,7 +614,7 @@ export class RmdFormsComponent {
       this.metadataService.setDeletingMeta(true);
       
       // Delete from database
-      await this.supabase.deleteFormMeta(sel.id);
+      await this.record.deleteFormMeta(sel.id);
       
       // Remove from local categories
       for (const cat of this.categories) {
@@ -818,13 +824,13 @@ export class RmdFormsComponent {
   private async loadInitialData() {
     queueMicrotask(async () => {
       // Load departments for dropdowns
-      try { this.departments = await this.supabase.listDepartments(); } catch { this.departments = []; }
+      try { this.departments = await this.org.listDepartments(); } catch { this.departments = []; }
 
       await this.metadataService.loadMetadata(this.categories);
       
       // Load user list for typeahead
       try {
-        const { data: users } = await this.supabase.getClient().from('users').select('name,email');
+        const { data: users } = await this.auth.getClient().from('users').select('name,email');
         this.userPairs = (users || []).map((u: any) => ({ name: u?.name || '', email: u?.email || '' }));
         this.users = this.userPairs.map(p => p.name || p.email).filter(Boolean);
       } catch {}

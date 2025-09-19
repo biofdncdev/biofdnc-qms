@@ -1,7 +1,8 @@
 import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RecordService } from '../../services/record.service';
+import { OrganizationService } from '../../services/organization.service';
 import { FormsModule } from '@angular/forms';
-import { SupabaseService } from '../../services/supabase.service';
 
 interface Cat { id: string; name: string; doc_prefix: string; department_code?: string | null; created_at?: string; updated_at?: string }
 
@@ -86,10 +87,13 @@ export class RmdCategoriesComponent {
   busy = signal<boolean>(false);
   form: { name: string; doc_prefix: string; department_code: string | null } = { name: '', doc_prefix: '', department_code: null };
   depts = signal<Array<{ code: string; name: string; company?: string }>>([]);
-  constructor(private supabase: SupabaseService){ this.load(); }
+  constructor(
+    private record: RecordService,
+    private org: OrganizationService
+  ) { this.load(); }
   async load(){
-    this.cats.set(await this.supabase.listRmdCategories());
-    const ds = await this.supabase.listDepartments();
+    this.cats.set(await this.record.listRmdCategories());
+    const ds = await this.org.listDepartments();
     this.depts.set((ds||[]).map((d:any)=>({ code: d.code, name: d.name, company: d.company_code || null })));
   }
   async save(){
@@ -98,7 +102,7 @@ export class RmdCategoriesComponent {
     if(!(this.form.name||'').trim()){ alert('규정카테고리명은 필수입니다.'); return; }
     this.busy.set(true);
     try{
-      await this.supabase.upsertRmdCategory({ name: this.form.name.trim(), doc_prefix: this.form.doc_prefix.trim(), department_code: this.form.department_code || null } as any);
+      await this.record.upsertRmdCategory({ name: this.form.name.trim(), doc_prefix: this.form.doc_prefix.trim(), department_code: this.form.department_code || null } as any);
       this.form = { name:'', doc_prefix:'', department_code: null };
       await this.load();
     }
@@ -121,10 +125,10 @@ export class RmdCategoriesComponent {
     if(!(f.name||'').trim()){ alert('규정카테고리명은 필수입니다.'); return; }
     this.busy.set(true);
     try{
-      await this.supabase.upsertRmdCategory({ id: f.id as any, name: f.name.trim(), doc_prefix: f.doc_prefix.trim(), department_code: f.department_code } as any);
+      await this.record.upsertRmdCategory({ id: f.id as any, name: f.name.trim(), doc_prefix: f.doc_prefix.trim(), department_code: f.department_code } as any);
       this.editOpen.set(false);
       await this.load();
     } finally{ this.busy.set(false); }
   }
-  async remove(c: Cat){ if(!confirm('삭제할까요?')) return; this.busy.set(true); try{ await this.supabase.deleteRmdCategory(c.id); await this.load(); } finally{ this.busy.set(false); } }
+  async remove(c: Cat){ if(!confirm('삭제할까요?')) return; this.busy.set(true); try{ await this.record.deleteRmdCategory(c.id); await this.load(); } finally{ this.busy.set(false); } }
 }

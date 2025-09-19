@@ -2,7 +2,7 @@ import { Component, OnInit, signal, Directive, ElementRef, HostListener, AfterVi
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
 
 @Directive({
   selector: 'textarea[autoGrow]',
@@ -158,18 +158,18 @@ export class AutoGrowDirective implements AfterViewInit {
 export class MaterialFormComponent implements OnInit {
   id = signal<string | null>(null);
   model: any = {};
-  constructor(private route: ActivatedRoute, private router: Router, private supabase: SupabaseService) {}
+  constructor(private route: ActivatedRoute, private router: Router, private erpData: ErpDataService) {}
   async ngOnInit(){
     const id = this.route.snapshot.queryParamMap.get('id');
     if (id){
       this.id.set(id);
-      try{ const { data } = await this.supabase.getMaterial(id); if(data) this.model = data; }catch{}
+      try{ const { data } = await this.erpData.getMaterial(id); if(data) this.model = data; }catch{}
     } else {
       this.model = { id: crypto.randomUUID() } as any;
     }
   }
   async save(){
-    try{ await this.supabase.upsertMaterial(this.model); alert('저장되었습니다.'); }catch(e:any){ alert('저장 실패: '+(e?.message||e)); }
+    try{ await this.erpData.upsertMaterial(this.model); alert('저장되었습니다.'); }catch(e:any){ alert('저장 실패: '+(e?.message||e)); }
   }
   cancel(){ this.router.navigate(['/app/material']); }
 }

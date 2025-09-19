@@ -1,6 +1,6 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 
@@ -159,11 +159,11 @@ export class ProductUpdateComponent implements OnInit {
     'NOTICE (Composition 국문)2','NOTICE (Composition 영문)2','CAUTION (Origin)2'
   ]);
 
-  constructor(private supabase: SupabaseService) {}
+  constructor(private erpData: ErpDataService) {}
   async ngOnInit(){
     // Merge mapping labels from DB to improve header detection
     try{
-      const maps = await this.supabase.getProductColumnMap();
+      const maps = await this.erpData.getProductColumnMap();
       for(const m of maps){ if (m?.sheet_label_kr) this.erpHeaderSet.add(String(m.sheet_label_kr)); }
     }catch{}
   }
@@ -355,7 +355,7 @@ export class ProductUpdateComponent implements OnInit {
           const idx = next++;
           const part = chunks[idx];
           try{
-            const res = await this.supabase.syncProductsByExcel({ sheet: part });
+            const res = await this.erpData.syncProductsByExcel({ sheet: part });
             agg.updated += res.updated || 0; agg.skipped += res.skipped || 0; agg.inserted += res.inserted || 0;
             if (Array.isArray(res.errors)) errs.push(...res.errors);
           }catch(e:any){
@@ -442,21 +442,21 @@ export class ProductUpdateComponent implements OnInit {
       // Resolve INCI names to ingredient IDs in batch per product
       for (const [code, list] of Object.entries(byCode)){
         // 1) Find product by code
-        const { data: prod } = await this.supabase.getProductByCode(code) as any;
+        const { data: prod } = await this.erpData.getProductByCode(code) as any;
         if (!prod || !prod.id) continue;
         const pid = prod.id as string;
         // 2) Resolve INCI → ingredient
         const names = Array.from(new Set(list.map(x=>x.inci)));
-        const { data: ing } = await this.supabase.getIngredientsByNames(names);
+        const { data: ing } = await this.erpData.getIngredientsByNames(names);
         const nameToId: Record<string,string> = {}; const nameToRow: Record<string, any> = {};
         for (const r of (ing||[])){ nameToId[r.inci_name] = r.id; nameToRow[r.inci_name] = r; }
         // 3) Build UI-equivalent rows and upsert
         // Delete existing first to simplify sync
-        const { data: ex } = await this.supabase.listProductCompositions(pid) as any;
-        for (const row of (ex||[])){ if (row?.id) await this.supabase.deleteProductComposition(row.id); }
+        const { data: ex } = await this.erpData.listProductCompositions(pid) as any;
+        for (const row of (ex||[])){ if (row?.id) await this.erpData.deleteProductComposition(row.id); }
         for (const rec of list){
           const iid = nameToId[rec.inci]; if (!iid) continue;
-          await this.supabase.addProductComposition({ product_id: pid, ingredient_id: iid, percent: rec.pct });
+          await this.erpData.addProductComposition({ product_id: pid, ingredient_id: iid, percent: rec.pct });
         }
       }
       this.compPending = byCode; this.compCount.set(Object.values(byCode).reduce((a,c)=> a + c.length, 0)); this.compFileName.set(this.compFileName() || 'composition.csv');
@@ -471,22 +471,22 @@ export class ProductUpdateComponent implements OnInit {
       let applied = 0, skipped = 0; const errs: Array<{ product_code: string; inci?: string; message: string }> = [];
       for (const code of keys){
         const list = byCode[code];
-        const { data: prod } = await this.supabase.getProductByCode(code) as any; if (!prod || !prod.id){ errs.push({ product_code: code, message: '제품을 찾을 수 없습니다' }); continue; } const pid = prod.id as string;
+        const { data: prod } = await this.erpData.getProductByCode(code) as any; if (!prod || !prod.id){ errs.push({ product_code: code, message: '제품을 찾을 수 없습니다' }); continue; } const pid = prod.id as string;
         const names = Array.from(new Set(list.map(x=>x.inci)));
-        const { data: ing } = await this.supabase.getIngredientsByNames(names);
+        const { data: ing } = await this.erpData.getIngredientsByNames(names);
         const nameToId: Record<string,string> = {}; for (const r of (ing||[])){ nameToId[r.inci_name] = r.id; }
-        const { data: ex } = await this.supabase.listProductCompositions(pid) as any; for (const row of (ex||[])){ if (row?.id) await this.supabase.deleteProductComposition(row.id); }
+        const { data: ex } = await this.erpData.listProductCompositions(pid) as any; for (const row of (ex||[])){ if (row?.id) await this.erpData.deleteProductComposition(row.id); }
         for (const rec of list){
           const iid = nameToId[rec.inci];
           if (!iid){ errs.push({ product_code: code, inci: rec.inci, message: 'INCI 매칭 실패' }); skipped++; continue; }
           try{
-            await this.supabase.addProductComposition({ product_id: pid, ingredient_id: iid, percent: rec.pct });
+            await this.erpData.addProductComposition({ product_id: pid, ingredient_id: iid, percent: rec.pct });
             applied++;
           }catch(e:any){ errs.push({ product_code: code, inci: rec.inci, message: e?.message || String(e) }); }
         }
         // 검증: 실제로 저장되었는지 확인하여 0행이면 경고 추가
         try{
-          const { data: verifyRows } = await this.supabase.listProductCompositions(pid) as any;
+          const { data: verifyRows } = await this.erpData.listProductCompositions(pid) as any;
           if (!Array.isArray(verifyRows) || verifyRows.length===0){ errs.push({ product_code: code, message: 'DB에 반영되지 않았습니다(RLS/권한/정합성 확인 필요)' }); }
         }catch{}
         // Notify other tabs/components (e.g., product form) to refresh if this product is on screen

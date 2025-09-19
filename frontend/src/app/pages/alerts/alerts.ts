@@ -1,6 +1,6 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SupabaseService } from '../../services/supabase.service';
+import { AuthService } from '../../services/auth.service';
 import { Router } from '@angular/router';
 
 @Component({
@@ -48,20 +48,20 @@ export class AlertsComponent implements OnInit {
   notifications = signal<any[]>([]);
   unreadCount = signal<number>(0);
 
-  constructor(private supabase: SupabaseService, private router: Router) {}
+  constructor(private auth: AuthService, private router: Router) {}
 
   async ngOnInit() {
     await this.load();
   }
 
   async load(){
-    const { data } = await this.supabase.listNotifications();
+    const { data } = await this.auth.listNotifications();
     this.notifications.set(data || []);
     this.unreadCount.set((data || []).filter((n:any)=>!n.read_at).length);
   }
 
   async markAll(){
-    await this.supabase.markAllNotificationsRead();
+    await this.auth.markAllNotificationsRead();
     await this.load();
   }
 

@@ -1,7 +1,9 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ComposePreviewComponent } from './compose-preview';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
+import { AuthService } from '../../services/auth.service';
+import { StorageService } from '../../services/storage.service';
 
 @Component({
   selector: 'app-product-doc-templates',
@@ -136,13 +138,15 @@ export class ProductDocTemplatesComponent {
   notice: string | null = null;
   logs: Array<{ user: string | null; time: string }> = [];
 
-  constructor(private supabase: SupabaseService) {
+  constructor(private erpData: ErpDataService,
+    private auth: AuthService,
+    private storage: StorageService) {
     this.loadTemplateStatus();
     this.loadLogs();
   }
 
   async loadTemplateStatus(){
-    try{ const { exists, url } = await this.supabase.getCompositionTemplate() as any; this.templateUrl = exists ? (url as string) : null; }catch{ this.templateUrl = null; }
+    try{ const { exists, url } = await this.storage.getCompositionTemplate() as any; this.templateUrl = exists ? (url as string) : null; }catch{ this.templateUrl = null; }
   }
 
   loadLogs(){ try{ const raw = localStorage.getItem(this.logsKey); this.logs = raw ? JSON.parse(raw) : []; }catch{ this.logs = []; } }
@@ -170,11 +174,11 @@ export class ProductDocTemplatesComponent {
   async saveTemplate(){
     if (!this.pendingFile) { this.notice = '저장할 템플릿 파일이 없습니다.'; return; }
     try{
-      const res = await this.supabase.uploadCompositionTemplate(this.pendingFile);
+      const res = await this.storage.uploadCompositionTemplate(this.pendingFile);
       this.templateUrl = (res as any)?.url || null;
       this.lastUploadedName = this.pendingFile?.name || this.lastUploadedName;
       this.pendingFile = null;
-      const user = await this.supabase.getCurrentUser();
+      const user = await this.auth.getCurrentUser();
       const now = new Date(); const pad=(n:number)=> String(n).padStart(2,'0');
       const time = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
       this.logs = [{ user: user?.email || user?.id || 'unknown', time }, ...this.logs].slice(0, 50);
@@ -184,7 +188,7 @@ export class ProductDocTemplatesComponent {
   }
 
   async deleteTemplate(){
-    try{ await this.supabase.deleteCompositionTemplate(); this.templateUrl = null; this.notice = '삭제되었습니다.'; }
+    try{ await this.storage.deleteCompositionTemplate(); this.templateUrl = null; this.notice = '삭제되었습니다.'; }
     catch(e:any){ this.notice = '삭제 실패: ' + (e?.message||e); }
   }
 }

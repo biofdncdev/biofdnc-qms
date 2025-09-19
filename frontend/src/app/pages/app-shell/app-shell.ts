@@ -10,7 +10,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatListModule } from '@angular/material/list';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { SupabaseService } from '../../services/supabase.service';
+import { AuthService } from '../../services/auth.service';
 import { TabService } from '../../services/tab.service';
 
 @Component({
@@ -56,11 +56,11 @@ export class AppShellComponent {
   unread = signal<number>(0);
   private notifSubscription: any;
 
-  constructor(private router: Router, private supabase: SupabaseService, private tabBus: TabService) {
+  constructor(private router: Router, private auth: AuthService, private tabBus: TabService) {
     // Determine admin on boot
-    this.supabase.getCurrentUser().then(async (u) => {
+    this.auth.getCurrentUser().then(async (u) => {
       if (u) {
-        const { data } = await this.supabase.getUserProfile(u.id);
+        const { data } = await this.auth.getUserProfile(u.id);
         this.isAdmin = data?.role === 'admin';
         this.isManager = data?.role === 'manager';
         this.isStaff = data?.role === 'staff';
@@ -154,7 +154,7 @@ export class AppShellComponent {
   }
 
   private async refreshNotifications(){
-    const count = await this.supabase.countUnreadNotifications();
+    const count = await this.auth.countUnreadNotifications();
     this.unread.set(count);
     const alerts = this.menus.find(m => m.key === 'alerts');
     if (alerts) alerts.badge = count;
@@ -162,7 +162,7 @@ export class AppShellComponent {
 
   private subscribeNotifications(){
     // Realtime subscription to notifications inserts
-    const client = this.supabase.getClient();
+    const client = this.auth.getClient();
     this.notifSubscription = client
       .channel('public:notifications')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, async () => {
@@ -250,13 +250,13 @@ export class AppShellComponent {
   }
 
   async logout() {
-    const user = await this.supabase.getCurrentUser();
+    const user = await this.auth.getCurrentUser();
     if (user) {
-      await this.supabase.updateLoginState(user.id, false);
+      await this.auth.updateLoginState(user.id, false);
     }
     // Clear transient UI states that should not persist across login sessions
     try { sessionStorage.removeItem('product.list.state.v1'); } catch {}
-    await this.supabase.signOut();
+    await this.auth.signOut();
     this.router.navigate(['/login']);
   }
 

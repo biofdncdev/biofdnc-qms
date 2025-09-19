@@ -2,7 +2,8 @@ import { Component, OnInit, signal, Directive, ElementRef, HostListener, AfterVi
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
+import { AuthService } from '../../services/auth.service';
 
 @Directive({
   selector: 'textarea[autoGrow]',
@@ -122,7 +123,8 @@ export class IngredientFormComponent implements OnInit {
   ingQuery: string = '';
   ingResults: Array<{ id: string; inci_name: string; korean_name?: string; old_korean_name?: string; cas_no?: string }> = [];
   ingPointer = -1;
-  constructor(private route: ActivatedRoute, private router: Router, private supabase: SupabaseService) {}
+  constructor(private route: ActivatedRoute, private router: Router, private erpData: ErpDataService,
+    private auth: AuthService) {}
   async ngOnInit(){
     // Remember list query params to preserve search state on back/cancel
     const qp = this.route.snapshot.queryParamMap;
@@ -140,7 +142,7 @@ export class IngredientFormComponent implements OnInit {
     const id = this.route.snapshot.queryParamMap.get('id');
     if (id) {
       this.id.set(id);
-      const { data } = await this.supabase.getIngredient(id);
+      const { data } = await this.erpData.getIngredient(id);
       this.model = data || {};
       this.meta = {
         created_at: data?.created_at,
@@ -160,7 +162,7 @@ export class IngredientFormComponent implements OnInit {
     }
   }
   async save(){
-    const { data: user } = await this.supabase.getClient().auth.getUser();
+    const { data: user } = await this.auth.getClient().auth.getUser();
     const now = new Date().toISOString();
     const row: any = { ...this.model };
     if (!row.id) row.id = crypto.randomUUID();
@@ -172,7 +174,7 @@ export class IngredientFormComponent implements OnInit {
     row.updated_at = now;
     row.updated_by = user.user?.id || null;
     row.updated_by_name = user.user?.email || null;
-    const { data: saved } = await this.supabase.upsertIngredient(row);
+    const { data: saved } = await this.erpData.upsertIngredient(row);
     // Stay on the form; update local state and URL (id) if needed
     const applied = saved || row;
     this.model = applied;
@@ -208,12 +210,12 @@ export class IngredientFormComponent implements OnInit {
   private async resolveActorEmails(){
     try{
       if (this.meta?.created_by && !this.meta?.created_by_name) {
-        const { data: profile } = await this.supabase.getUserProfile(this.meta.created_by);
+        const { data: profile } = await this.auth.getUserProfile(this.meta.created_by);
         if (profile?.email) { this.meta.created_by_email = profile.email; if (!this.meta.created_by_name) this.meta.created_by_name = profile.email; }
         else if (profile?.name) { this.meta.created_by_name = profile.name; }
       }
       if (this.meta?.updated_by && !this.meta?.updated_by_name) {
-        const { data: profile } = await this.supabase.getUserProfile(this.meta.updated_by);
+        const { data: profile } = await this.auth.getUserProfile(this.meta.updated_by);
         if (profile?.email) { this.meta.updated_by_email = profile.email; if (!this.meta.updated_by_name) this.meta.updated_by_name = profile.email; }
         else if (profile?.name) { this.meta.updated_by_name = profile.name; }
       }
@@ -226,7 +228,7 @@ export class IngredientFormComponent implements OnInit {
   async runIngQuickSearch(){
     const q = (this.ingQuery||'').trim();
     if (!q){ this.ingResults = []; this.ingPointer = -1; return; }
-    const { data } = await this.supabase.listIngredients({ page: 1, pageSize: 20, keyword: q, keywordOp: 'AND' }) as any;
+    const { data } = await this.erpData.listIngredients({ page: 1, pageSize: 20, keyword: q, keywordOp: 'AND' }) as any;
     const rows = Array.isArray(data) ? data : [];
     this.ingResults = rows.map((r:any)=> ({ id: r.id, inci_name: r.inci_name, korean_name: r.korean_name, old_korean_name: r.old_korean_name, cas_no: r.cas_no }));
     this.ingPointer = this.ingResults.length ? 0 : -1;
@@ -238,7 +240,7 @@ export class IngredientFormComponent implements OnInit {
   onIngEsc(ev: Event){ if ((ev as any)?.preventDefault) (ev as any).preventDefault(); this.ingQuery=''; this.ingResults=[]; this.ingPointer=-1; }
   async pickIngredient(row: { id: string }){
     try{
-      const { data } = await this.supabase.getIngredient(row.id);
+      const { data } = await this.erpData.getIngredient(row.id);
       if (data){
         this.model = data;
         this.id.set(row.id);

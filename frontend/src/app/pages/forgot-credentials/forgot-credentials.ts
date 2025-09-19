@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { SupabaseService } from '../../services/supabase.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-forgot-credentials',
@@ -51,7 +51,7 @@ export class ForgotCredentialsComponent {
   confirmPassword = '';
   isRecovery = false;
 
-  constructor(private supabase: SupabaseService){
+  constructor(private auth: AuthService){
     const hash = location.hash || '';
     const search = location.search || '';
     const urlType = new URLSearchParams(search).get('type');
@@ -61,7 +61,7 @@ export class ForgotCredentialsComponent {
   async startReset(){
     const e = (this.email || '').trim().toLowerCase();
     if (!e){ alert('이메일을 입력하세요.'); return; }
-    await this.supabase.getClient().auth.resetPasswordForEmail(e, { redirectTo: 'https://biofdnc-qms.vercel.app/forgot-credentials' });
+    await this.auth.getClient().auth.resetPasswordForEmail(e, { redirectTo: 'https://biofdnc-qms.vercel.app/forgot-credentials' });
     alert('이메일로 비밀번호 변경 링크를 보냈습니다. 메일함/스팸함을 확인해주세요.');
   }
 
@@ -70,7 +70,7 @@ export class ForgotCredentialsComponent {
     const p2 = (this.confirmPassword || '').trim();
     if (!p1 || p1.length < 6){ alert('새 비밀번호는 6자 이상이어야 합니다.'); return; }
     if (p1 !== p2){ alert('비밀번호가 서로 다릅니다.'); return; }
-    await this.supabase.getClient().auth.updateUser({ password: p1 });
+    await this.auth.getClient().auth.updateUser({ password: p1 });
     alert('비밀번호가 변경되었습니다. 로그인 페이지로 이동합니다.');
     location.href = '/login';
   }

@@ -1,5 +1,7 @@
 import { Injectable, signal } from '@angular/core';
-import { SupabaseService } from '../../../services/supabase.service';
+import { RecordService } from '../../../services/record.service';
+import { StorageService } from '../../../services/storage.service';
+import { AuthService } from '../../../services/auth.service';
 import { PdfFile } from '../rmd-forms.types';
 
 @Injectable()
@@ -46,12 +48,16 @@ export class RmdFormsPdfService {
   isSavingPasted = signal<boolean>(false);
   pasteError = signal<string>('');
 
-  constructor(private supabase: SupabaseService) {}
+  constructor(
+    private record: RecordService,
+    private storage: StorageService,
+    private auth: AuthService
+  ) {}
 
   async refreshPdfList(formId: string): Promise<void> {
     if (!formId) return;
     try {
-      const pdfs = await this.supabase.listRecordPdfs(formId);
+      const pdfs = await this.record.listRecordPdfs(formId);
       const uploadInfo = this.getPdfUploadInfo(formId);
       const pdfList = pdfs.map((pdf: any) => {
         const info = uploadInfo[pdf.path] || {};
@@ -115,7 +121,7 @@ export class RmdFormsPdfService {
   async removePdf(pdf: PdfFile, formId: string): Promise<void> {
     if (!confirm('이 PDF 파일을 삭제하시겠습니까?')) return;
     try { 
-      await this.supabase.deleteRecordPdf(pdf.path, pdf.bucket);
+      await this.record.deleteRecordPdf(pdf.path, pdf.bucket);
       // localStorage에서도 업로드 정보 삭제
       const uploadInfo = this.getPdfUploadInfo(formId);
       delete uploadInfo[pdf.path];
@@ -142,11 +148,11 @@ export class RmdFormsPdfService {
     this.pdfUploadError.set('');
     
     try {
-      const result = await this.supabase.uploadRecordPdf(pendingFile, formId);
+      const result = await this.record.uploadRecordPdf(pendingFile, formId);
       
       if (result && result.path) {
         // 업로드 정보를 localStorage에 저장
-        const user = await this.supabase.getCurrentUser();
+        const user = await this.auth.getCurrentUser();
         const uploadInfo = this.getPdfUploadInfo(formId);
         uploadInfo[result.path] = {
           uploadedBy: user?.email || '알 수 없음',
@@ -433,7 +439,7 @@ export class RmdFormsPdfService {
     
     // record_no인 경우 record_id를 조회
     if (!isUuid) {
-      const fetchedId = await this.supabase.getRecordIdFromRecordNo(formId);
+      const fetchedId = await this.record.getRecordIdFromRecordNo(formId);
       if (fetchedId) {
         record_id = fetchedId;
       }
@@ -446,11 +452,11 @@ export class RmdFormsPdfService {
     try{
       // Upload blob as PNG
       const pngBlob = blob.type === 'image/png' ? blob : await this.convertToPng(blob);
-      const { path, publicUrl } = await this.supabase.uploadRecordImage(pngBlob, storagePath);
+      const { path, publicUrl } = await this.record.uploadRecordImage(pngBlob, storagePath);
       // Persist to cross-device index using record_id
       try{
-        const user = await this.supabase.getCurrentUser();
-        await this.supabase.updateRecordFileIndexEntry(record_id, path, {
+        const user = await this.auth.getCurrentUser();
+        await this.record.updateRecordFileIndexEntry(record_id, path, {
           originalName: fileName,
           uploadedBy: (user as any)?.email || (user as any)?.id || null,
           uploadedAt: new Date().toISOString()

@@ -1,7 +1,8 @@
 import { Component, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
+import { AuthService } from '../../services/auth.service';
 
 type Delivery = { id: string; date: string; quantity: number; outsourceDate?: string | null; outsourceQty?: number | null };
 type Receipt = { id: string; orderDate: string; orderNo: string; orderQty: number; deliveries: Delivery[]; collapsed?: boolean; status?: 'open'|'done' };
@@ -185,7 +186,8 @@ type Receipt = { id: string; orderDate: string; orderNo: string; orderQty: numbe
 export class RiceBranWaterHComponent {
 	// Data
 	receipts = signal<Receipt[]>([]);
-  constructor(private supabase: SupabaseService){}
+  constructor(private erpData: ErpDataService,
+    private auth: AuthService){}
 
 	// Days window for the timeline (60 days from today)
 	readonly days: Date[] = Array.from({ length: 60 }, (_, i) => { const d = new Date(); d.setDate(d.getDate()+i); return d; });
@@ -252,8 +254,8 @@ export class RiceBranWaterHComponent {
   // Persist change log for delivery updates
   private async recordChange(delivery: Delivery, field: 'date'|'quantity'|'outsourceDate'|'outsourceQty', oldVal: any, newVal: any){
     try{
-      const u = await this.supabase.getCurrentUser();
-      await this.supabase.logDeliveryChange({
+      const u = await this.auth.getCurrentUser();
+      await this.erpData.logDeliveryChange({
         delivery_id: (delivery as any).db_id || delivery.id,
         field,
         old_value: oldVal==null? null : String(oldVal),

@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { Router } from '@angular/router';
 import { TabService } from '../../services/tab.service';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
 import { DragDropModule, CdkDragDrop, moveItemInArray, CdkDragMove } from '@angular/cdk/drag-drop';
 
 type ProductRow = { [key:string]: any } & {
@@ -268,7 +268,7 @@ export class ProductListComponent implements OnInit, AfterViewInit {
   @ViewChild('menuList') menuListRef!: ElementRef<HTMLDivElement>;
   private menuAutoScrollInterval: any = null;
 
-  constructor(private supabase: SupabaseService, private router: Router, private tabBus: TabService) {}
+  constructor(private erpData: ErpDataService, private router: Router, private tabBus: TabService) {}
   ngOnInit(){
     const saved = this.loadSavedLayout();
     this.columns = saved.order.length ? saved.order.slice() : this.baseColumns.slice();
@@ -290,7 +290,7 @@ export class ProductListComponent implements OnInit, AfterViewInit {
 
   async load(){
     this.loading = true;
-    const { data, count } = await this.supabase.listProducts({ page: this.page, pageSize: this.pageSize, keyword: this.keyword, keywordOp: this.keywordOp }) as any;
+    const { data, count } = await this.erpData.listProducts({ page: this.page, pageSize: this.pageSize, keyword: this.keyword, keywordOp: this.keywordOp }) as any;
     const rows = (data as ProductRow[]) || [];
     // Detect extra columns in DB and show them as optional columns
     const baseSet = new Set(['id', ...this.baseColumns]);
@@ -493,7 +493,7 @@ export class ProductListComponent implements OnInit, AfterViewInit {
 
   private async loadColumnLabels(){
     try{
-      const rows = await this.supabase.getProductColumnMap();
+      const rows = await this.erpData.getProductColumnMap();
       this.colLabelMap.clear();
       for(const r of rows){
         const key = r?.db_column as string;

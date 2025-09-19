@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
 
 @Component({
   selector: 'app-compose-preview',
@@ -107,7 +107,7 @@ export class ComposePreviewComponent implements OnInit {
   lines: Array<{ inci: string; kor: string; pct: number }> = [];
   totalPct = 0;
 
-  constructor(private supabase: SupabaseService){}
+  constructor(private erpData: ErpDataService){}
 
   ngOnInit(): void {
     const url = new URL(location.href);
@@ -186,7 +186,7 @@ export class ComposePreviewComponent implements OnInit {
 
   async loadCompositions(productId: string){
     try{
-      const { data } = await this.supabase.listProductCompositions(productId) as any;
+      const { data } = await this.erpData.listProductCompositions(productId) as any;
       const list: Array<{ inci: string; kor: string; pct: number }> = (data||[]).map((c:any)=>({
         inci: (c?.ingredient?.inci_name)||'',
         kor: (c?.ingredient?.korean_name)||'',

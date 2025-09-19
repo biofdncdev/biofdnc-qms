@@ -1,7 +1,7 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { SupabaseService } from '../../../services/supabase.service';
+import { AuditService } from '../../../services/audit.service';
 
 @Component({
   selector: 'app-audit-companies',
@@ -52,19 +52,19 @@ import { SupabaseService } from '../../../services/supabase.service';
 export class AuditCompaniesComponent implements OnInit {
   rows: Array<{ id?: string; name: string; note?: string | null }> = [];
   saving = false;
-  constructor(private supabase: SupabaseService){}
-  async ngOnInit(){ this.rows = await this.supabase.listAuditCompanies(); }
+  constructor(private audit: AuditService){}
+  async ngOnInit(){ this.rows = await this.audit.listAuditCompanies(); }
   addRow(){ this.rows.push({ name: '', note: '' }); }
-  remove(i: number){ const row = this.rows[i]; if (row?.id){ this.supabase.deleteAuditCompany(row.id as string); } this.rows.splice(i,1); }
+  remove(i: number){ const row = this.rows[i]; if (row?.id){ this.audit.deleteAuditCompany(row.id as string); } this.rows.splice(i,1); }
   async saveAll(){
     this.saving = true;
     for (const r of this.rows){
       if (!r.name || !r.name.trim()) continue;
-      if (r.id){ await this.supabase.updateAuditCompany(r.id, { name: r.name.trim(), note: (r.note || undefined) }); }
-      else { const { data } = (await this.supabase.addAuditCompany({ name: r.name.trim(), note: r.note || null })) as any; r.id = (data as any)?.id; }
+      if (r.id){ await this.audit.updateAuditCompany(r.id, { name: r.name.trim(), note: (r.note || undefined) }); }
+      else { const { data } = (await this.audit.addAuditCompany({ name: r.name.trim(), note: r.note || null })) as any; r.id = (data as any)?.id; }
     }
     this.saving = false;
-    this.rows = await this.supabase.listAuditCompanies();
+    this.rows = await this.audit.listAuditCompanies();
   }
 }
 

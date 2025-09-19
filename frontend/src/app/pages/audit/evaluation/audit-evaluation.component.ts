@@ -3,7 +3,9 @@ import { Router, NavigationEnd } from '@angular/router';
 import { TabService } from '../../../services/tab.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { SupabaseService } from '../../../services/supabase.service';
+import { AuditService } from '../../../services/audit.service';
+import { AuthService } from '../../../services/auth.service';
+import { RecordService } from '../../../services/record.service';
 import { RmdFormItem } from '../../../record/rmd-forms/rmd-forms-data';
 import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
 import * as XLSX from 'xlsx';
@@ -479,7 +481,13 @@ interface AuditDate { value: string; label: string; }
   `]
 })
 export class AuditEvaluationComponent {
-  constructor(private supabase: SupabaseService, private router: Router, private tabBus: TabService){
+  constructor(
+    private audit: AuditService,
+    private record: RecordService,
+    private auth: AuthService,
+    private router: Router,
+    private tabBus: TabService
+  ) {
     // Pre-hydrate UI from sessionStorage to avoid initial flicker on tab switching
     this.prehydrateFromSession();
     
@@ -579,9 +587,9 @@ export class AuditEvaluationComponent {
         sessionStorage.removeItem('audit.eval.forceOpen');
         sessionStorage.removeItem('audit.eval.forceOpenTitle');
       }catch{}
-      const u = await this.supabase.getCurrentUser();
+      const u = await this.auth.getCurrentUser();
       if(u){
-        const { data } = await this.supabase.getUserProfile(u.id);
+        const { data } = await this.auth.getUserProfile(u.id);
         this.userDisplay = data?.name || data?.email || '사용자';
         this.currentUserId = u.id;
         this.isAdmin = (data?.role === 'admin');
@@ -591,12 +599,12 @@ export class AuditEvaluationComponent {
       // 기본 선택값: 가장 최근 저장일
       this.savedSelectedDate = this.savedDates?.[0] || null;
       // load audit companies for selects/filters
-      try{ this.companies = (await this.supabase.listAuditCompanies()).map((r:any)=> r.name).filter(Boolean); }catch{}
+      try{ this.companies = (await this.audit.listAuditCompanies()).map((r:any)=> r.name).filter(Boolean); }catch{}
       // Expose tab service bridge for child components (temporary)
       try{ (window as any).tabBus = (window as any).tabBus || new (class{ requestOpen(){}})(); }catch{}
       // 사용자 목록 로드 (담당자 선택/필터용)
       try{
-        const { data: users } = await this.supabase.getClient().from('users').select('name,email').order('created_at', { ascending: false });
+        const { data: users } = await this.auth.getClient().from('users').select('name,email').order('created_at', { ascending: false });
         this.userOptions = (users||[]).map((u:any)=> u?.name || u?.email).filter(Boolean);
       }catch{}
       // Restore persisted UI state if available (no flicker)
@@ -678,7 +686,7 @@ export class AuditEvaluationComponent {
             return row ? ({...it, titleKo: row.titleKo || it.titleKo, titleEn: row.titleEn || it.titleEn}) : it;
           });
           this.items.set(updated as any);
-          try{ await this.supabase.upsertAuditItems(items); }catch{}
+          try{ await this.audit.upsertAuditItems(items); }catch{}
           return;
         }
       }
@@ -717,7 +725,7 @@ export class AuditEvaluationComponent {
       const curr = this.items();
       for (let i=0;i<curr.length;i++) curr[i] = updated[i] as any;
       this.items.set(curr as any);
-      if (upserts.length){ try{ await this.supabase.upsertAuditItems(upserts); }catch{} }
+      if (upserts.length){ try{ await this.audit.upsertAuditItems(upserts); }catch{} }
       // 회사명도 함께 저장 (company는 audit_progress가 날짜별이라 items에는 보관하지 않음)
       // 화면 반영만 즉시 수행
       const curr2 = this.items();
@@ -790,7 +798,7 @@ export class AuditEvaluationComponent {
 
       // Upsert to DB to persist titles by immutable key 'number'
       if (upserts.length){
-        try{ const res: any = await this.supabase.upsertAuditItems(upserts); console.info('[Audit] Upsert items (sequential):', upserts.length, 'result:', res); return !!(res && res.ok !== false); }catch(e){ console.warn('[Audit] Upsert failed', e); return false as any; }
+        try{ const res: any = await this.audit.upsertAuditItems(upserts); console.info('[Audit] Upsert items (sequential):', upserts.length, 'result:', res); return !!(res && res.ok !== false); }catch(e){ console.warn('[Audit] Upsert failed', e); return false as any; }
       }
       return true as any;
     }catch{ return false as any; }
@@ -798,7 +806,7 @@ export class AuditEvaluationComponent {
 
   private async refreshTitlesFromDb(){
     try{
-      const rows = await this.supabase.listAuditItems();
+      const rows = await this.audit.listAuditItems();
       const map = new Map<number, { title_ko: string; title_en: string }>();
       for (const r of rows as any[]){ map.set((r as any).number, { title_ko: (r as any).title_ko, title_en: (r as any).title_en }); }
       const updated = this.items().map((it:any)=>{
@@ -863,10 +871,10 @@ export class AuditEvaluationComponent {
   setToday(){ this.setDate(this.today()); }
   async loadSavedDates(){
     try{
-      this.savedDates = await this.supabase.listSavedAuditDates();
+      this.savedDates = await this.audit.listSavedAuditDates();
       // 함께 메타도 조회하여 드롭다운 보조 텍스트로 표시
       try{
-        const rows = await this.supabase.listAllAuditDateMeta();
+        const rows = await this.audit.listAllAuditDateMeta();
         const map: Record<string, { company?: string; memo?: string }> = {};
         for (const r of rows){ map[r.audit_date] = { company: (r.company || undefined) as any, memo: r.memo || '' }; }
         this.savedMeta = map;
@@ -905,14 +913,14 @@ export class AuditEvaluationComponent {
     try{
       // 날짜 메타 불러와 헤더 반영 (없으면 기본값)
       try{
-        const meta = await this.supabase.getAuditDateMeta(date);
+        const meta = await this.audit.getAuditDateMeta(date);
         this.companyFilter = (meta?.company as any) || 'ALL';
         this.headerMemo = meta?.memo || '';
         this.savedMeta[date] = { company: this.companyFilter !== 'ALL' ? this.companyFilter : undefined, memo: this.headerMemo };
       }catch{}
-      const { data: all } = created ? await this.supabase.listGivaudanProgressByDate(date) : { data: [] } as any;
+      const { data: all } = created ? await this.audit.listGivaudanProgressByDate(date) : { data: [] } as any;
       // 생성일(최초 저장 시간) 표시
-      try{ this.createdAt = (await this.supabase.getAuditDateCreatedAt(date)) || null; }catch{ this.createdAt = null; }
+      try{ this.createdAt = (await this.audit.getAuditDateCreatedAt(date)) || null; }catch{ this.createdAt = null; }
       const next = this.items().map(it => {
         // 높이 캐시 초기화
         delete (it as any).__h1;
@@ -990,11 +998,11 @@ export class AuditEvaluationComponent {
       audit_date: date
     }));
     try{
-      await this.supabase.upsertGivaudanProgressMany(payload as any);
+      await this.audit.upsertGivaudanProgressMany(payload as any);
     }catch(e){ console.warn('bulk upsert failed', e); this.showToast('저장이 일부 실패했습니다'); }
     // 서버 기준으로 최신화
     try{
-      const latest = await this.supabase.listSavedAuditDates();
+      const latest = await this.audit.listSavedAuditDates();
       this.savedDates = Array.from(new Set([date, ...(latest||[])]));
       // 저장 메타: 현재 업체 필터/메모를 저장 목록과 함께 보이도록 보관
       this.savedMeta[date] = { company: this.companyFilter, memo: this.headerMemo };
@@ -1076,7 +1084,7 @@ export class AuditEvaluationComponent {
     if(!ok) return;
     try{
       this.deleting.set(true);
-      await this.supabase.deleteGivaudanProgressByDate(date);
+      await this.audit.deleteGivaudanProgressByDate(date);
       // savedDates에서 즉시 제거(낙관적 업데이트)
       this.savedDates = this.savedDates.filter(d => d !== date);
       // 현재 화면도 초기화
@@ -1133,7 +1141,7 @@ export class AuditEvaluationComponent {
       this.selectedDate.set(target);
       const from = this.copyFromDate; if (!from){ alert('복사할 날짜를 선택하세요.'); return; }
       // 원본을 한번에 읽고, 단일 벌크 업서트로 처리하여 속도와 완료 타이밍 개선
-      const { data: rows } = await this.supabase.listGivaudanProgressByDate(from);
+      const { data: rows } = await this.audit.listGivaudanProgressByDate(from);
       const payload = (rows||[]).map((r:any)=> ({
         number: r.number,
         status: r.status || null,
@@ -1144,7 +1152,7 @@ export class AuditEvaluationComponent {
         updated_by: this.currentUserId,
         updated_by_name: this.userDisplay
       }));
-      if (payload.length){ await this.supabase.upsertGivaudanProgressMany(payload as any); }
+      if (payload.length){ await this.audit.upsertGivaudanProgressMany(payload as any); }
       await this.loadByDate();
       await this.loadSavedDates();
       // 완료 안내 (모달은 유지)
@@ -1285,7 +1293,7 @@ export class AuditEvaluationComponent {
   private async loadRecordPickerDataOnce(){
     if (this.recordDataLoading) return; this.recordDataLoading = true;
     try{
-      const rows: any[] = await this.supabase.listAllFormMeta();
+      const rows: any[] = await this.record.listAllFormMeta();
       const recs = (rows||[]).map(r => ({
         id: String((r as any).record_no || '').trim(),
         title: (r as any).record_name || (r as any).name || '',
@@ -1553,11 +1561,11 @@ export class AuditEvaluationComponent {
     // 선택 즉시 UI 상태 저장해 탭 이동 후 복귀 시 동일 항목 복원
     this.persistUi();
     // Load assessment master
-    const { data } = await this.supabase.getGivaudanAssessment(it.id);
+    const { data } = await this.audit.getGivaudanAssessment(it.id);
     this.assessment = data;
     // Load progress
     const date = this.selectedDate();
-    const { data: prog } = date ? await this.supabase.getGivaudanProgressByDate(it.id, date) : await this.supabase.getGivaudanProgress(it.id);
+    const { data: prog } = date ? await this.audit.getGivaudanProgressByDate(it.id, date) : await this.audit.getGivaudanProgress(it.id);
     if (prog){
       it.status = (prog.status as any) || it.status;
       it.note = prog.note || it.note;
@@ -1580,7 +1588,7 @@ export class AuditEvaluationComponent {
       }
     }
     // Load resources
-    const { data: res } = await this.supabase.listGivaudanResources(it.id);
+    const { data: res } = await this.audit.listGivaudanResources(it.id);
     this.resources = res || [];
     
     // 높이 캐시를 초기화하고 재계산
@@ -1603,10 +1611,10 @@ export class AuditEvaluationComponent {
     }
     this.openExtra.add(it.id);
     // 열릴 때 필요한 데이터는 selectItem과 동일하게 로드
-    const { data } = await this.supabase.getGivaudanAssessment(it.id);
+    const { data } = await this.audit.getGivaudanAssessment(it.id);
     this.assessment = data;
     const date = this.selectedDate();
-    const { data: prog } = date ? await this.supabase.getGivaudanProgressByDate(it.id, date) : await this.supabase.getGivaudanProgress(it.id);
+    const { data: prog } = date ? await this.audit.getGivaudanProgressByDate(it.id, date) : await this.audit.getGivaudanProgress(it.id);
     if (prog){
       it.status = (prog.status as any) || it.status;
       it.note = prog.note || it.note;
@@ -1628,7 +1636,7 @@ export class AuditEvaluationComponent {
         }
       }
     }
-    const { data: res } = await this.supabase.listGivaudanResources(it.id);
+    const { data: res } = await this.audit.listGivaudanResources(it.id);
     this.resources = res || [];
     
     // 높이 캐시를 초기화하고 재계산
@@ -1692,13 +1700,13 @@ export class AuditEvaluationComponent {
         updated_by_name: this.userDisplay,
         audit_date: this.selectedDate() || null,
       };
-      const { error } = await this.supabase.upsertGivaudanProgress(payload) as any;
+      const { error } = await this.audit.upsertGivaudanProgress(payload) as any;
       if (error) throw error;
       // Reload the single row from server to reflect canonical values
       try{
         const date = this.selectedDate();
         if (date){
-          const { data: fresh } = await this.supabase.getGivaudanProgressByDate(it.id, date);
+          const { data: fresh } = await this.audit.getGivaudanProgressByDate(it.id, date);
           if (fresh){
             it.status = (fresh as any).status || it.status;
             it.note = (fresh as any).note || it.note;
@@ -1835,7 +1843,7 @@ export class AuditEvaluationComponent {
     this.companyFilterSaveTimer = setTimeout(() => {
       // DB 저장
       this.headerSavingMeta = true;
-      this.supabase.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo })
+      this.audit.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo })
         .then((res: any) => {
           if (res?.error) {
             console.error('[onCompanyFilterChange] Save failed:', res.error);
@@ -1855,7 +1863,7 @@ export class AuditEvaluationComponent {
     clearTimeout(this.headerMemoTimer);
     this.headerMemoTimer = setTimeout(()=>{
       this.headerSavingMeta = true;
-      this.supabase.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo })
+      this.audit.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo })
         .finally(()=>{ this.headerSavingMeta = false; });
       this.persistUi();
     }, 400);
@@ -1864,7 +1872,7 @@ export class AuditEvaluationComponent {
     const d = this.selectedDate(); if (!d) return;
     // 입력 중 새로고침 등에 대비하여 blur 시점에 즉시 한번 더 저장
     this.headerSavingMeta = true;
-    this.supabase.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo })
+    this.audit.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo })
       .finally(()=>{ this.headerSavingMeta = false; });
   }
 
@@ -1902,19 +1910,19 @@ export class AuditEvaluationComponent {
 
   async addResource(it: any){
     const row = { number: it.id, name: '', type: 'Manual', url: null, file_url: null };
-    const { data } = await this.supabase.addGivaudanResource(row);
+    const { data } = await this.audit.addGivaudanResource(row);
     this.resources = [...(this.resources || []), data as ResourceItem];
   }
 
   async addResourceByAside(){
     if(!this.openItemId) return;
     const row = { number: this.openItemId, name: '', type: 'Manual', url: null, file_url: null };
-    const { data } = await this.supabase.addGivaudanResource(row);
+    const { data } = await this.audit.addGivaudanResource(row);
     this.resources = [...(this.resources || []), data as ResourceItem];
   }
 
   async removeResource(r: any){
-    await this.supabase.deleteGivaudanResource(r.id);
+    await this.audit.deleteGivaudanResource(r.id);
     this.resources = (this.resources || []).filter((x:any)=>x.id!==r.id);
   }
   removeResourceConfirm(r: any){
@@ -1928,7 +1936,7 @@ export class AuditEvaluationComponent {
     if(!file) return;
     const ext = file.name.split('.').pop();
     const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-    const { publicUrl } = await this.supabase.uploadAuditFile(file, path);
+    const { publicUrl } = await this.audit.uploadAuditFile(file, path);
     r.file_url = publicUrl;
     this.saveResource(r);
   }
@@ -2015,7 +2023,7 @@ export class AuditEvaluationComponent {
   async saveResource(r: ResourceItem){
     if (!r || !('id' in (r as any))) return;
     try{
-      await this.supabase.updateGivaudanResource((r as any).id, { name: r.name, url: (r as any).url, file_url: (r as any).file_url, done: (r as any).done });
+      await this.audit.updateGivaudanResource((r as any).id, { name: r.name, url: (r as any).url, file_url: (r as any).file_url, done: (r as any).done });
     }catch{}
   }
   openLink(url?: string | null){ if(!url) return; window.open(url, '_blank'); }

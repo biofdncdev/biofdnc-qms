@@ -8,7 +8,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { FormsModule } from '@angular/forms';
-import { SupabaseService } from '../../services/supabase.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-login',
@@ -34,7 +34,7 @@ export class LoginComponent implements OnInit {
   confirmNewPassword = '';
   private maxAttempts = 10;
 
-  constructor(private router: Router, private supabase: SupabaseService) {}
+  constructor(private router: Router, private auth: AuthService) {}
 
   submitOnEnter(event: Event) {
     event.preventDefault();
@@ -59,7 +59,7 @@ export class LoginComponent implements OnInit {
       return;
     }
 
-    const { data, error } = await this.supabase.signIn(email, password);
+    const { data, error } = await this.auth.signIn(email, password);
     if (error) {
       // Increase local fail counter and block after threshold
       fails += 1; localStorage.setItem(key, String(fails));
@@ -73,7 +73,7 @@ export class LoginComponent implements OnInit {
 
     // Successful login: reset the local counter
     try { localStorage.removeItem(key); } catch {}
-    const user = await this.supabase.getCurrentUser();
+    const user = await this.auth.getCurrentUser();
     if (!user) {
       alert('로그인 세션을 확인할 수 없습니다. 다시 시도해주세요.');
       return;
@@ -81,17 +81,17 @@ export class LoginComponent implements OnInit {
 
     // 프로필 자동 생성 제거: 탈퇴 직후 재생성되는 문제 방지
 
-    const { data: profile, error: pError } = await this.supabase.getUserProfile(user.id);
+    const { data: profile, error: pError } = await this.auth.getUserProfile(user.id);
     if (pError || !profile) {
       // 방금 ensureUserProfile 수행 후에도 조회가 실패하면 viewer 기본권한으로 진행 차단 안내
       alert('프로필을 불러오지 못했습니다. 관리자에게 문의하세요.');
-      await this.supabase.signOut();
+      await this.auth.signOut();
       return;
     }
 
     // viewer도 로그인 허용 (메뉴 제한은 앱 셸에서 처리)
 
-    await this.supabase.updateLoginState(user.id, true);
+    await this.auth.updateLoginState(user.id, true);
     this.router.navigate(['/app']);
   }
 
@@ -102,11 +102,11 @@ export class LoginComponent implements OnInit {
       if (!input) return;
       const e = input.trim().toLowerCase();
       if (!e){ alert('이메일을 입력하세요.'); return; }
-      await this.supabase.addDeleteRequestNotification({ email: e });
+      await this.auth.addDeleteRequestNotification({ email: e });
       alert('회원탈퇴 요청이 접수되었습니다. 관리자 검토 후 처리됩니다.');
       return;
     }
-    await this.supabase.addDeleteRequestNotification({ email });
+    await this.auth.addDeleteRequestNotification({ email });
     alert('회원탈퇴 요청이 접수되었습니다. 관리자 검토 후 처리됩니다.');
   }
 
@@ -117,11 +117,11 @@ export class LoginComponent implements OnInit {
       if (!input) return;
       const e = input.trim().toLowerCase();
       if (!e){ alert('이메일을 입력하세요.'); return; }
-      await this.supabase.resendConfirmationEmail(e);
+      await this.auth.resendConfirmationEmail(e);
       alert('인증(로그인) 링크를 이메일로 재발송했습니다. 메일함/스팸함을 확인해주세요.');
       return;
     }
-    await this.supabase.resendConfirmationEmail(email);
+    await this.auth.resendConfirmationEmail(email);
     alert('인증(로그인) 링크를 이메일로 재발송했습니다. 메일함/스팸함을 확인해주세요.');
   }
 
@@ -149,9 +149,9 @@ export class LoginComponent implements OnInit {
     if (!p1 || p1.length < 6) { alert('새 비밀번호는 6자 이상이어야 합니다.'); return; }
     if (p1 !== p2) { alert('비밀번호가 서로 다릅니다.'); return; }
     try {
-      await this.supabase.getClient().auth.updateUser({ password: p1 });
+      await this.auth.getClient().auth.updateUser({ password: p1 });
       alert('비밀번호가 변경되었습니다. 새 비밀번호로 로그인하세요.');
-      await this.supabase.signOut();
+      await this.auth.signOut();
       this.recovery = false;
       this.newPassword = '';
       this.confirmNewPassword = '';

@@ -1,5 +1,7 @@
 import { Injectable, signal, ElementRef } from '@angular/core';
-import { SupabaseService } from '../../../services/supabase.service';
+import { RecordService } from '../../../services/record.service';
+import { StorageService } from '../../../services/storage.service';
+import { AuthService } from '../../../services/auth.service';
 import { Stroke, StrokePoint, Granularity, Tool } from '../rmd-forms.types';
 
 @Injectable()
@@ -34,7 +36,10 @@ export class RmdFormsThRecordService {
   
   isAdmin = false;
 
-  constructor(private supabase: SupabaseService) {}
+  constructor(
+    private record: RecordService,
+    private auth: AuthService
+  ) {}
 
   // Date utilities
   static toMonday(d: Date): string {
@@ -280,7 +285,7 @@ export class RmdFormsThRecordService {
   async saveRecord(formId: string, pdfCanvas: HTMLCanvasElement, drawCanvas: HTMLCanvasElement): Promise<void> {
     const ymd = this.periodStart();
     try {
-      const chk = await this.supabase.getThRecord(formId, ymd);
+      const chk = await this.record.getThRecord(formId, ymd);
       if (chk.data) {
         const first = globalThis.confirm('해당 날짜에 기존 기록이 있습니다. 덮어쓰시겠습니까?');
         if (!first) return;
@@ -300,7 +305,7 @@ export class RmdFormsThRecordService {
       let publicUrl: string | null = null;
       
       try {
-        const up = await this.supabase.uploadRecordImage(blob, path);
+        const up = await this.record.uploadRecordImage(blob, path);
         publicUrl = up.publicUrl;
       } catch (err: any) {
         // Storage 업로드가 실패해도 DB에는 strokes만 저장
@@ -311,7 +316,7 @@ export class RmdFormsThRecordService {
         this.strokesByDate[this.dateValue()] = this.legacyStrokes;
       }
       
-      await this.supabase.upsertThRecord({
+      await this.record.upsertThRecord({
         form_id: formId,
         week_start: ymd,
         image_url: publicUrl,
@@ -326,7 +331,7 @@ export class RmdFormsThRecordService {
   async loadRecord(formId: string): Promise<void> {
     try {
       const ymd = this.periodStart();
-      const { data } = await this.supabase.getThRecord(formId, ymd);
+      const { data } = await this.record.getThRecord(formId, ymd);
       if (data?.strokes) {
         const raw = data.strokes as any;
         // Backward-compat: older 데이터는 배열로 저장됨
@@ -438,16 +443,16 @@ export class RmdFormsThRecordService {
 
   async checkAdmin(): Promise<void> {
     try {
-      const u = await this.supabase.getCurrentUser();
+      const u = await this.auth.getCurrentUser();
       if (u) {
-        const { data } = await this.supabase.getUserProfile(u.id);
+        const { data } = await this.auth.getUserProfile(u.id);
         this.isAdmin = (data?.role === 'admin' || data?.role === 'manager');
       }
     } catch {}
   }
 
   async loadWeeks(formId: string): Promise<void> {
-    const list = await this.supabase.listThWeeks(formId);
+    const list = await this.record.listThWeeks(formId);
     this.recordedWeeks.set((list.data || []).map((r: any) => r.week_start));
   }
 }

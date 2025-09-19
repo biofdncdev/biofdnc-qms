@@ -2,7 +2,7 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
 
 type SyncError = { key: string; column?: string; message: string };
 
@@ -92,9 +92,9 @@ export class MaterialUpdateComponent implements OnInit {
   // ERP에서 유일키는 '자재번호' 하나만 사용
   private keyColumns = ['자재번호'];
 
-  constructor(private supabase: SupabaseService) {}
+  constructor(private erpData: ErpDataService) {}
   async ngOnInit(){
-    try{ const maps = await this.supabase.getMaterialColumnMap(); for(const m of maps){ if(m?.sheet_label_kr) this.erpHeaderSet.add(String(m.sheet_label_kr)); } }catch{}
+    try{ const maps = await this.erpData.getMaterialColumnMap(); for(const m of maps){ if(m?.sheet_label_kr) this.erpHeaderSet.add(String(m.sheet_label_kr)); } }catch{}
   }
 
   onUpdateClick(){
@@ -208,7 +208,7 @@ export class MaterialUpdateComponent implements OnInit {
       const rows=this.pendingRows().slice(); const CHUNK=300; const MAX_PAR=3; const chunks:any[][]=[]; for(let i=0;i<rows.length;i+=CHUNK) chunks.push(rows.slice(i,i+CHUNK));
       console.log('[MaterialUpdate] start sync', { total: rows.length, chunks: chunks.length });
       const agg:any={ total:rows.length, updated:0, skipped:0, inserted:0 }; const errs:SyncError[]=[]; let next=0;
-      const runWorker=async()=>{ while(next<chunks.length && !this.cancelRequested){ const idx=next++; const part=chunks[idx]; try{ const res=await this.supabase.syncMaterialsByExcel({ sheet: part }); agg.updated+=(res.updated||0); agg.skipped+=(res.skipped||0); agg.inserted+=(res.inserted||0); if(Array.isArray(res.errors)) errs.push(...res.errors); }catch(e:any){ console.error('[MaterialUpdate] worker error', e); errs.push({ key:'-', message:e?.message||String(e) }); } finally { this.processed.set(Math.min(rows.length, this.processed()+part.length)); } } };
+      const runWorker=async()=>{ while(next<chunks.length && !this.cancelRequested){ const idx=next++; const part=chunks[idx]; try{ const res=await this.erpData.syncMaterialsByExcel({ sheet: part }); agg.updated+=(res.updated||0); agg.skipped+=(res.skipped||0); agg.inserted+=(res.inserted||0); if(Array.isArray(res.errors)) errs.push(...res.errors); }catch(e:any){ console.error('[MaterialUpdate] worker error', e); errs.push({ key:'-', message:e?.message||String(e) }); } finally { this.processed.set(Math.min(rows.length, this.processed()+part.length)); } } };
       const workers=Array.from({length:Math.min(MAX_PAR,chunks.length)},()=>runWorker()); await Promise.all(workers);
       this.errors.set(errs); this.stats.set({ total:this.pendingRows().length, updated:agg.updated||0, skipped:agg.skipped||0, inserted:agg.inserted||0 }); this.ran.set(true);
       const sumMsg = `총 ${agg.updated+agg.skipped+agg.inserted}건 처리 / 업데이트 ${agg.updated} · 신규 ${agg.inserted} · 스킵 ${agg.skipped}${errs.length? ` · 에러 ${errs.length}`:''}`;

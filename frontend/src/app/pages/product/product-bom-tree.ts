@@ -1,7 +1,8 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
+import { AuthService } from '../../services/auth.service';
 
 type BomNode = { code: string; name: string; percent?: number | null; children?: BomNode[] };
 
@@ -162,7 +163,8 @@ export class ProductBomTreeComponent implements OnInit {
   chosenMaterials = signal<any[]>([]);
   private selectionsMap: Record<string, any> = {};
 
-  constructor(private supabase: SupabaseService) {}
+  constructor(private erpData: ErpDataService,
+    private auth: AuthService) {}
   async ngOnInit(){ }
 
   openSearch(){
@@ -194,7 +196,7 @@ export class ProductBomTreeComponent implements OnInit {
     const cols = ['product_code','name_kr','name_en','cas_no','spec','specification','keywords_alias'];
     const makeGroup = (w:string)=> cols.map(c=> `${c}.ilike.*${w}*`).join(',');
     const orLogic = words.map(w=> `or(${makeGroup(w)})`).join(',');
-    const { data } = await this.supabase.getClient().from('products').select('id, product_code, name_kr, name_en, cas_no, spec, specification, keywords_alias').or(orLogic).limit(100) as any;
+    const { data } = await this.auth.getClient().from('products').select('id, product_code, name_kr, name_en, cas_no, spec, specification, keywords_alias').or(orLogic).limit(100) as any;
     const rows: any[] = Array.isArray(data)? data: [];
     const toHay = (r:any)=> `${r.product_code||''} ${r.name_kr||''} ${r.name_en||''} ${r.cas_no||''} ${r.spec||''} ${r.specification||''} ${r.keywords_alias||''}`.toLowerCase();
     const filtered = rows.filter(r=> words.every(w=> toHay(r).includes(w.toLowerCase())));
@@ -217,7 +219,7 @@ export class ProductBomTreeComponent implements OnInit {
   }
   async rebuildFromSelection(){
     // Build compositions and unique ingredient list for all selected products
-    const client = this.supabase.getClient();
+    const client = this.auth.getClient();
     const list = this.selectedProducts(); if (!list.length){ this.leftCompositions.set([]); this.uniqueIngredients.set([]); return; }
     const ids = list.map(p=> p.id);
     const { data: prods } = await client.from('products').select('id, product_code').in('id', ids) as any;
@@ -238,7 +240,7 @@ export class ProductBomTreeComponent implements OnInit {
     this.uniqueIngredients.set(Array.from(uniqueIngSet).sort());
     // preload saved selections for first product
     const { product_code } = list[0];
-    const saved = await this.supabase.getBomMaterialSelection(product_code);
+    const saved = await this.erpData.getBomMaterialSelection(product_code);
     this.selectionsMap = {}; for(const s of saved){ this.selectionsMap[(s.ingredient_name||'').toLowerCase()] = s; }
     // refresh chosen materials list
     this.refreshChosenMaterials();
@@ -261,14 +263,14 @@ export class ProductBomTreeComponent implements OnInit {
   async onIngredientClick(ing: string, product_code?: string){
     this.context = { ingredient: ing, product_code };
     // load specification matches in materials table
-    const mats = await this.supabase.listMaterialsBySpecificationExact(ing);
+    const mats = await this.erpData.listMaterialsBySpecificationExact(ing);
     this.materialCandidates.set(mats);
   }
   async chooseMaterial(mat: any){
     // associate to first selected product
     const ctx = this.context; if (!ctx) return; const baseCode = ctx.product_code || (this.selectedProducts()[0]?.product_code);
     if (!baseCode) return;
-    await this.supabase.setBomMaterialSelection({ product_code: baseCode, ingredient_name: ctx.ingredient, selected_material_id: mat.id || null, selected_material_number: mat.material_number || null });
+    await this.erpData.setBomMaterialSelection({ product_code: baseCode, ingredient_name: ctx.ingredient, selected_material_id: mat.id || null, selected_material_number: mat.material_number || null });
     // store in local map
     this.selectionsMap[ctx.ingredient.toLowerCase()] = { selected_material_id: mat.id, selected_material_number: mat.material_number, material_name: mat.material_name };
     this.refreshChosenMaterials();

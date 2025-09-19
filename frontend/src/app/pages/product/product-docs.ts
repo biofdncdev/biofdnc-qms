@@ -1,7 +1,8 @@
 import { Component, OnInit, signal, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
+import { StorageService } from '../../services/storage.service';
 import { TabService } from '../../services/tab.service';
 // 템플릿의 서식 보존을 위해 exceljs를 동적 import로 사용합니다.
 
@@ -225,7 +226,8 @@ export class ProductDocsComponent implements OnInit {
   modalLeft = Math.round(window.innerWidth/2 - 400);
   private dragging = false; private dragOffsetX = 0; private dragOffsetY = 0;
 
-  constructor(private supabase: SupabaseService, private tabBus: TabService) {}
+  constructor(private erpData: ErpDataService,
+    private storage: StorageService, private tabBus: TabService) {}
 
   ngOnInit() {
     const saved = this.loadState();
@@ -274,7 +276,7 @@ export class ProductDocsComponent implements OnInit {
   async runSearch(){
     const q = (this.searchQuery||'').trim();
     try{
-      const { data } = await this.supabase.quickSearchProducts(q);
+      const { data } = await this.erpData.quickSearchProducts(q);
       this.searchResults = Array.isArray(data) ? data.map((r:any)=>({
         product_code: r.product_code,
         name_kr: r.name_kr,
@@ -319,14 +321,14 @@ export class ProductDocsComponent implements OnInit {
     r.product_id = p.id || r.product_id;
     // Determine composition verification by fetching product info and checking save/verify
     try {
-      const { data } = await this.supabase.getProduct(p.id as any);
+      const { data } = await this.erpData.getProduct(p.id as any);
       // If product has any saved compositions, and verify logs exist, show v
       let hasCompositions = false;
       try {
-        const list = await this.supabase.listProductCompositions(p.id as any);
+        const list = await this.erpData.listProductCompositions(p.id as any);
         hasCompositions = Array.isArray((list as any)?.data) && ((list as any).data.length > 0);
       } catch { hasCompositions = false; }
-      const verifyLogs = await this.supabase.getProductVerifyLogs((p.id as any));
+      const verifyLogs = await this.erpData.getProductVerifyLogs((p.id as any));
       r.verified = (p.product_code === 'RPE01794') || (hasCompositions && Array.isArray(verifyLogs) && verifyLogs.length > 0);
     } catch { r.verified = false; }
     this.saveState();
@@ -467,7 +469,7 @@ export class ProductDocsComponent implements OnInit {
     if (!target){ alert('Composition 체크된 품목이 없습니다.'); return; }
     if (!target.verified){ alert('조성비 확인이 필요합니다.'); return; }
     try{
-      const { data } = await this.supabase.listProductCompositions(target.product_id as any) as any;
+      const { data } = await this.erpData.listProductCompositions(target.product_id as any) as any;
       const list: Array<{ inci: string; kor: string; pct: number }> = (data||[]).map((c:any)=>({
         inci: (c?.ingredient?.inci_name)||'',
         kor: (c?.ingredient?.korean_name)||'',
@@ -605,7 +607,7 @@ export class ProductDocsComponent implements OnInit {
     }
     for (const r of targets){
       try{
-        const { data } = await this.supabase.listProductCompositions(r.product_id as any) as any;
+        const { data } = await this.erpData.listProductCompositions(r.product_id as any) as any;
         const list = (data||[]).map((c:any)=>({
           inci: (c.ingredient && c.ingredient.inci_name) || '',
           kor: (c.ingredient && c.ingredient.korean_name) || '',
@@ -613,7 +615,7 @@ export class ProductDocsComponent implements OnInit {
           pct: Number(c.percent)||0,
         }));
         // 1) 템플릿 XLSX 다운로드
-        const tpl = await this.supabase.getCompositionTemplate() as any;
+        const tpl = await this.storage.getCompositionTemplate() as any;
         if (!tpl?.url){ alert('서류양식의 Composition 템플릿이 없습니다.'); return; }
         const resp = await fetch(tpl.url);
         const buf = await resp.arrayBuffer();
@@ -635,7 +637,7 @@ export class ProductDocsComponent implements OnInit {
         // Upload to Supabase Storage and then offer the URL for download
         try{
           const path = `composition/${encodeURIComponent(r.product_code||'code')}/${encodeURIComponent(name)}`;
-          const uploaded = await this.supabase.uploadProductExport(blob, path);
+          const uploaded = await this.storage.uploadProductExport(blob, path);
           const a = document.createElement('a'); a.href = (uploaded as any).url; a.download = name; a.target = '_blank'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }catch{
           // Fallback to direct download if storage upload fails
@@ -710,7 +712,7 @@ export class ProductDocsComponent implements OnInit {
     if (!code) { r.verified = false; this.saveState(); return; }
     // Try to fetch product by code via quick search and exact match
     try{
-      const { data } = await this.supabase.quickSearchProducts(code);
+      const { data } = await this.erpData.quickSearchProducts(code);
       const row = (data||[]).find((p:any)=> String(p.product_code).toLowerCase() === code.toLowerCase());
       if (row){ await this.pickSearch({ product_code: row.product_code, name_kr: row.name_kr, name_en: row.name_en, id: row.id }); }
     }catch{}
@@ -732,7 +734,7 @@ export class ProductDocsComponent implements OnInit {
     if (!r) return;
     if (!r.product_id && r.product_code){
       try{
-        const { data } = await this.supabase.quickSearchProducts(r.product_code);
+        const { data } = await this.erpData.quickSearchProducts(r.product_code);
         const exact = (data||[]).find((p:any)=> String(p.product_code).toLowerCase() === String(r.product_code).toLowerCase());
         if (exact){ r.product_id = exact.id; this.saveState(); }
       }catch{}

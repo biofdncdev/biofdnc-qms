@@ -1,7 +1,7 @@
 import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { SupabaseService } from '../../services/supabase.service';
+import { OrganizationService } from '../../services/organization.service';
 
 interface Dept { id: string; name: string; code: string; company_code?: string }
 
@@ -111,8 +111,8 @@ export class DeptRegisterComponent {
   selectedCompanyCode = '';
   busyDept = signal<boolean>(false);
   busyCompany = signal<boolean>(false);
-  constructor(private supabase: SupabaseService){ this.load(); }
-  async load(){ this.depts.set(await this.supabase.listDepartments()); try{ const list = (await (this.supabase as any).listCompanies?.()) || []; this.companies.set(list); }catch{ this.companies.set([]); } }
+  constructor(private orgService: OrganizationService){ this.load(); }
+  async load(){ this.depts.set(await this.orgService.listDepartments()); try{ const list = (await (this.orgService as any).listCompanies?.()) || []; this.companies.set(list); }catch{ this.companies.set([]); } }
   onSelectCompany(){
     // Reflect selection into inputs for save payload and display
     const code = this.selectedCompanyCode || '';
@@ -132,7 +132,7 @@ export class DeptRegisterComponent {
     try{
       const cc = (this.selectedCompanyCode || this.companyCode || '').trim();
       const cn = cc ? (((this.companies() || []).find(c => c.code === cc)?.name) || (this.companyName||'').trim() || null) : null;
-      await this.supabase.upsertDepartment({
+      await this.orgService.upsertDepartment({
         name: this.name.trim(),
         code: this.code.trim(),
         company_code: cc || null,
@@ -147,7 +147,7 @@ export class DeptRegisterComponent {
     if ((text||'').trim() !== '삭제') return;
     this.busyDept.set(true);
     try{
-      await this.supabase.deleteDepartment(d.id);
+      await this.orgService.deleteDepartment(d.id);
       await this.load();
     } finally { this.busyDept.set(false); }
   }
@@ -165,7 +165,7 @@ export class DeptRegisterComponent {
     if (!nn || !cc){ alert('부서명과 부서코드는 필수입니다.'); return; }
     this.busyDept.set(true);
     try{
-      await this.supabase.upsertDepartment({ id: (d as any).id, name: nn, code: cc, company_code: ccode || null, company_name: cname || null } as any);
+      await this.orgService.upsertDepartment({ id: (d as any).id, name: nn, code: cc, company_code: ccode || null, company_name: cname || null } as any);
       await this.load();
     } finally { this.busyDept.set(false); }
   }
@@ -183,7 +183,7 @@ export class DeptRegisterComponent {
     if (!cc || !nn){ alert('회사코드와 회사명은 필수입니다.'); return; }
     this.busyCompany.set(true);
     try{
-      await (this.supabase as any).upsertCompany?.(payload);
+      await (this.orgService as any).upsertCompany?.(payload);
       this.companyModalOpen.set(false);
       await this.load();
     } finally { this.busyCompany.set(false); }
@@ -194,7 +194,7 @@ export class DeptRegisterComponent {
     if (!cc || !nn){ alert('회사코드와 회사명은 필수입니다.'); return; }
     this.busyCompany.set(true);
     try{
-      await (this.supabase as any).upsertCompany?.({ code: cc, name: nn });
+      await (this.orgService as any).upsertCompany?.({ code: cc, name: nn });
       await this.load();
     } finally{ this.busyCompany.set(false); }
   }

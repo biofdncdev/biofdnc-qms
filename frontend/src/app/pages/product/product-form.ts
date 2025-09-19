@@ -2,7 +2,8 @@ import { Component, OnInit, signal, ViewChild, ElementRef } from '@angular/core'
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-product-form',
@@ -372,11 +373,12 @@ export class ProductFormComponent implements OnInit {
   matSaved = false;
   matPickerOpen = false; matPickerQuery = ''; matPickerRows: any[] = [];
 
-  constructor(private route: ActivatedRoute, private router: Router, private supabase: SupabaseService) {}
+  constructor(private route: ActivatedRoute, private router: Router, private erpData: ErpDataService,
+    private auth: AuthService) {}
   isAdmin = false;
   async ngOnInit(){
     // capture current user for per-user persistence
-    try{ const u = await this.supabase.getCurrentUser(); this.uid = u?.id || null; }catch{ this.uid = null; }
+    try{ const u = await this.auth.getCurrentUser(); this.uid = u?.id || null; }catch{ this.uid = null; }
     const id = this.route.snapshot.queryParamMap.get('id');
     if (id) {
       this.id.set(id);
@@ -426,7 +428,7 @@ export class ProductFormComponent implements OnInit {
   private async reloadCompositions(){
     try{
       const pid = this.id(); if (!pid) return;
-      const { data: comps } = await this.supabase.listProductCompositions(pid) as any;
+      const { data: comps } = await this.erpData.listProductCompositions(pid) as any;
       this.compositions = (comps || []).map((c:any)=>({ ...c, inci_name: (c.ingredient && c.ingredient.inci_name) || '', korean_name: (c.ingredient && c.ingredient.korean_name) || '', cas_no: (c.ingredient && c.ingredient.cas_no) || '', }));
       this.saved = Array.isArray(this.compositions) && this.compositions.length>0;
     }catch{}
@@ -434,7 +436,7 @@ export class ProductFormComponent implements OnInit {
   setTab(tab: 'composition' | 'extra'){ this.activeTab = tab; localStorage.setItem('product.form.activeTab', tab); }
   addComposition(){ this.compositions.push({ ingredient_id: '', percent: null, note: '' }); }
   addCompositionAndFocus(){ this.addComposition(); setTimeout(()=>{ const last = document.querySelector('input[type="number"]') as HTMLInputElement|null; last?.focus(); }, 0); }
-  async removeComposition(row: any){ if (row?.id){ await this.supabase.deleteProductComposition(row.id); } this.compositions = this.compositions.filter(r => r !== row); this.saveStateSnapshot(); }
+  async removeComposition(row: any){ if (row?.id){ await this.erpData.deleteProductComposition(row.id); } this.compositions = this.compositions.filter(r => r !== row); this.saveStateSnapshot(); }
   // Auto-save only remarks when changed
   onRemarksChange(_: any){
     if (this.saveTimer) clearTimeout(this.saveTimer);
@@ -443,7 +445,7 @@ export class ProductFormComponent implements OnInit {
   }
   private async saveRemarks(){
     if (!this.id()) return; // existing product only
-    const { data } = await this.supabase.upsertProduct({ id: this.id()!, remarks: this.model.remarks ?? null });
+    const { data } = await this.erpData.upsertProduct({ id: this.id()!, remarks: this.model.remarks ?? null });
     if (data) this.model = { ...this.model, ...data };
     this.notice.set('비고가 저장되었습니다.'); setTimeout(()=>this.notice.set(null), 1800);
   }
@@ -451,7 +453,7 @@ export class ProductFormComponent implements OnInit {
     if (!this.id()) return;
     const ok = confirm('이 제품을 삭제하시겠습니까? 조성성분도 함께 삭제됩니다.');
     if (!ok) return;
-    await this.supabase.deleteProduct(this.id()!);
+    await this.erpData.deleteProduct(this.id()!);
     this.router.navigate(['/app/product']);
   }
 
@@ -461,7 +463,7 @@ export class ProductFormComponent implements OnInit {
   async onInciInput(index:number, ev:any){
     const q = (ev?.target?.value || '').trim();
     if (!q){ this.ingredientSuggest[index] = []; return; }
-    const { data } = await this.supabase.searchIngredientsBasic(q);
+    const { data } = await this.erpData.searchIngredientsBasic(q);
     this.ingredientSuggest[index] = data || [];
   }
   async onInciChange(index:number, value:string){
@@ -492,12 +494,12 @@ export class ProductFormComponent implements OnInit {
   async runIngSearch(){
     const q = (this.ingQuery||'').trim();
     if (!q){ this.ingResults = []; this.ingPageIndex = 0; this.recommendLabel = null; return; }
-    const { data } = await this.supabase.searchIngredientsBasic(q);
+    const { data } = await this.erpData.searchIngredientsBasic(q);
     this.ingResults = Array.isArray(data) ? data : [];
     this.ingPageIndex = 0;
     // Recommend: among current result IDs, show the most used ingredient in product compositions
     try{
-      const counts = await this.supabase.getCompositionCountsForIngredients(this.ingResults.map(r=>r.id));
+      const counts = await this.erpData.getCompositionCountsForIngredients(this.ingResults.map(r=>r.id));
       let bestId: string | null = null; let bestCnt = -1;
       for (const r of this.ingResults){ const c = (counts as any)[r.id] || 0; if (c > bestCnt){ bestCnt = c; bestId = r.id; } }
       const best = this.ingResults.find(r=>r.id===bestId);
@@ -593,7 +595,7 @@ export class ProductFormComponent implements OnInit {
         return;
       }
       try{
-        const { data } = await this.supabase.getIngredientsByNames(defaults);
+        const { data } = await this.erpData.getIngredientsByNames(defaults);
         const arr = Array.isArray(data) ? data : [];
         // Keep the desired order even if DB returns unordered
         const ordered = defaults
@@ -608,7 +610,7 @@ export class ProductFormComponent implements OnInit {
       return;
     }
     // reuse existing ingredient search; ideally include chinese_name, cas_no
-    const { data } = await this.supabase.listIngredients({ page: 1, pageSize: 20, keyword: q, keywordOp: 'AND' }) as any;
+    const { data } = await this.erpData.listIngredients({ page: 1, pageSize: 20, keyword: q, keywordOp: 'AND' }) as any;
     this.pickerRows = (data||[]).map((r:any)=>({ id: r.id, inci_name: r.inci_name, korean_name: r.korean_name, chinese_name: r.chinese_name, cas_no: r.cas_no }));
     this.pickerPointer = (this.pickerRows.length > 0 && this.pickerPointerMoved) ? 0 : -1;
   }
@@ -680,14 +682,14 @@ export class ProductFormComponent implements OnInit {
   async runProductSearch(){
     const q = (this.productQuery||'').trim();
     if (!q){ this.productResults = []; this.productPointer = 0; return; }
-    const { data } = await this.supabase.quickSearchProducts(q);
+    const { data } = await this.erpData.quickSearchProducts(q);
     this.productResults = data || [];
     this.productPointer = 0;
   }
   async pickProduct(p: any){
     // load selected product
     try{
-      const { data } = await this.supabase.getProduct(p.id);
+      const { data } = await this.erpData.getProduct(p.id);
       if (data){ this.model = data; this.id.set(p.id); this.storeLastProductId(p.id); this.saved = true; this.productResults = []; this.productQuery = `${p.product_code} · ${p.name_kr||''}`; await this.loadProductState(p.id); this.saveStateSnapshot(); }
     }catch{}
   }
@@ -708,7 +710,7 @@ export class ProductFormComponent implements OnInit {
     try{
       const pid = this.id()!;
       // 1) Snapshot of DB rows
-      const { data: dbComps } = await this.supabase.listProductCompositions(pid) as any;
+      const { data: dbComps } = await this.erpData.listProductCompositions(pid) as any;
       const dbList: Array<{ id: string; ingredient_id: string }> = (dbComps||[]).map((x:any)=> ({ id: x.id, ingredient_id: x.ingredient_id }));
       // 2) Build latest percent per ingredient from current UI
       const latestPercent: Record<string, number> = {};
@@ -723,22 +725,22 @@ export class ProductFormComponent implements OnInit {
         const inUI = latestPercent[row.ingredient_id] !== undefined;
         const allowedId = allowedIdByIngredient[row.ingredient_id];
         if (!inUI || (allowedId && row.id !== allowedId)){
-          await this.supabase.deleteProductComposition(row.id);
+          await this.erpData.deleteProductComposition(row.id);
         }
       }
       // 4) Apply updates to existing rows that remain
       for (const [ingredientId, compId] of Object.entries(existingByIngredient)){
         const pct = latestPercent[ingredientId] ?? 0;
-        await this.supabase.updateProductComposition(compId, { percent: pct });
+        await this.erpData.updateProductComposition(compId, { percent: pct });
       }
       // 5) Insert new ingredients that don't exist yet in DB
       for (const [ingredientId, pct] of Object.entries(latestPercent)){
         if (!existingByIngredient[ingredientId]){
-          await this.supabase.addProductComposition({ product_id: pid, ingredient_id: ingredientId, percent: pct });
+          await this.erpData.addProductComposition({ product_id: pid, ingredient_id: ingredientId, percent: pct });
         }
       }
       // Re-fetch compositions sorted by percent desc
-      const { data: comps } = await this.supabase.listProductCompositions(pid) as any;
+      const { data: comps } = await this.erpData.listProductCompositions(pid) as any;
       const mapped = (comps || []).map((c:any)=>({
         ...c,
         inci_name: (c.ingredient && c.ingredient.inci_name) || '',
@@ -750,7 +752,7 @@ export class ProductFormComponent implements OnInit {
       this.saved = true;
       this.saveStateSnapshot();
       // After successful save, persist verification logs to DB as-is
-      try{ await this.supabase.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
+      try{ await this.erpData.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
       // 저장 이후 확인 버튼을 다시 활성화
       this.lastVerifiedAt = null;
       this.notice.set('조성성분이 저장되었습니다.'); setTimeout(()=> this.notice.set(null), 1800);
@@ -762,7 +764,7 @@ export class ProductFormComponent implements OnInit {
   closeMatPicker(){ this.matPickerOpen = false; }
   async runMatPickerSearch(){
     const q = (this.matPickerQuery||'').trim();
-    const { data } = await this.supabase.listMaterials({ page:1, pageSize: 20, keyword: q||' ', keywordOp: 'AND' } as any) as any;
+    const { data } = await this.erpData.listMaterials({ page:1, pageSize: 20, keyword: q||' ', keywordOp: 'AND' } as any) as any;
     this.matPickerRows = Array.isArray(data) ? data : [];
   }
   onMatPickerEnter(ev:any){ if(ev?.preventDefault) ev.preventDefault(); this.runMatPickerSearch(); }
@@ -779,7 +781,7 @@ export class ProductFormComponent implements OnInit {
     if (!product_code){ alert('품번이 없습니다. 좌측 품목 정보를 확인해 주세요.'); return; }
     try{
       // Existing selections
-      const saved = await this.supabase.getBomMaterialSelection(product_code);
+      const saved = await this.erpData.getBomMaterialSelection(product_code);
       const savedMap: Record<string, any> = {}; for (const s of saved){ if (s?.ingredient_name) savedMap[String(s.ingredient_name)] = s; }
       // New selections by ingredient_name
       const latest: Record<string, { id?: string|null; number?: string|null }> = {};
@@ -788,23 +790,23 @@ export class ProductFormComponent implements OnInit {
       const currentInci = new Set(Object.keys(latest));
       for (const k of Object.keys(savedMap)){
         if (!currentInci.has(k)){
-          await this.supabase.setBomMaterialSelection({ product_code, ingredient_name: k, selected_material_id: null, selected_material_number: null });
+          await this.erpData.setBomMaterialSelection({ product_code, ingredient_name: k, selected_material_id: null, selected_material_number: null });
         }
       }
       // Upsert new mappings
       for (const [inci, v] of Object.entries(latest)){
-        await this.supabase.setBomMaterialSelection({ product_code, ingredient_name: inci, selected_material_id: v.id || null, selected_material_number: v.number || null });
+        await this.erpData.setBomMaterialSelection({ product_code, ingredient_name: inci, selected_material_id: v.id || null, selected_material_number: v.number || null });
       }
       // Persist verify logs as-is
-      try{ await this.supabase.setProductMaterialsVerifyLogs(this.id()!, this.materialsVerifyLogs); }catch{}
+      try{ await this.erpData.setProductMaterialsVerifyLogs(this.id()!, this.materialsVerifyLogs); }catch{}
       this.matSaved = true; this.notice.set('자재 매핑이 저장되었습니다.'); setTimeout(()=> this.notice.set(null), 1800); this.saveStateSnapshot();
     }catch{ this.matSaved = false; }
   }
 
   private async loadProductState(pid: string){
-    const { data } = await this.supabase.getProduct(pid);
+    const { data } = await this.erpData.getProduct(pid);
     // role check for admin-only actions
-    try{ const u = await this.supabase.getCurrentUser(); if (u){ const prof = await this.supabase.getUserProfile(u.id); this.isAdmin = (prof?.data?.role === 'admin'); } }catch{ this.isAdmin = false; }
+    try{ const u = await this.auth.getCurrentUser(); if (u){ const prof = await this.auth.getUserProfile(u.id); this.isAdmin = (prof?.data?.role === 'admin'); } }catch{ this.isAdmin = false; }
     this.model = data || {};
     this.meta = {
       created_at: data?.created_at,
@@ -814,7 +816,7 @@ export class ProductFormComponent implements OnInit {
       updated_by: data?.updated_by,
       updated_by_name: data?.updated_by_name,
     } as any;
-    const { data: comps } = await this.supabase.listProductCompositions(pid) as any;
+    const { data: comps } = await this.erpData.listProductCompositions(pid) as any;
     this.compositions = (comps || []).map((c:any)=>({
       ...c,
       inci_name: (c.ingredient && c.ingredient.inci_name) || '',
@@ -824,7 +826,7 @@ export class ProductFormComponent implements OnInit {
     this.ingredientSuggest = this.compositions.map(()=>[]);
     this.saved = Array.isArray(this.compositions) && this.compositions.length>0;
     try{
-      const logs = await this.supabase.getProductVerifyLogs(pid);
+      const logs = await this.erpData.getProductVerifyLogs(pid);
       this.verifyLogs = Array.isArray(logs) ? logs : [];
       this.lastVerifiedAt = null;
     }catch{ this.verifyLogs = []; this.lastVerifiedAt = null; }
@@ -834,14 +836,14 @@ export class ProductFormComponent implements OnInit {
       const code = (this.model && (this.model as any).product_code) || null;
       this.materials = [];
       if (code){
-        const maps = await this.supabase.getBomMaterialSelection(code);
+        const maps = await this.erpData.getBomMaterialSelection(code);
         const byId: Record<string, any> = {};
         const ids: string[] = [];
         for (const m of maps){
           if (m?.selected_material_id){ ids.push(m.selected_material_id); }
         }
         let details: any[] = [];
-        try{ details = await this.supabase.getMaterialsByIds(ids); }catch{ details = []; }
+        try{ details = await this.erpData.getMaterialsByIds(ids); }catch{ details = []; }
         const idToDetail: Record<string, any> = {}; for(const d of details){ if(d?.id) idToDetail[d.id]=d; }
         for (const row of maps){
           const det = row?.selected_material_id ? idToDetail[row.selected_material_id] : null;
@@ -857,7 +859,7 @@ export class ProductFormComponent implements OnInit {
           this.materials.push(rec);
         }
       }
-      try{ const mlogs = await this.supabase.getProductMaterialsVerifyLogs(pid); this.materialsVerifyLogs = Array.isArray(mlogs)? mlogs: []; this.lastMaterialsVerifiedAt = null; }catch{ this.materialsVerifyLogs = []; this.lastMaterialsVerifiedAt = null; }
+      try{ const mlogs = await this.erpData.getProductMaterialsVerifyLogs(pid); this.materialsVerifyLogs = Array.isArray(mlogs)? mlogs: []; this.lastMaterialsVerifiedAt = null; }catch{ this.materialsVerifyLogs = []; this.lastMaterialsVerifiedAt = null; }
       this.matSaved = Array.isArray(this.materials) && this.materials.length>0;
     }catch{}
     this.saveStateSnapshot();
@@ -884,7 +886,7 @@ export class ProductFormComponent implements OnInit {
   }
   async confirmComposition(){
     try{
-      const user = await this.supabase.getCurrentUser();
+      const user = await this.auth.getCurrentUser();
       const name = user ? (user.email || (user as any).user_metadata?.name || user.id || 'user') : 'anonymous';
       const now = new Date();
       const pad = (n:number)=> String(n).padStart(2,'0');
@@ -892,7 +894,7 @@ export class ProductFormComponent implements OnInit {
       this.verifyLogs = [...this.verifyLogs, { user: name, time }];
       this.lastVerifiedAt = time;
       this.saveVerifyState();
-      const pid = this.id(); if (pid) try{ await this.supabase.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
+      const pid = this.id(); if (pid) try{ await this.erpData.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
       this.saveStateSnapshot();
     }catch{}
   }
@@ -902,7 +904,7 @@ export class ProductFormComponent implements OnInit {
     // If there is any log left, keep disabled state; otherwise enable button
     this.lastVerifiedAt = this.verifyLogs.length ? (this.verifyLogs[this.verifyLogs.length-1].time) : null;
     this.saveVerifyState();
-    const pid = this.id(); if (pid) try{ this.supabase.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
+    const pid = this.id(); if (pid) try{ this.erpData.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
   }
 
   // Materials verification logs
@@ -912,13 +914,13 @@ export class ProductFormComponent implements OnInit {
   onMaterialsVerifyClick(){ if (!this.isMaterialsVerified()) this.confirmMaterials(); }
   async confirmMaterials(){
     try{
-      const user = await this.supabase.getCurrentUser();
+      const user = await this.auth.getCurrentUser();
       const name = user ? (user.email || (user as any).user_metadata?.name || user.id || 'user') : 'anonymous';
       const now = new Date(); const pad = (n:number)=> String(n).padStart(2,'0');
       const time = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
       this.materialsVerifyLogs = [...this.materialsVerifyLogs, { user: name, time }];
       this.lastMaterialsVerifiedAt = time;
-      try{ const pid=this.id(); if(pid) await this.supabase.setProductMaterialsVerifyLogs(pid, this.materialsVerifyLogs); }catch{}
+      try{ const pid=this.id(); if(pid) await this.erpData.setProductMaterialsVerifyLogs(pid, this.materialsVerifyLogs); }catch{}
       this.saveStateSnapshot();
     }catch{}
   }
@@ -926,7 +928,7 @@ export class ProductFormComponent implements OnInit {
     if (index < 0 || index >= this.materialsVerifyLogs.length) return;
     this.materialsVerifyLogs = this.materialsVerifyLogs.filter((_,i)=> i !== index);
     this.lastMaterialsVerifiedAt = this.materialsVerifyLogs.length ? (this.materialsVerifyLogs[this.materialsVerifyLogs.length-1].time) : null;
-    try{ const pid=this.id(); if(pid) this.supabase.setProductMaterialsVerifyLogs(pid, this.materialsVerifyLogs); }catch{}
+    try{ const pid=this.id(); if(pid) this.erpData.setProductMaterialsVerifyLogs(pid, this.materialsVerifyLogs); }catch{}
     this.saveStateSnapshot();
   }
 
@@ -938,7 +940,7 @@ export class ProductFormComponent implements OnInit {
       // Prefer DB logs when available
       const pid = this.id();
       if (pid){
-        const dbLogs = await this.supabase.getProductVerifyLogs(pid);
+        const dbLogs = await this.erpData.getProductVerifyLogs(pid);
         if (Array.isArray(dbLogs) && dbLogs.length){ this.verifyLogs = dbLogs; this.lastVerifiedAt = this.verifyLogs[this.verifyLogs.length-1]?.time || null; return; }
       }
       const raw=localStorage.getItem(key); if(!raw) return; const s=JSON.parse(raw); this.verifyLogs = Array.isArray(s?.logs)? s.logs: []; this.lastVerifiedAt = s?.lastVerifiedAt || null;

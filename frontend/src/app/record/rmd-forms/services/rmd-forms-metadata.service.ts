@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
-import { SupabaseService } from '../../../services/supabase.service';
+import { RecordService } from '../../../services/record.service';
+import { StorageService } from '../../../services/storage.service';
 import { normalizeRecordFeatures } from '../../../pages/record/features/record-features.registry';
 import { FormMetadata, UiState } from '../rmd-forms.types';
 import { RmdFormItem } from '../rmd-forms-data';
@@ -12,14 +13,14 @@ export class RmdFormsMetadataService {
   infoOpen = signal<boolean>(false);
   private featuresDirty = false;
 
-  constructor(private supabase: SupabaseService) {}
+  constructor(private record: RecordService) {}
 
   async saveMeta(sel: any): Promise<void> {
     try {
       this.isSavingMeta.set(true);
       this.metaJustSaved.set(false);
       
-      const up = await this.supabase.upsertFormMeta({
+      const up = await this.record.upsertFormMeta({
         record_no: sel.id,
         record_name: sel.title || sel.id,
         department: Array.isArray(sel.ownerDepartments) ? sel.ownerDepartments.join(', ') : (sel.department || null),
@@ -35,7 +36,7 @@ export class RmdFormsMetadataService {
       
       // Re-fetch canonical row and patch UI to ensure persistence actually reflected
       try {
-        const { data: fresh } = await this.supabase.getFormMeta(sel.id) as any;
+        const { data: fresh } = await this.record.getFormMeta(sel.id) as any;
         if (fresh) {
           sel.department = fresh.department || sel.department;
           sel.owner = fresh.owner || sel.owner;
@@ -98,7 +99,7 @@ export class RmdFormsMetadataService {
 
   async loadMetadata(categories: any[]): Promise<void> {
     try {
-      const all = await this.supabase.listAllFormMeta();
+      const all = await this.record.listAllFormMeta();
       const byId: Record<string, any> = {};
       for (const row of all as any[]) {
         if (!row?.record_no) continue;

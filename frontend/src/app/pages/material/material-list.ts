@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { DragDropModule, CdkDragDrop, moveItemInArray, CdkDragMove } from '@angular/cdk/drag-drop';
 import { Router } from '@angular/router';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
 import { TabService } from '../../services/tab.service';
 
 type MaterialRow = { [key:string]: any } & { id: string };
@@ -170,7 +170,7 @@ export class MaterialListComponent implements OnInit {
   @ViewChild('menuEl') menuElRef!: ElementRef<HTMLDivElement>; @ViewChild('menuList') menuListRef!: ElementRef<HTMLDivElement>;
   private menuAutoScrollInterval: any = null;
 
-  constructor(private supabase: SupabaseService, private router: Router, private tabBus: TabService) {}
+  constructor(private erpData: ErpDataService, private router: Router, private tabBus: TabService) {}
   ngOnInit(){
     const saved = this.loadSavedLayout();
     this.columns = saved.order.length ? saved.order.slice() : this.baseColumns.slice();
@@ -185,7 +185,7 @@ export class MaterialListComponent implements OnInit {
 
   async load(){
     this.loading = true;
-    const { data, count } = await this.supabase.listMaterials({ page: this.page, pageSize: this.pageSize, keyword: this.keyword, keywordOp: this.keywordOp }) as any;
+    const { data, count } = await this.erpData.listMaterials({ page: this.page, pageSize: this.pageSize, keyword: this.keyword, keywordOp: this.keywordOp }) as any;
     const rows = (data as MaterialRow[]) || [];
     const baseSet = new Set(['id', ...this.baseColumns]);
     // Collect columns from current page rows
@@ -246,7 +246,7 @@ export class MaterialListComponent implements OnInit {
 
   private async loadColumnLabels(){
     try{
-      const rows = await this.supabase.getMaterialColumnMap();
+      const rows = await this.erpData.getMaterialColumnMap();
       this.colLabelMap.clear();
       const cols: string[] = [];
       for(const r of rows){

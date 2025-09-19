@@ -17,7 +17,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { Router, RouterLink } from '@angular/router';
-import { SupabaseService } from '../../services/supabase.service';
+import { AuthService } from '../../services/auth.service';
 import { ErrorStateMatcher } from '@angular/material/core';
 
 // 입력을 시작하면(Dirty) 즉시 에러 상태로 간주하는 매처
@@ -72,7 +72,7 @@ export class SignupComponent {
 
   constructor(
     private fb: FormBuilder,
-    private supabaseService: SupabaseService,
+    private supabaseService: AuthService,
     private router: Router
   ) {
     this.signupForm = this.fb.group(

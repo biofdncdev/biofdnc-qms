@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TabService } from '../../services/tab.service';
-import { SupabaseService } from '../../services/supabase.service';
+import { ErpDataService } from '../../services/erp-data.service';
 import { DragDropModule, CdkDragDrop, moveItemInArray, CdkDragMove } from '@angular/cdk/drag-drop';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 
@@ -189,7 +189,7 @@ export class IngredientListComponent implements OnInit {
   private hiddenCols = new Set<string>();
   showColMenu = false;
 
-  constructor(private supabase: SupabaseService, private router: Router, private route: ActivatedRoute, private tabBus: TabService) {}
+  constructor(private erpData: ErpDataService, private router: Router, private route: ActivatedRoute, private tabBus: TabService) {}
 
   ngOnInit(){
     // Initialize filters from URL query params to preserve state on back navigation
@@ -213,7 +213,7 @@ export class IngredientListComponent implements OnInit {
   async load(){
     this.loading = true;
     const normalizedKeyword = (this.keyword || '').trim().replace(/\s+/g, ' ');
-    const { data, count } = await this.supabase.listIngredients({ page: this.page, pageSize: this.pageSize, keyword: normalizedKeyword, keywordOp: this.keywordOp });
+    const { data, count } = await this.erpData.listIngredients({ page: this.page, pageSize: this.pageSize, keyword: normalizedKeyword, keywordOp: this.keywordOp });
     const rows = (data as IngredientRow[]) || [];
     // 추출된 컬럼 중 기본 컬럼 제외 나머지를 extraCols로 구성
     const base = new Set(['id','created_by','updated_by','created_at','updated_at','created_by_name','updated_by_name', ...this.baseColumns]);

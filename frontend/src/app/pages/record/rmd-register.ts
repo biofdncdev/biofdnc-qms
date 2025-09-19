@@ -1,10 +1,11 @@
 import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RecordService } from '../../services/record.service';
+import { OrganizationService } from '../../services/organization.service';
 import { FormsModule } from '@angular/forms';
 import { RecordFeaturesSelectorComponent } from './features/record-features-selector';
 import { RecordFeaturesTextPipe } from './features/record-features.pipe';
 import { getDefaultRecordFeatures, normalizeRecordFeatures } from './features/record-features.registry';
-import { SupabaseService } from '../../services/supabase.service';
 
 interface Cat { id: string; name: string; doc_prefix: string; department_code?: string }
 
@@ -110,18 +111,21 @@ export class RmdRegisterComponent {
   ownerDeptCodes = new Set<string>();
   owners = signal<Array<{ id: string; name: string; email?: string }>>([]); // kept for future use
   selectedOwnerIds = new Set<string>(); // hidden from UI
-  constructor(private supabase: SupabaseService){ this.load(); }
+  constructor(
+    private record: RecordService,
+    private org: OrganizationService
+  ) { this.load(); }
   async load(){
-    this.cats.set(await this.supabase.listRmdCategories());
+    this.cats.set(await this.record.listRmdCategories());
     // defensive: reload twice in case of eventual consistency
-    const list1 = await this.supabase.listRmdRecords();
-    const list2 = await this.supabase.listRmdRecords();
+    const list1 = await this.record.listRmdRecords();
+    const list2 = await this.record.listRmdRecords();
     this.rows.set(Array.isArray(list1) && list1.length ? list1 : list2);
     try{
-      const ds = await this.supabase.listDepartments();
+      const ds = await this.org.listDepartments();
       this.depts.set((ds||[]).map((d:any)=>({ code: d.code, name: d.name, company: d.company_code || null })));
     }catch{ this.depts.set([]); }
-    // try{ const us = await this.supabase.listActiveStaffManagers(); this.owners.set(us.map((u:any)=>({ id: u.id, name: u.name || u.email, email: u.email }))); }catch{ this.owners.set([]); }
+    // try{ const us = await this.record.listActiveStaffManagers(); this.owners.set(us.map((u:any)=>({ id: u.id, name: u.name || u.email, email: u.email }))); }catch{ this.owners.set([]); }
     this.owners.set([]);
   }
   findCat(id: string){ return this.cats().find(c => c.id === id); }
@@ -140,7 +144,7 @@ export class RmdRegisterComponent {
       const companyCode = deptInfo?.company || '';
       const parts = [companyCode, deptCode, cat.doc_prefix].filter(Boolean);
       const prefix = parts.join('-') + '-FR';
-      const nextNo = await this.supabase.getNextRecordDocNo(prefix);
+      const nextNo = await this.record.getNextRecordDocNo(prefix);
       this.docNo = nextNo;
       this.dupError.set(false);
     } finally {
@@ -152,10 +156,10 @@ export class RmdRegisterComponent {
     try{
       const id = crypto.randomUUID();
       // 중복검사
-      const taken = await this.supabase.isRecordDocNoTaken(this.docNo);
+      const taken = await this.record.isRecordDocNoTaken(this.docNo);
       if (taken){ this.dupError.set(true); alert('기록번호가 중복됩니다. 다른 번호로 저장하세요.'); return; }
       const row = { id, title: this.title.trim(), category_id: this.categoryId, doc_no: this.docNo.trim(), features: { ...this.features }, departments: Array.from(this.selectedDeptCodes), owner_departments: this.computeOwnerDeptByCategory() } as any;
-      await this.supabase.upsertRmdRecord(row);
+      await this.record.upsertRmdRecord(row);
       this.title=''; this.categoryId=''; this.docNo=''; this.features=getDefaultRecordFeatures(); this.selectedDeptCodes.clear(); this.ownerDeptCodes.clear(); this.selectedOwnerIds.clear(); this.dupError.set(false);
       await this.load();
     } catch (e: any) {
@@ -177,17 +181,17 @@ export class RmdRegisterComponent {
     const r = this.editRow(); if (!r) return;
     // Validate uniqueness when doc_no changed
     if ((r.doc_no||'').trim() !== (this.rows().find(x=>x.id===r.id)?.doc_no||'')){
-      const taken = await this.supabase.isRecordDocNoTaken((r.doc_no||'').trim());
+      const taken = await this.record.isRecordDocNoTaken((r.doc_no||'').trim());
       if (taken){ alert('이미 사용된 기록번호입니다. 다른 번호를 입력하세요.'); return; }
     }
     this.busy.set(true);
     try{
-      await this.supabase.upsertRmdRecord({ id: r.id, title: (r.title||'').trim(), category_id: r.category_id, doc_no: (r.doc_no||'').trim(), features: normalizeRecordFeatures(r.features), departments: (r.departments||[]) } as any);
+      await this.record.upsertRmdRecord({ id: r.id, title: (r.title||'').trim(), category_id: r.category_id, doc_no: (r.doc_no||'').trim(), features: normalizeRecordFeatures(r.features), departments: (r.departments||[]) } as any);
       this.editOpen.set(false);
       await this.load();
     } finally { this.busy.set(false); }
   }
-  async remove(r: any){ if(!confirm('삭제할까요?')) return; this.busy.set(true); try{ await this.supabase.deleteRmdRecord(r.id); await this.load(); } finally{ this.busy.set(false); } }
+  async remove(r: any){ if(!confirm('삭제할까요?')) return; this.busy.set(true); try{ await this.record.deleteRmdRecord(r.id); await this.load(); } finally{ this.busy.set(false); } }
   toggleDept(code: string, checked: any){
     if (checked){ this.selectedDeptCodes.add(code); } else { this.selectedDeptCodes.delete(code); }
   }

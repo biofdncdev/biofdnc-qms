@@ -1,7 +1,8 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { SupabaseService } from '../../services/supabase.service';
+import { OrganizationService } from '../../services/organization.service';
+import { AuthService } from '../../services/auth.service';
 
 interface V2Node {
   id: string;
@@ -632,7 +633,8 @@ export class OrgChartV2Component implements OnInit {
   dragUser: any = null;
   dragFrom: V2Node | null = null;
 
-  constructor(private supabase: SupabaseService) {}
+  constructor(private orgService: OrganizationService,
+    private auth: AuthService) {}
 
   get ceo(): V2Node { return this.nodes()[0]; }
   specials(): V2Node[] { return this.nodes().filter(n => n.kind==='special'); }
@@ -640,7 +642,7 @@ export class OrgChartV2Component implements OnInit {
   childrenOf(parent: V2Node): V2Node[] { return this.nodes().filter(n => n.kind==='dept' && n.parentId===parent.id); }
 
   async ngOnInit(){
-    const res:any = await this.supabase.listUsers();
+    const res:any = await this.auth.listUsers();
     const list:any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
     this.users.set((list||[]).map(u=>({ id:u.id, name:u.name||u.email, assigned:false })));
   }

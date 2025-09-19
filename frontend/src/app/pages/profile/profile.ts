@@ -2,7 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { SupabaseService } from '../../services/supabase.service';
+import { AuthService } from '../../services/auth.service';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDividerModule } from '@angular/material/divider';
@@ -94,18 +94,18 @@ export class ProfileComponent implements OnInit {
 	profile: any;
 	private dialog = inject(MatDialog);
 	private router = inject(Router);
-	constructor(private supabase: SupabaseService) {}
+	constructor(private auth: AuthService) {}
 	async ngOnInit() {
-		const user = await this.supabase.getCurrentUser();
+		const user = await this.auth.getCurrentUser();
 		if (user) {
-			const { data } = await this.supabase.getUserProfile(user.id);
+			const { data } = await this.auth.getUserProfile(user.id);
 			this.profile = data;
 		}
 	}
 
 	async sendPasswordReset() {
 		if (!this.profile?.email) return;
-		await this.supabase.getClient().auth.resetPasswordForEmail(this.profile.email, { redirectTo: 'https://biofdnc-qms.vercel.app/forgot-credentials' });
+		await this.auth.getClient().auth.resetPasswordForEmail(this.profile.email, { redirectTo: 'https://biofdnc-qms.vercel.app/forgot-credentials' });
 		alert('비밀번호 변경 메일을 보냈습니다. 메일의 링크를 눌러 새 비밀번호를 설정하세요.');
 	}
 
@@ -117,10 +117,10 @@ export class ProfileComponent implements OnInit {
 		const result = await ref.afterClosed().toPromise();
 		if (!result || !result.confirm) return;
 		try {
-			await this.supabase.selfDelete(String(result.email || '').toLowerCase());
+			await this.auth.selfDelete(String(result.email || '').toLowerCase());
 			// 로컬 세션 정리 및 메뉴/상태 초기화 전에 약간의 지연
 			await new Promise(r => setTimeout(r, 300));
-			await this.supabase.signOut();
+			await this.auth.signOut();
 			alert('탈퇴가 완료되었습니다. 이용해 주셔서 감사합니다.');
 			this.router.navigate(['/login']);
 		} catch (e: any) {
