@@ -1,0 +1,122 @@
+import { Injectable, signal } from '@angular/core';
+import { AuditStateService } from './audit-state.service';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AuditUiService {
+  // 편집 상태
+  isCompanyEditing = false;
+  isMemoEditing = false;
+  headerMemoDraft = '';
+  previousCompanyFilter = 'ALL';
+  headerSavingMeta = false;
+  
+  // Record picker 상태
+  recordPickerOpen = false;
+  pickerQuery = '';
+  pickerStdCat = '';
+  pickerDept = '';
+  pickerMethod = '';
+  pickerPeriod = '';
+  pickerIndex = 0;
+  hoverPickerIndex = -1;
+  pickerNotice: string | null = null;
+  pickerTargetItem: any = null;
+  
+  // Copy modal 상태
+  copying = false;
+  copyFromDate: string | null = null;
+  copyingBusy = signal<boolean>(false);
+  copyJustFinished = signal<boolean>(false);
+  
+  // Drag & Drop 상태
+  linkDragItemId: number | null = null;
+  linkDragIndex: number = -1;
+  linkDragOverIndex: number = -1;
+  
+  // 기타 UI 상태
+  previewing = false;
+  previewItem: any = null;
+  linkPopup: { id: string; title: string } | null = null;
+  rowSaving: Record<number, 'idle' | 'saving' | 'saved'> = {};
+  
+  // 코멘트 편집 상태
+  newComment: Record<number, string> = {};
+  editingComment: Record<number, number> = {};
+  editCommentText: Record<string, string> = {};
+  
+  constructor(private state: AuditStateService) {}
+  
+  setSaving(id: number, state: 'idle' | 'saving' | 'saved') {
+    this.rowSaving[id] = state;
+  }
+  
+  keyFor(id: number, i: number): string {
+    return `${id}|${i}`;
+  }
+  
+  syncHeaderMemoDraft() {
+    if (!this.isMemoEditing) {
+      this.headerMemoDraft = this.state.headerMemo;
+    }
+  }
+  
+  persistUi(listRef?: HTMLElement | null) {
+    try {
+      const st = {
+        selectedDate: this.state.selectedDate(),
+        companyFilter: this.state.companyFilter,
+        headerMemo: this.state.headerMemo,
+        filterDept: this.state.filterDept,
+        filterOwner: this.state.filterOwner,
+        scrollTop: listRef?.scrollTop || 0,
+        openItemId: this.state.openItemId,
+        openExtra: Array.from(this.state.openExtra)
+      };
+      sessionStorage.setItem('audit.eval.ui.v1', JSON.stringify(st));
+      
+      const d = this.state.selectedDate();
+      if (d) {
+        sessionStorage.setItem(`audit.eval.items.${d}`, JSON.stringify(this.state.items()));
+      }
+    } catch {}
+  }
+  
+  prehydrateFromSession() {
+    try {
+      const raw = sessionStorage.getItem('audit.eval.ui.v1');
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      
+      if (s?.selectedDate) this.state.selectedDate.set(s.selectedDate);
+      if (s?.companyFilter) this.state.companyFilter = s.companyFilter;
+      if (s?.headerMemo) {
+        this.state.headerMemo = s.headerMemo;
+        this.syncHeaderMemoDraft();
+      }
+      if (s?.filterDept) this.state.filterDept = s.filterDept;
+      if (s?.filterOwner) this.state.filterOwner = s.filterOwner;
+      
+      // Restore open extras
+      try {
+        const extra = Array.isArray(s?.openExtra) ? s.openExtra : [];
+        if (extra && extra.length) {
+          this.state.openExtra = new Set<number>(extra);
+        }
+      } catch {}
+      
+      // Items cache
+      const d = s?.selectedDate;
+      if (d) {
+        const cache = sessionStorage.getItem(`audit.eval.items.${d}`);
+        if (cache) {
+          const rows = JSON.parse(cache);
+          if (Array.isArray(rows) && rows.length) {
+            this.state.items.set(rows);
+          }
+        }
+      }
+    } catch {}
+  }
+}
