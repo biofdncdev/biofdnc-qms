@@ -1416,8 +1416,6 @@ export class AuditEvaluationComponent {
     // 현재 선택된 항목과 다르면 포커스를 이 칩이 속한 항목으로 이동
     if (this.openItemId !== it.id){
       this.selectItem(it);
-      // 선택 후 스크롤 보정
-      setTimeout(()=> this.centerRow(it.id), 0);
     }
     // 원래 동작(관련 탭 열기) 실행
     this.openLinkPopup(l);
@@ -2230,7 +2228,7 @@ export class AuditEvaluationComponent {
       if (!target) return;
       
       await this.selectItem(target as any);
-      setTimeout(()=> this.centerRow(id), 0);
+      // 탭 복귀 시 화면을 강제로 중앙으로 이동하지 않음
     }catch{}
     this.pendingOpenId = null;
   }
