@@ -54,7 +54,8 @@ interface AuditDate { value: string; label: string; }
             <option *ngFor="let c of companies" [ngValue]="c">{{ c }}</option>
           </select>
           <label style="margin-left:12px">메모</label>
-          <input class="kw-input" style="width:260px;" type="text" [(ngModel)]="headerMemo" (ngModelChange)="onHeaderMemoChange()" placeholder="이 스냅샷 설명 메모" />
+          <input class="kw-input" style="width:260px;" type="text" [(ngModel)]="headerMemo" (ngModelChange)="onHeaderMemoChange()" (blur)="onHeaderMemoBlur()" placeholder="이 스냅샷 설명 메모" />
+          <span *ngIf="headerSavingMeta" class="spinner inline" title="저장중"></span>
           <label *ngIf="!isGivaudanAudit" style="margin-left:12px">부서</label>
           <select *ngIf="!isGivaudanAudit" class="dept-select" [(ngModel)]="filterDept" (ngModelChange)="onFilterChange()">
             <option [ngValue]="'ALL'">전체</option>
@@ -546,6 +547,7 @@ export class AuditEvaluationComponent {
   companyFilter: 'ALL' | string = 'ALL';
   headerMemo: string = '';
   savedMeta: Record<string, { company?: string; memo?: string }> = {};
+  headerSavingMeta: boolean = false;
   @ViewChild('listRef') listRef?: ElementRef<HTMLDivElement>;
   // UI pre-hydration
   private preHydrated: boolean = false;
@@ -872,22 +874,24 @@ export class AuditEvaluationComponent {
     }catch{ this.savedDates = []; }
   }
   toggleSavedOpen(ev: MouseEvent){ ev.stopPropagation(); this.savedOpen = !this.savedOpen; }
-  selectSavedDate(d: string){ this.savedSelectedDate = d; this.savedOpen = false; /* 불러오기 버튼을 눌러야 실제 로드 */ }
+  selectSavedDate(d: string){
+    this.savedSelectedDate = d; this.savedOpen = false;
+    // 선택 즉시 헤더 미리보기 반영 (실제 데이터는 불러오기 버튼에서 로드)
+    const meta = this.savedMeta[d];
+    if (meta){
+      this.companyFilter = (meta.company as any) || 'ALL';
+      this.headerMemo = meta.memo || '';
+    }
+  }
   @HostListener('document:click') closeSaved(){ this.savedOpen = false; }
   async loadFromSaved(){
     const d = this.savedSelectedDate || this.savedDates?.[0];
     if (!d) return;
     this.loadingSaved.set(true);
-    // 반영: 저장 당시 메타를 헤더에 적용
-    const meta = this.savedMeta[d];
-    if (meta){
-      if (meta.company) this.companyFilter = meta.company as any;
-      if (typeof meta.memo === 'string') this.headerMemo = meta.memo as any;
-    }
     try{
       this.savedSelectedDate = d;
       this.setDate(d);
-      await this.loadByDate();
+      await this.loadByDate(); // 안에서 DB 메타를 기준으로 헤더를 정확히 반영
       await this.openFromPending();
     } finally {
       this.loadingSaved.set(false);
@@ -899,8 +903,13 @@ export class AuditEvaluationComponent {
     // 아직 생성되지 않은 날짜라면 화면을 초기화하고 수정 가드를 켭니다
     const created = this.savedDates.includes(date);
     try{
-      // 날짜 메타 불러와 헤더 반영
-      try{ const meta = await this.supabase.getAuditDateMeta(date); if (meta){ if (meta.company) this.companyFilter = meta.company as any; this.headerMemo = meta.memo || ''; this.savedMeta[date] = { company: meta.company || undefined, memo: meta.memo || '' }; } }catch{}
+      // 날짜 메타 불러와 헤더 반영 (없으면 기본값)
+      try{
+        const meta = await this.supabase.getAuditDateMeta(date);
+        this.companyFilter = (meta?.company as any) || 'ALL';
+        this.headerMemo = meta?.memo || '';
+        this.savedMeta[date] = { company: this.companyFilter !== 'ALL' ? this.companyFilter : undefined, memo: this.headerMemo };
+      }catch{}
       const { data: all } = created ? await this.supabase.listGivaudanProgressByDate(date) : { data: [] } as any;
       // 생성일(최초 저장 시간) 표시
       try{ this.createdAt = (await this.supabase.getAuditDateCreatedAt(date)) || null; }catch{ this.createdAt = null; }
@@ -1815,12 +1824,26 @@ export class AuditEvaluationComponent {
     if (!date || !this.savedDates.includes(date)) { this.showToast('먼저 생성 버튼으로 이 날짜를 생성해 주세요'); return; }
     it.companies = (it.companies||[]).filter((x:string)=>x!==c); this.saveProgress(it);
   }
+  private companyFilterSaveTimer: any = null;
   onCompanyFilterChange(_: any){
     // 날짜 단위 메타에 즉시 반영하여 드롭다운에도 표시
     const d = this.selectedDate(); if (!d) return;
     this.savedMeta[d] = { ...(this.savedMeta[d]||{}), company: this.companyFilter, memo: this.headerMemo };
-    // DB 저장
-    this.supabase.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo });
+    
+    // 중복 호출 방지를 위한 디바운싱 (100ms)
+    clearTimeout(this.companyFilterSaveTimer);
+    this.companyFilterSaveTimer = setTimeout(() => {
+      // DB 저장
+      this.headerSavingMeta = true;
+      this.supabase.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo })
+        .then((res: any) => {
+          if (res?.error) {
+            console.error('[onCompanyFilterChange] Save failed:', res.error);
+          }
+        })
+        .finally(()=>{ this.headerSavingMeta = false; });
+    }, 100);
+    
     this.persistUi();
   }
   private headerMemoTimer: any = null;
@@ -1831,9 +1854,18 @@ export class AuditEvaluationComponent {
     // 약간의 디바운스로 저장 호출 빈도 절감
     clearTimeout(this.headerMemoTimer);
     this.headerMemoTimer = setTimeout(()=>{
-      this.supabase.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo });
+      this.headerSavingMeta = true;
+      this.supabase.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo })
+        .finally(()=>{ this.headerSavingMeta = false; });
       this.persistUi();
     }, 400);
+  }
+  onHeaderMemoBlur(){
+    const d = this.selectedDate(); if (!d) return;
+    // 입력 중 새로고침 등에 대비하여 blur 시점에 즉시 한번 더 저장
+    this.headerSavingMeta = true;
+    this.supabase.upsertAuditDateMeta(d, { company: this.companyFilter, memo: this.headerMemo })
+      .finally(()=>{ this.headerSavingMeta = false; });
   }
 
   @HostListener('window:beforeunload')

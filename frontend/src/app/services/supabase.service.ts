@@ -622,54 +622,72 @@ export class SupabaseService {
   async upsertAuditDateMeta(audit_date: string, meta: { company?: string | null; memo?: string | null }){
     const client = this.ensureClient();
     try{
-      // Read existing meta row (number = 0 used as date-level meta container)
-      const { data } = await client
-        .from('audit_progress')
-        .select('comments')
-        .eq('audit_date', audit_date)
-        .eq('number', 0)
-        .maybeSingle();
-      let comments: any[] = Array.isArray((data as any)?.comments) ? ((data as any).comments as any[]) : [];
-      // Remove previous meta entries
-      comments = comments.filter((c: any)=> !(c && c.type === 'date_meta'));
-      comments.push({ type: 'date_meta', company: meta.company ?? null, memo: meta.memo ?? '' });
-      // Upsert meta row
-      return client
-        .from('audit_progress')
-        .upsert({ number: 0, audit_date, comments }, { onConflict: 'number,audit_date', ignoreDuplicates: false });
-    }catch(err){ return { error: err } as any; }
+      const { data, error } = await client
+        .from('audit_date_meta')
+        .upsert({
+          audit_date,
+          company: meta.company ?? null,
+          memo: meta.memo ?? '',
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'audit_date'
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('[upsertAuditDateMeta] Error:', error);
+        return { error } as any;
+      }
+      
+      return { data, error: null } as any;
+    }catch(err){ 
+      console.error('[upsertAuditDateMeta] Unexpected error:', err);
+      return { error: err } as any; 
+    }
   }
 
   async getAuditDateMeta(audit_date: string): Promise<{ company?: string | null; memo?: string | null } | null>{
     try{
-      const { data } = await this.ensureClient()
-        .from('audit_progress')
-        .select('comments')
+      const { data, error } = await this.ensureClient()
+        .from('audit_date_meta')
+        .select('company, memo')
         .eq('audit_date', audit_date)
-        .eq('number', 0)
         .maybeSingle();
-      const arr: any[] = Array.isArray((data as any)?.comments) ? ((data as any).comments as any[]) : [];
-      const meta = arr.find((c:any)=> c && c.type === 'date_meta');
-      if (meta) return { company: meta.company ?? null, memo: meta.memo ?? '' };
+      
+      // Ignore errors if table doesn't exist or no rows found
+      if (error && error.code !== 'PGRST116' && !error.message?.includes('audit_date_meta')) {
+        console.error('[getAuditDateMeta] Error:', error);
+      }
+      
+      if (data) {
+        return { company: data.company ?? null, memo: data.memo ?? '' };
+      }
+      
       return null;
     }catch{ return null; }
   }
 
   async listAllAuditDateMeta(): Promise<Array<{ audit_date: string; company?: string | null; memo?: string | null }>>{
     try{
-      const { data } = await this.ensureClient()
-        .from('audit_progress')
-        .select('audit_date, comments')
-        .eq('number', 0)
+      const { data, error } = await this.ensureClient()
+        .from('audit_date_meta')
+        .select('audit_date, company, memo')
         .order('audit_date', { ascending: false });
-      const rows: Array<{ audit_date: string; company?: string | null; memo?: string | null }> = [];
-      for (const r of (Array.isArray(data) ? data : [])){
-        const d = (r as any)?.audit_date; if (!d) continue;
-        const arr: any[] = Array.isArray((r as any)?.comments) ? ((r as any).comments as any[]) : [];
-        const meta = arr.find((c:any)=> c && c.type === 'date_meta');
-        if (meta) rows.push({ audit_date: String(d), company: meta.company ?? null, memo: meta.memo ?? '' });
+      
+      // If table doesn't exist, return empty array
+      if (error && error.message?.includes('audit_date_meta')) {
+        console.warn('[listAllAuditDateMeta] Table not found, returning empty array');
+        return [];
       }
-      return rows;
+      
+      if (!data) return [];
+      
+      return data.map(row => ({
+        audit_date: String(row.audit_date),
+        company: row.company ?? null,
+        memo: row.memo ?? ''
+      }));
     }catch{ return []; }
   }
 

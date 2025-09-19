@@ -1,0 +1,3 @@
+-- Update existing users with 'givaudan_audit' role to 'audit'
+-- Note: This needs to be done manually by an admin user or through Supabase dashboard
+-- UPDATE public.users SET role = 'audit' WHERE role = 'givaudan_audit';
