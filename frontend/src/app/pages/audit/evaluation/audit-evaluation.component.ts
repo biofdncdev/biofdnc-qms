@@ -859,6 +859,7 @@ export class AuditEvaluationComponent {
       col3Text: '',
       selectedLinks: []
     } as any;
+    if (id === 105) { (base as any).titleKo = 'GIVADAN Audit 최종 평가'; }
     return base as any;
   }));
 
@@ -983,6 +984,7 @@ export class AuditEvaluationComponent {
     const blank = Array.from({ length: 214 }, (_, i) => {
       const id = i + 1;
       const row: any = { id, titleKo: `점검 항목 ${id}`, titleEn: `Inspection item ${id}`, done: false, status: 'pending', note: '', departments: [], owners: [] as string[], companies: [] as string[] };
+      if (id === 105) { row.titleKo = 'GIVADAN Audit 최종 평가'; }
       return row;
     });
     const curr = this.items();
@@ -1561,8 +1563,8 @@ export class AuditEvaluationComponent {
   }
 
   async selectItem(it: any){
-    // 105번 이후 항목은 사용하지 않음
-    if (it && Number(it.id) > 104) return;
+    // 106번 이후 항목은 사용하지 않음 (105까지 허용)
+    if (it && Number(it.id) > 105) return;
     // 단일 선택: 선택만 변경. 슬라이드 열림 상태는 유지하며, 현재 항목이 닫혀 있으면 연다.
     this.openItemId = it.id;
     if (!this.openExtra.has(it.id)) this.openExtra.add(it.id);
@@ -1751,7 +1753,7 @@ export class AuditEvaluationComponent {
 
   visibleItems(){
     // 1) 기본 제한(105번 이상 숨김)
-    const base = this.items().filter((it:any)=> Number(it.id) <= 104 && Number((it as any).id) !== 25);
+    const base = this.items().filter((it:any)=> Number(it.id) <= 105 && Number((it as any).id) !== 25);
     // 2) 중복 ID 방지: 같은 번호가 두 번 있을 경우 첫 번째만 유지
     const uniqMap = new Map<number, any>();
     for (const it of base){ if (!uniqMap.has((it as any).id)) uniqMap.set((it as any).id, it); }
