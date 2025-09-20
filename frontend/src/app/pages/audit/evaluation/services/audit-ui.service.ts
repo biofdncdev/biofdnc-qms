@@ -120,10 +120,8 @@ export class AuditUiService {
       const s = JSON.parse(raw);
       
       if (typeof s?.scrollTop === 'number') {
-        // Use requestAnimationFrame for immediate scroll restoration
-        requestAnimationFrame(() => {
-          listRef.scrollTop = s.scrollTop;
-        });
+        // Immediate scroll restoration without delay
+        listRef.scrollTop = s.scrollTop;
       }
     } catch {}
   }

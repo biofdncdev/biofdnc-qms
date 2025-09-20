@@ -11,6 +11,9 @@ import * as XLSX from 'xlsx';
   providedIn: 'root'
 })
 export class AuditDataService {
+  isInitialized = false;
+  private lastLoadedDate: string | null = null;
+
   constructor(
     private audit: AuditService,
     private auth: AuthService,
@@ -19,7 +22,16 @@ export class AuditDataService {
     private ui: AuditUiService
   ) {}
   
+  invalidateCache() {
+    this.lastLoadedDate = null;
+  }
+
   async initialize() {
+    // 이미 초기화된 경우 스킵 (탭 전환 시 빠른 복귀)
+    if (this.isInitialized) {
+      return;
+    }
+    
     // 사용자 정보 로드 (우선순위 높음)
     const u = await this.auth.getCurrentUser();
     if (u) {
@@ -62,6 +74,8 @@ export class AuditDataService {
           .filter(Boolean);
       } catch {}
     }
+    
+    this.isInitialized = true;
   }
   
   async loadSavedDates() {
@@ -89,6 +103,11 @@ export class AuditDataService {
     const date = this.state.selectedDate();
     if (!date) {
       this.state.resetItems();
+      return;
+    }
+    
+    // 같은 날짜의 데이터가 이미 로드된 경우 스킵 (탭 전환 시 빠른 복귀)
+    if (this.lastLoadedDate === date && this.state.items().length > 0) {
       return;
     }
     
@@ -159,6 +178,8 @@ export class AuditDataService {
       
       // 새로 생성한 날짜라도 항목 타이틀은 DB 기준으로 동기화
       await this.refreshTitlesFromDb();
+      
+      this.lastLoadedDate = date; // 로드된 날짜 기록
     } catch {
       this.state.resetItems();
     }
@@ -240,6 +261,7 @@ export class AuditDataService {
     if (this.state.savedDates.includes(date)) return;
     
     this.state.resetItems();
+    this.invalidateCache(); // 캐시 무효화
     
     try {
       await this.applyTitlesFromJsonOrExcel();

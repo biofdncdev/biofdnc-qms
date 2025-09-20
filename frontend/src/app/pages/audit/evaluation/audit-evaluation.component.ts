@@ -53,7 +53,6 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
 
         <!-- Item List Component -->
         <app-audit-item-list
-          *ngIf="!isRestoringState"
           #itemList
           (onSelectItem)="selectItem($event)"
           (onSaveProgress)="saveProgress($event)"
@@ -67,12 +66,6 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
           (onLinkChipClick)="onLinkChipClick($event.event, $event.it, $event.link)"
           (onEditCommentKeydown)="onEditCommentKeydown($event.ev, $event.it, $event.index)">
         </app-audit-item-list>
-        
-        <!-- Loading placeholder -->
-        <div *ngIf="isRestoringState" class="loading-placeholder">
-          <div class="loading-spinner"></div>
-          <span>평가 항목을 불러오는 중...</span>
-        </div>
       </div>
 
       <!-- Modals -->
@@ -189,33 +182,7 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
       <div class="toast" *ngIf="state.toast">{{ state.toast }}</div>
     </div>
   `,
-  styleUrls: ['./audit-evaluation.component.scss'],
-  styles: [`
-    .loading-placeholder {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: #666;
-      font-size: 14px;
-    }
-    
-    .loading-spinner {
-      width: 24px;
-      height: 24px;
-      border: 2px solid #e0e0e0;
-      border-top: 2px solid #1976d2;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-bottom: 16px;
-    }
-    
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  `]
+  styleUrls: ['./audit-evaluation.component.scss']
 })
 export class AuditEvaluationComponent implements OnInit {
   @ViewChild('itemList') itemList?: AuditItemListComponent;
@@ -236,7 +203,6 @@ export class AuditEvaluationComponent implements OnInit {
   
   // Navigation
   private pendingOpenId: number | null = null;
-  isRestoringState = false;
   private pickerDrag = { 
     active: false, 
     startX: 0, 
@@ -290,25 +256,40 @@ export class AuditEvaluationComponent implements OnInit {
   }
 
   async ngOnInit() {
-    // Check if we need to restore state
-    const hasStoredState = this.hasStoredUiState();
-    if (hasStoredState) {
-      this.isRestoringState = true;
+    // 서비스 레벨에서 초기화 상태 확인
+    if (this.data.isInitialized) {
+      // 탭 전환 시: UI 상태만 즉시 복원
+      this.quickRestore();
+      return;
     }
     
+    // 첫 방문 시: 전체 초기화
+    await this.fullInitialize();
+  }
+
+  private quickRestore() {
+    // 데이터는 이미 로드되어 있으므로 UI만 복원
+    // 스크롤 위치 즉시 복원
+    setTimeout(() => {
+      this.ui.restoreScrollPosition(this.itemList?.listRef?.nativeElement);
+      
+      // 선택된 항목이 있으면 중앙 정렬
+      if (this.state.openItemId) {
+        this.centerRow(this.state.openItemId);
+      }
+    }, 0);
+  }
+
+  private async fullInitialize() {
+    // UI 상태 사전 복원 (데이터 로딩 전에 실행)
+    this.ui.prehydrateFromSession();
+    this.preRestoreUiState();
+    
+    // 서비스 초기화
     await this.data.initialize();
     
-    // Deep-link handling
-    try {
-      const params = new URLSearchParams(location.search);
-      const openParam = params.get('open');
-      if (openParam && openParam.trim()) {
-        const open = Number(openParam);
-        if (Number.isFinite(open) && open > 0 && open <= 214) {
-          this.pendingOpenId = open;
-        }
-      }
-    } catch {}
+    // Deep-link 처리
+    this.handleDeepLink();
     
     // Session restore
     try {
@@ -326,10 +307,7 @@ export class AuditEvaluationComponent implements OnInit {
     // Load saved dates
     await this.data.loadSavedDates();
     
-    // Pre-restore UI state to prevent flickering
-    this.preRestoreUiState();
-    
-    // Load data with optimized timing
+    // Load data
     const dateReady = !!this.state.selectedDate();
     if (!dateReady) {
       this.setDate(this.state.today());
@@ -341,24 +319,29 @@ export class AuditEvaluationComponent implements OnInit {
       await this.openFromPending();
     }
     
-    // Show list after state is ready
-    if (hasStoredState) {
-      // Small delay to ensure data is fully loaded
-      setTimeout(() => {
-        this.isRestoringState = false;
-        // Final UI state restoration after list is rendered
-        setTimeout(() => {
-          this.finalizeUiState();
-        }, 0);
-      }, 30);
-    } else {
-      this.isRestoringState = false;
-    }
+    // UI 최종 복원
+    setTimeout(() => {
+      this.finalizeUiState();
+    }, 0);
+  }
+
+  private handleDeepLink() {
+    try {
+      const params = new URLSearchParams(location.search);
+      const openParam = params.get('open');
+      if (openParam && openParam.trim()) {
+        const open = Number(openParam);
+        if (Number.isFinite(open) && open > 0 && open <= 214) {
+          this.pendingOpenId = open;
+        }
+      }
+    } catch {}
   }
 
   // Header events
   setDate(value: string) {
     this.state.selectedDate.set(value);
+    this.data.invalidateCache(); // 날짜 변경 시 캐시 무효화
     this.data.loadByDate();
   }
 
@@ -1318,25 +1301,20 @@ export class AuditEvaluationComponent implements OnInit {
   }
 
   private finalizeUiState() {
-    // Use requestAnimationFrame for better timing synchronization
-    requestAnimationFrame(() => {
-      try {
-        // Restore scroll position
-        this.ui.restoreScrollPosition(this.itemList?.listRef?.nativeElement);
-        
-        // Center the selected item if it exists
-        if (this.state.openItemId) {
-          const selectedItem = this.state.items().find(x => x.id === this.state.openItemId);
-          if (selectedItem) {
-            // Center the selected item after DOM is fully rendered
-            setTimeout(() => {
-              this.centerRow(this.state.openItemId!);
-            }, 50);
-          }
+    try {
+      // Restore scroll position immediately
+      this.ui.restoreScrollPosition(this.itemList?.listRef?.nativeElement);
+      
+      // Center the selected item if it exists
+      if (this.state.openItemId) {
+        const selectedItem = this.state.items().find(x => x.id === this.state.openItemId);
+        if (selectedItem) {
+          // Center the selected item immediately for faster restoration
+          this.centerRow(this.state.openItemId!);
         }
-      } catch (e) {
-        console.warn('Failed to finalize UI state:', e);
       }
-    });
+    } catch (e) {
+      console.warn('Failed to finalize UI state:', e);
+    }
   }
 }
