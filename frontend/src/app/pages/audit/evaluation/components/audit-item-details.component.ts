@@ -49,7 +49,7 @@ import { AuditUiService } from '../services/audit-ui.service';
                   (dragleave)="onLinkDragLeave.emit({event: $event, index: i})"
                   (drop)="onLinkDrop.emit({event: $event, index: i})"
                   (dragend)="onLinkDragEnd.emit()"
-                  (click)="onLinkChipClick.emit({event: $event, link: l})">
+                  (click)="handleLinkClick($event, l)">
             <span class="kind-dot" 
                   [class.dot-standard]="l.kind==='standard'" 
                   [class.dot-record]="l.kind==='record'">
@@ -198,7 +198,13 @@ export class AuditItemDetailsComponent implements AfterViewInit, OnChanges {
     public ui: AuditUiService
   ) {}
   
-  trackByComment = (_: number, c: any) => `${c.user}|${c.time}|${c.text}`;
+  trackByComment = (_: number, c: any) => `${c.user}|${c.time}|${c.text}`
+
+  handleLinkClick(event: MouseEvent, link: any) {
+    console.log('Link clicked in details component:', link.id, link.kind);
+    event.stopPropagation();
+    this.onLinkChipClick.emit({ event, link });
+  };
   
   canDeleteComment(c: { user: string }): boolean {
     if (this.state.isAdmin) return true;

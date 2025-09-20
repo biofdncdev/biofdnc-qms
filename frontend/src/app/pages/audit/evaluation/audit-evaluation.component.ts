@@ -63,6 +63,7 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
           (onStartEditComment)="startEditComment($event.it, $event.index, $event.text)"
           (onSaveEditComment)="saveEditComment($event.it, $event.index)"
           (onCancelEditComment)="cancelEditComment($event.it, $event.index)"
+          (onLinkChipClick)="onLinkChipClick($event.event, $event.it, $event.link)"
           (onEditCommentKeydown)="onEditCommentKeydown($event.ev, $event.it, $event.index)">
         </app-audit-item-list>
       </div>
@@ -184,7 +185,7 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
   styleUrls: ['./audit-evaluation.component.scss']
 })
 export class AuditEvaluationComponent implements OnInit {
-  @ViewChild('listRef') listRef?: ElementRef<HTMLDivElement>;
+  @ViewChild('itemList') itemList?: AuditItemListComponent;
   @ViewChild('pickerRoot') pickerRoot?: ElementRef<HTMLDivElement>;
   @ViewChild('copyModalRoot') copyModalRoot?: ElementRef<HTMLDivElement>;
   @ViewChild('pickerInput') pickerInput?: ElementRef<HTMLInputElement>;
@@ -339,7 +340,7 @@ export class AuditEvaluationComponent implements OnInit {
       this.state.openExtra.add(it.id);
     }
     
-    this.ui.persistUi(this.listRef?.nativeElement);
+    this.ui.persistUi(this.itemList?.listRef?.nativeElement);
     
     // Load assessment and progress
     const { data } = await this.audit.getGivaudanAssessment(it.id);
@@ -390,6 +391,12 @@ export class AuditEvaluationComponent implements OnInit {
     this.resources = res || [];
     
     this.measureAndCacheSlideHeights(it);
+
+    // When expanding an already-open row via click, ensure selection and centering
+    setTimeout(() => {
+      this.state.openItemId = it.id;
+      this.centerRow(it.id);
+    }, 20);
   }
 
   async saveProgress(it: AuditItem) {
@@ -711,6 +718,7 @@ export class AuditEvaluationComponent implements OnInit {
 
   // Links management
   onLinkChipClick(ev: MouseEvent, it: AuditItem, l: LinkItem) {
+    console.log('Link chip clicked:', l.id, l.kind);
     ev.stopPropagation();
     
     if (this.state.openItemId !== it.id) {
@@ -721,28 +729,34 @@ export class AuditEvaluationComponent implements OnInit {
   }
 
   openLinkPopup(l: LinkItem) {
+    console.log('Opening link popup for:', l.id, l.kind);
+    
     if ((l.kind || 'record') === 'record') {
-      const tabPath = '/app/record/rmd-forms';
+      const tabPath = 'record:rmd-forms';
       const navUrl = `/app/record/rmd-forms?open=${encodeURIComponent(l.id)}&ts=${Date.now()}`;
+      
+      console.log('Opening record tab:', tabPath, navUrl);
       
       try {
         sessionStorage.setItem('record.forceOpen', String(l.id));
       } catch {}
       
-      this.ui.persistUi(this.listRef?.nativeElement);
+      this.ui.persistUi(this.itemList?.listRef?.nativeElement);
       this.tabBus.requestOpen('원료제조팀 기록', tabPath, navUrl);
       return;
     }
     
-    const stdTab = '/app/standard/rmd';
+    const stdTab = 'standard:rmd';
     const ts = Date.now();
+    const stdUrl = `/app/standard/rmd?open=${encodeURIComponent(l.id)}&ts=${ts}`;
+    
+    console.log('Opening standard tab:', stdTab, stdUrl);
     
     try {
       sessionStorage.setItem('standard.forceOpen', String(l.id));
     } catch {}
     
-    const stdUrl = `/app/standard/rmd?open=${encodeURIComponent(l.id)}&ts=${ts}`;
-    this.ui.persistUi(this.listRef?.nativeElement);
+    this.ui.persistUi(this.itemList?.listRef?.nativeElement);
     this.tabBus.requestOpen('원료제조팀 규정', stdTab, stdUrl);
   }
 
@@ -1020,7 +1034,7 @@ export class AuditEvaluationComponent implements OnInit {
 
   private centerRow(id: number) {
     try {
-      const container = this.listRef?.nativeElement as HTMLElement | undefined;
+      const container = this.itemList?.listRef?.nativeElement as HTMLElement | undefined;
       if (!container) return;
       
       const row = container.querySelector(`.item[data-id="${id}"]`) as HTMLElement | null;
@@ -1034,33 +1048,21 @@ export class AuditEvaluationComponent implements OnInit {
       const max = container.scrollHeight - container.clientHeight;
       const to = Math.max(0, Math.min(max, target));
       
-      try {
-        container.scrollTo({ top: to, behavior: 'smooth' as ScrollBehavior });
-      } catch {
-        // Fallback animation
-        const start = container.scrollTop;
-        const change = to - start;
-        const duration = 220;
-        let startTs: number | null = null;
-        
-        const easeInOut = (t: number) => t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-        
-        const step = (ts: number) => {
-          if (startTs === null) startTs = ts;
-          const p = Math.min(1, (ts - startTs) / duration);
-          container.scrollTop = start + change * easeInOut(p);
-          if (p < 1) requestAnimationFrame(step);
-        };
-        
-        requestAnimationFrame(step);
-      }
+      // Skip if already close to target
+      if (Math.abs(current - to) < 5) return;
+      
+      // Use native smooth scroll for better performance and consistency
+      container.scrollTo({
+        top: to,
+        behavior: 'smooth'
+      });
     } catch {}
   }
 
   private measureAndCacheSlideHeights(it: AuditItem) {
     setTimeout(() => {
       try {
-        const container = this.listRef?.nativeElement as HTMLElement | undefined;
+        const container = this.itemList?.listRef?.nativeElement as HTMLElement | undefined;
         if (!container) return;
         
         const row = container.querySelector(`.item[data-id="${it.id}"]`) as HTMLElement | null;
@@ -1167,11 +1169,14 @@ export class AuditEvaluationComponent implements OnInit {
     if (isUp) idx = Math.max(idx - 1, 0);
     
     const next = arr[Math.max(0, idx)];
-    if (next) {
+    if (next && next.id !== this.state.openItemId) {
       this.selectItem(next);
-      this.ui.persistUi(this.listRef?.nativeElement);
+      this.ui.persistUi(this.itemList?.listRef?.nativeElement);
       
-      setTimeout(() => this.centerRow(next.id), 0);
+      // Use requestAnimationFrame for better timing
+      requestAnimationFrame(() => {
+        this.centerRow(next.id);
+      });
     }
   }
 
@@ -1203,7 +1208,7 @@ export class AuditEvaluationComponent implements OnInit {
 
   @HostListener('window:beforeunload')
   persistUi() {
-    this.ui.persistUi(this.listRef?.nativeElement);
+    this.ui.persistUi(this.itemList?.listRef?.nativeElement);
   }
 
   @HostListener('document:click')

@@ -17,7 +17,7 @@ import { AuditItemDetailsComponent } from './audit-item-details.component';
              *ngFor="let it of visibleItems(); trackBy: trackByItem" 
              [class.open]="isOpen(it)" 
              [class.selected]="state.openItemId === it.id" 
-             (click)="onSelectItem.emit(it)" 
+             (click)="onItemClick(it, $event)" 
              [attr.data-id]="it.id" 
              (mouseenter)="state.hoverItemId = it.id" 
              (mouseleave)="state.hoverItemId = null">
@@ -136,7 +136,7 @@ import { AuditItemDetailsComponent } from './audit-item-details.component';
           </div>
           
           <!-- Details section (expanded content) -->
-          <div class="details" *ngIf="isOpen(it)" (click)="$event.stopPropagation()">
+          <div class="details" *ngIf="isOpen(it)" (click)="onItemClick(it, $event)">
             <app-audit-item-details
               [item]="it"
               [isDateCreated]="isDateCreated()"
@@ -149,8 +149,8 @@ import { AuditItemDetailsComponent } from './audit-item-details.component';
               (onSaveEditComment)="onSaveEditComment.emit({ it: it, index: $event })"
               (onCancelEditComment)="onCancelEditComment.emit({ it: it, index: $event })"
               (onEditCommentKeydown)="onEditCommentKeydown.emit({ ev: $event.event, it: it, index: $event.index })"
-              (onLinkChipClick)="$event"
-              (onRemoveSelectedLink)="$event"
+              (onLinkChipClick)="onLinkChipClick.emit({ event: $event.event, it: it, link: $event.link })"
+              (onRemoveSelectedLink)="removeSelectedLink(it, $event)"
               (onLinkDragStart)="$event"
               (onLinkDragOver)="$event"
               (onLinkDragLeave)="$event"
@@ -182,6 +182,7 @@ export class AuditItemListComponent {
   @Output() onSaveEditComment = new EventEmitter<{ it: AuditItem; index: number }>();
   @Output() onCancelEditComment = new EventEmitter<{ it: AuditItem; index: number }>();
   @Output() onEditCommentKeydown = new EventEmitter<{ ev: KeyboardEvent; it: AuditItem; index: number }>();
+  @Output() onLinkChipClick = new EventEmitter<{ event: MouseEvent; it: AuditItem; link: any }>();
   
   private noteTimers: Record<number, any> = {};
   
@@ -386,6 +387,24 @@ export class AuditItemListComponent {
     }
   }
   
+  onItemClick(it: AuditItem, event: MouseEvent) {
+    // Always emit selection, regardless of whether item is open or closed
+    this.onSelectItem.emit(it);
+    
+    // Don't stop propagation for input elements to preserve their functionality
+    const target = event.target as HTMLElement;
+    const isInput = target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON';
+    if (!isInput) {
+      event.stopPropagation();
+    }
+  }
+
+  removeSelectedLink(it: AuditItem, l: any) {
+    // Forward to parent component
+    // This will be handled by the main audit-evaluation component
+    console.log('Remove link requested:', l);
+  }
+
   private normalizeCompanyName(name: string): string {
     if (!name) return '';
     const raw = String(name).trim();
