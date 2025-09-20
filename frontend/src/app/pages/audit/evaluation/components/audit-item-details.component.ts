@@ -201,7 +201,6 @@ export class AuditItemDetailsComponent implements AfterViewInit, OnChanges {
   trackByComment = (_: number, c: any) => `${c.user}|${c.time}|${c.text}`
 
   handleLinkClick(event: MouseEvent, link: any) {
-    console.log('Link clicked in details component:', link.id, link.kind);
     event.stopPropagation();
     this.onLinkChipClick.emit({ event, link });
   };

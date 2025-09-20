@@ -20,7 +20,7 @@ export class AuditDataService {
   ) {}
   
   async initialize() {
-    // 사용자 정보 로드
+    // 사용자 정보 로드 (우선순위 높음)
     const u = await this.auth.getCurrentUser();
     if (u) {
       const { data } = await this.auth.getUserProfile(u.id);
@@ -30,30 +30,38 @@ export class AuditDataService {
       this.state.isGivaudanAudit = data?.role === 'audit' || data?.role === 'givaudan_audit';
     }
     
-    // 저장된 날짜 로드
-    await this.loadSavedDates();
-    this.state.savedSelectedDate = this.state.savedDates?.[0] || null;
-    
-    // 회사 목록 로드
-    try {
-      this.state.companies = (await this.audit.listAuditCompanies())
-        .map((r: any) => r.name)
-        .filter(Boolean);
-    } catch {}
-    
-    // 사용자 목록 로드
-    try {
-      const { data: users } = await this.auth.getClient()
+    // 병렬로 데이터 로드 (성능 개선)
+    const [savedDates, companies, users, titles] = await Promise.allSettled([
+      this.loadSavedDates(),
+      this.audit.listAuditCompanies(),
+      this.auth.getClient()
         .from('users')
         .select('name,email')
-        .order('created_at', { ascending: false });
-      this.state.userOptions = (users || [])
-        .map((u: any) => u?.name || u?.email)
-        .filter(Boolean);
-    } catch {}
+        .order('created_at', { ascending: false })
+        .then(({ data }) => data || []),
+      this.refreshTitlesFromDb()
+    ]);
     
-    // CSV 템플릿 사용 중지: 항상 DB 기준으로 제목/부제목 로드
-    await this.refreshTitlesFromDb();
+    // 저장된 날짜 설정
+    this.state.savedSelectedDate = this.state.savedDates?.[0] || null;
+    
+    // 회사 목록 설정
+    if (companies.status === 'fulfilled') {
+      try {
+        this.state.companies = (companies.value || [])
+          .map((r: any) => r.name)
+          .filter(Boolean);
+      } catch {}
+    }
+    
+    // 사용자 목록 설정
+    if (users.status === 'fulfilled') {
+      try {
+        this.state.userOptions = (users.value || [])
+          .map((u: any) => u?.name || u?.email)
+          .filter(Boolean);
+      } catch {}
+    }
   }
   
   async loadSavedDates() {

@@ -56,7 +56,7 @@ export class AppShellComponent implements OnDestroy {
   isAudit = false;
   unread = signal<number>(0);
   private notifSubscription: any;
-  private menuHoverTimer: any = null;
+  private menuAreaTimer: any = null;
 
   constructor(private router: Router, private auth: AuthService, private tabBus: TabService) {
     // Determine admin on boot
@@ -193,36 +193,23 @@ export class AppShellComponent implements OnDestroy {
     target.style.setProperty('--my', `${event.offsetY}px`);
   }
 
-  onRailMouseEnter(key: string) {
-    // Clear any pending timer
-    if (this.menuHoverTimer) {
-      clearTimeout(this.menuHoverTimer);
-      this.menuHoverTimer = null;
+  onMenuAreaMouseEnter() {
+    // Clear any pending timer when mouse enters menu area
+    if (this.menuAreaTimer) {
+      clearTimeout(this.menuAreaTimer);
+      this.menuAreaTimer = null;
     }
-    
-    // Add delay before changing menu to prevent accidental switches
-    this.menuHoverTimer = setTimeout(() => {
-      const menu = this.menus.find(m => m.key === key);
-      if (menu?.submenu && menu.submenu.length > 0) {
-        this.openLeftForKey(key);
-      } else {
-        this.selected.set(key);
-      }
-      this.menuHoverTimer = null;
-    }, 200); // 200ms delay to prevent accidental menu switches
   }
 
-  onContentMouseEnter(){
-    // Clear any pending timer
-    if (this.menuHoverTimer) {
-      clearTimeout(this.menuHoverTimer);
-      this.menuHoverTimer = null;
-    }
-    
-    // When moving into the page content, restore to the actual current route
-    const path = this.router.url || this.tabs[this.activeTabIndex]?.path || '/app/home';
-    this.syncMenuSelectionByPath(path);
+  onMenuAreaMouseLeave() {
+    // Set a timer to sync menu to current route after a short delay
+    // This allows mouse to move between nav-rail and section-drawer without triggering sync
+    this.menuAreaTimer = setTimeout(() => {
+      this.syncMenuToCurrentRoute();
+      this.menuAreaTimer = null;
+    }, 150); // 150ms delay to allow mouse movement between menu areas
   }
+
 
   onMainClick(menu: { key: string; path?: string; submenu?: Array<{ label: string; path?: string }> }) {
     this.selected.set(menu.key);
@@ -251,9 +238,6 @@ export class AppShellComponent implements OnDestroy {
     this.drawerCompact = !this.drawerCompact;
   }
 
-  toggleLeftDrawer(){
-    this.leftOpen = !this.leftOpen;
-  }
 
   openAccountList() {
     this.selected.set('account');
@@ -423,9 +407,9 @@ export class AppShellComponent implements OnDestroy {
     if (this.notifSubscription) {
       this.notifSubscription.unsubscribe();
     }
-    if (this.menuHoverTimer) {
-      clearTimeout(this.menuHoverTimer);
-      this.menuHoverTimer = null;
+    if (this.menuAreaTimer) {
+      clearTimeout(this.menuAreaTimer);
+      this.menuAreaTimer = null;
     }
   }
 }

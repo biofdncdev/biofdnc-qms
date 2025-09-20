@@ -53,6 +53,7 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
 
         <!-- Item List Component -->
         <app-audit-item-list
+          *ngIf="!isRestoringState"
           #itemList
           (onSelectItem)="selectItem($event)"
           (onSaveProgress)="saveProgress($event)"
@@ -66,6 +67,12 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
           (onLinkChipClick)="onLinkChipClick($event.event, $event.it, $event.link)"
           (onEditCommentKeydown)="onEditCommentKeydown($event.ev, $event.it, $event.index)">
         </app-audit-item-list>
+        
+        <!-- Loading placeholder -->
+        <div *ngIf="isRestoringState" class="loading-placeholder">
+          <div class="loading-spinner"></div>
+          <span>평가 항목을 불러오는 중...</span>
+        </div>
       </div>
 
       <!-- Modals -->
@@ -182,7 +189,33 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
       <div class="toast" *ngIf="state.toast">{{ state.toast }}</div>
     </div>
   `,
-  styleUrls: ['./audit-evaluation.component.scss']
+  styleUrls: ['./audit-evaluation.component.scss'],
+  styles: [`
+    .loading-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      color: #666;
+      font-size: 14px;
+    }
+    
+    .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid #e0e0e0;
+      border-top: 2px solid #1976d2;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  `]
 })
 export class AuditEvaluationComponent implements OnInit {
   @ViewChild('itemList') itemList?: AuditItemListComponent;
@@ -203,6 +236,7 @@ export class AuditEvaluationComponent implements OnInit {
   
   // Navigation
   private pendingOpenId: number | null = null;
+  isRestoringState = false;
   private pickerDrag = { 
     active: false, 
     startX: 0, 
@@ -256,6 +290,12 @@ export class AuditEvaluationComponent implements OnInit {
   }
 
   async ngOnInit() {
+    // Check if we need to restore state
+    const hasStoredState = this.hasStoredUiState();
+    if (hasStoredState) {
+      this.isRestoringState = true;
+    }
+    
     await this.data.initialize();
     
     // Deep-link handling
@@ -286,7 +326,10 @@ export class AuditEvaluationComponent implements OnInit {
     // Load saved dates
     await this.data.loadSavedDates();
     
-    // Restore UI state
+    // Pre-restore UI state to prevent flickering
+    this.preRestoreUiState();
+    
+    // Load data with optimized timing
     const dateReady = !!this.state.selectedDate();
     if (!dateReady) {
       this.setDate(this.state.today());
@@ -296,6 +339,20 @@ export class AuditEvaluationComponent implements OnInit {
     
     if (this.pendingOpenId) {
       await this.openFromPending();
+    }
+    
+    // Show list after state is ready
+    if (hasStoredState) {
+      // Small delay to ensure data is fully loaded
+      setTimeout(() => {
+        this.isRestoringState = false;
+        // Final UI state restoration after list is rendered
+        setTimeout(() => {
+          this.finalizeUiState();
+        }, 0);
+      }, 30);
+    } else {
+      this.isRestoringState = false;
     }
   }
 
@@ -718,7 +775,6 @@ export class AuditEvaluationComponent implements OnInit {
 
   // Links management
   onLinkChipClick(ev: MouseEvent, it: AuditItem, l: LinkItem) {
-    console.log('Link chip clicked:', l.id, l.kind);
     ev.stopPropagation();
     
     if (this.state.openItemId !== it.id) {
@@ -729,19 +785,17 @@ export class AuditEvaluationComponent implements OnInit {
   }
 
   openLinkPopup(l: LinkItem) {
-    console.log('Opening link popup for:', l.id, l.kind);
+    // Ensure UI state is saved before navigating
+    this.ui.persistUi(this.itemList?.listRef?.nativeElement);
     
     if ((l.kind || 'record') === 'record') {
       const tabPath = 'record:rmd-forms';
       const navUrl = `/app/record/rmd-forms?open=${encodeURIComponent(l.id)}&ts=${Date.now()}`;
       
-      console.log('Opening record tab:', tabPath, navUrl);
-      
       try {
         sessionStorage.setItem('record.forceOpen', String(l.id));
       } catch {}
       
-      this.ui.persistUi(this.itemList?.listRef?.nativeElement);
       this.tabBus.requestOpen('원료제조팀 기록', tabPath, navUrl);
       return;
     }
@@ -750,13 +804,10 @@ export class AuditEvaluationComponent implements OnInit {
     const ts = Date.now();
     const stdUrl = `/app/standard/rmd?open=${encodeURIComponent(l.id)}&ts=${ts}`;
     
-    console.log('Opening standard tab:', stdTab, stdUrl);
-    
     try {
       sessionStorage.setItem('standard.forceOpen', String(l.id));
     } catch {}
     
-    this.ui.persistUi(this.itemList?.listRef?.nativeElement);
     this.tabBus.requestOpen('원료제조팀 규정', stdTab, stdUrl);
   }
 
@@ -1232,5 +1283,60 @@ export class AuditEvaluationComponent implements OnInit {
     } catch {
       return false;
     }
+  }
+
+  private hasStoredUiState(): boolean {
+    try {
+      const raw = sessionStorage.getItem('audit.eval.ui.v1');
+      if (!raw) return false;
+      const s = JSON.parse(raw);
+      return typeof s?.openItemId === 'number' && s.openItemId > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  private preRestoreUiState() {
+    try {
+      // Immediately restore basic UI state to prevent flickering
+      const raw = sessionStorage.getItem('audit.eval.ui.v1');
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      
+      // Restore selected item immediately
+      if (typeof s?.openItemId === 'number') {
+        this.state.openItemId = s.openItemId;
+      }
+      
+      // Restore expanded items immediately
+      if (Array.isArray(s?.openExtra)) {
+        this.state.openExtra = new Set<number>(s.openExtra);
+      }
+    } catch (e) {
+      console.warn('Failed to pre-restore UI state:', e);
+    }
+  }
+
+  private finalizeUiState() {
+    // Use requestAnimationFrame for better timing synchronization
+    requestAnimationFrame(() => {
+      try {
+        // Restore scroll position
+        this.ui.restoreScrollPosition(this.itemList?.listRef?.nativeElement);
+        
+        // Center the selected item if it exists
+        if (this.state.openItemId) {
+          const selectedItem = this.state.items().find(x => x.id === this.state.openItemId);
+          if (selectedItem) {
+            // Center the selected item after DOM is fully rendered
+            setTimeout(() => {
+              this.centerRow(this.state.openItemId!);
+            }, 50);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to finalize UI state:', e);
+      }
+    });
   }
 }

@@ -96,6 +96,11 @@ export class AuditUiService {
       if (s?.filterDept) this.state.filterDept = s.filterDept;
       if (s?.filterOwner) this.state.filterOwner = s.filterOwner;
       
+      // Restore selected item
+      if (typeof s?.openItemId === 'number') {
+        this.state.openItemId = s.openItemId;
+      }
+      
       // Restore open extras
       try {
         const extra = Array.isArray(s?.openExtra) ? s.openExtra : [];
@@ -105,6 +110,21 @@ export class AuditUiService {
       } catch {}
       
       // Items cache 복원 비활성화: 서버 상태와의 불일치 방지
+    } catch {}
+  }
+
+  restoreScrollPosition(listRef?: HTMLElement | null) {
+    try {
+      const raw = sessionStorage.getItem('audit.eval.ui.v1');
+      if (!raw || !listRef) return;
+      const s = JSON.parse(raw);
+      
+      if (typeof s?.scrollTop === 'number') {
+        // Use requestAnimationFrame for immediate scroll restoration
+        requestAnimationFrame(() => {
+          listRef.scrollTop = s.scrollTop;
+        });
+      }
     } catch {}
   }
 }
