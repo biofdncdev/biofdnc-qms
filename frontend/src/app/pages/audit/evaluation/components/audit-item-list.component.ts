@@ -151,15 +151,15 @@ import { AuditItemDetailsComponent } from './audit-item-details.component';
               (onEditCommentKeydown)="onEditCommentKeydown.emit({ ev: $event.event, it: it, index: $event.index })"
               (onLinkChipClick)="onLinkChipClick.emit({ event: $event.event, it: it, link: $event.link })"
               (onRemoveSelectedLink)="removeSelectedLink(it, $event)"
-              (onLinkDragStart)="$event"
-              (onLinkDragOver)="$event"
-              (onLinkDragLeave)="$event"
-              (onLinkDrop)="$event"
-              (onLinkDragEnd)="$event"
-              (onLinkListDragOver)="$event"
-              (onLinkListDrop)="$event"
-              (onLinkDragOverEnd)="$event"
-              (onLinkDropEnd)="$event"
+              (onLinkDragStart)="onLinkDragStart.emit({ event: $event.event, it: it, index: $event.index })"
+              (onLinkDragOver)="onLinkDragOver.emit({ event: $event.event, it: it, index: $event.index })"
+              (onLinkDragLeave)="onLinkDragLeave.emit({ event: $event.event, it: it, index: $event.index })"
+              (onLinkDrop)="onLinkDrop.emit({ event: $event.event, it: it, index: $event.index })"
+              (onLinkDragEnd)="onLinkDragEnd.emit()"
+              (onLinkListDragOver)="onLinkListDragOver.emit({ event: $event, it: it })"
+              (onLinkListDrop)="onLinkListDrop.emit({ event: $event, it: it })"
+              (onLinkDragOverEnd)="onLinkDragOverEnd.emit({ event: $event, it: it })"
+              (onLinkDropEnd)="onLinkDropEnd.emit({ event: $event, it: it })"
               (onCommentKeydown)="$event">
             </app-audit-item-details>
           </div>
@@ -183,6 +183,16 @@ export class AuditItemListComponent {
   @Output() onCancelEditComment = new EventEmitter<{ it: AuditItem; index: number }>();
   @Output() onEditCommentKeydown = new EventEmitter<{ ev: KeyboardEvent; it: AuditItem; index: number }>();
   @Output() onLinkChipClick = new EventEmitter<{ event: MouseEvent; it: AuditItem; link: any }>();
+  // Re-emit link drag events to parent
+  @Output() onLinkDragStart = new EventEmitter<{ event: DragEvent; it: AuditItem; index: number }>();
+  @Output() onLinkDragOver = new EventEmitter<{ event: DragEvent; it: AuditItem; index: number }>();
+  @Output() onLinkDragLeave = new EventEmitter<{ event: DragEvent; it: AuditItem; index: number }>();
+  @Output() onLinkDrop = new EventEmitter<{ event: DragEvent; it: AuditItem; index: number }>();
+  @Output() onLinkDragEnd = new EventEmitter<void>();
+  @Output() onLinkListDragOver = new EventEmitter<{ event: DragEvent; it: AuditItem }>();
+  @Output() onLinkListDrop = new EventEmitter<{ event: DragEvent; it: AuditItem }>();
+  @Output() onLinkDragOverEnd = new EventEmitter<{ event: DragEvent; it: AuditItem }>();
+  @Output() onLinkDropEnd = new EventEmitter<{ event: DragEvent; it: AuditItem }>();
   
   private noteTimers: Record<number, any> = {};
   

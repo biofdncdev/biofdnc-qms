@@ -64,7 +64,17 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
           (onSaveEditComment)="saveEditComment($event.it, $event.index)"
           (onCancelEditComment)="cancelEditComment($event.it, $event.index)"
           (onLinkChipClick)="onLinkChipClick($event.event, $event.it, $event.link)"
-          (onEditCommentKeydown)="onEditCommentKeydown($event.ev, $event.it, $event.index)">
+          (onEditCommentKeydown)="onEditCommentKeydown($event.ev, $event.it, $event.index)"
+          (onLinkDragStart)="onLinkDragStart($event.event, $event.it, $event.index)"
+          (onLinkDragOver)="onLinkDragOver($event.event, $event.it, $event.index)"
+          (onLinkDragLeave)="onLinkDragLeave($event.event, $event.it, $event.index)"
+          (onLinkDrop)="onLinkDrop($event.event, $event.it, $event.index)"
+          (onLinkDragEnd)="onLinkDragEnd()"
+          (onLinkListDragOver)="onLinkListDragOver($event.event, $event.it)"
+          (onLinkListDrop)="onLinkListDrop($event.event, $event.it)"
+          (onLinkDragOverEnd)="onLinkDragOverEnd($event.event, $event.it)"
+          (onLinkDropEnd)="onLinkDropEnd($event.event, $event.it)"
+        >
         </app-audit-item-list>
       </div>
 
@@ -148,7 +158,7 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
                 <select [(ngModel)]="ui.copyFromDate" 
                         class="date-select" 
                         [disabled]="ui.copyingBusy()">
-                  <option *ngFor="let d of state.savedDates" [ngValue]="d">{{ d }} · {{ state.savedMeta[d]?.company || 'ALL' }} · {{ state.savedMeta[d]?.memo || '' }}</option>
+              <option *ngFor="let d of state.savedDates" [ngValue]="d">{{ d }} · {{ state.savedMeta[d].company || 'ALL' }} · {{ state.savedMeta[d].memo || '' }}</option>
                 </select>
               </div>
               <div class="hint">원본데이터의 기록을 지정한 Audit date : <b>{{ state.selectedDate() || state.today() }}</b> 에 복사 저장 합니다.</div>

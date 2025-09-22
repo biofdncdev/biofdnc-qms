@@ -43,8 +43,8 @@ import { AuditStateService } from '../services/audit-state.service';
             <div class="saved-item" *ngFor="let d of state.savedDates" (click)="selectSavedDate(d)">
               {{ d }}
               <span class="hint-inline" *ngIf="state.savedMeta[d]"> 
-                · {{ state.savedMeta[d]?.company || 'ALL' }} 
-                · {{ state.savedMeta[d]?.memo || '' }}
+                · {{ state.savedMeta[d].company || 'ALL' }} 
+                · {{ state.savedMeta[d].memo || '' }}
               </span>
             </div>
             <div class="saved-empty" *ngIf="!state.savedDates?.length">저장된 날짜가 없습니다</div>
