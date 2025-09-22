@@ -9,7 +9,7 @@ import { AuditStateService } from '../services/audit-state.service';
   imports: [CommonModule, FormsModule],
   template: `
     <header class="audit-header">
-      <div class="title">Audit <small class="sub">평가 항목</small></div>
+      <div class="title">Audit <small class="sub">평가 기록</small></div>
       <div class="controls">
         <label>Audit Date</label>
         <input class="date-input" type="date" 

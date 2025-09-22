@@ -132,7 +132,7 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
         <div class="preview copy-modal" #copyModalRoot tabindex="0" 
              (click)="$event.stopPropagation()">
           <header>
-            <div class="name">다른 날짜에서 복사</div>
+            <div class="name">Audit 기록 복사</div>
             <button (click)="onCopyCloseClick()">×</button>
           </header>
           <div class="body">
@@ -144,21 +144,48 @@ import { RMD_STANDARDS } from '../../../standard/rmd/rmd-standards';
             </div>
             <div class="form">
               <div class="form-row">
-                <label class="lbl">복사할 날짜 선택</label>
+                <label class="lbl">원본 데이터 선택</label>
                 <select [(ngModel)]="ui.copyFromDate" 
                         class="date-select" 
                         [disabled]="ui.copyingBusy()">
-                  <option *ngFor="let d of state.savedDates" [ngValue]="d">{{ d }}</option>
+                  <option *ngFor="let d of state.savedDates" [ngValue]="d">{{ d }} · {{ state.savedMeta[d]?.company || 'ALL' }} · {{ state.savedMeta[d]?.memo || '' }}</option>
                 </select>
               </div>
+              <div class="hint">원본데이터의 기록을 지정한 Audit date : <b>{{ state.selectedDate() || state.today() }}</b> 에 복사 저장 합니다.</div>
               <div class="hint">선택한 날짜의 모든 항목을 현재 Audit Date로 복사합니다.</div>
               <div class="actions">
                 <button class="btn" (click)="onCopyCloseClick()">취소</button>
                 <button class="btn primary" 
-                        (click)="confirmCopy()" 
+                        (click)="openCopyConfirm()" 
                         [disabled]="ui.copyingBusy()">
                   {{ ui.copyingBusy() ? '복사중…' : '복사' }}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Copy Confirm Modal -->
+      <div class="preview-backdrop" *ngIf="ui.copyConfirmOpen" (click)="closeCopyConfirm()" style="align-items:flex-start; justify-content:center; background: transparent; padding-top: 56vh;">
+        <div class="preview copy-modal" (click)="$event.stopPropagation()">
+          <header>
+            <div class="name">복사 확인</div>
+            <button (click)="closeCopyConfirm()">×</button>
+          </header>
+          <div class="body">
+            <div class="form">
+              <div class="form-row">
+                <label class="lbl">원본날짜</label>
+                <input class="date-select" type="text" [ngModel]="ui.confirmFromDate" (ngModelChange)="onConfirmDateInput('from', $event)" placeholder="yyyy-mm-dd" maxlength="10" />
+              </div>
+              <div class="form-row">
+                <label class="lbl">대상(Audit Date)</label>
+                <input class="date-select" type="text" [ngModel]="ui.confirmToDate" (ngModelChange)="onConfirmDateInput('to', $event)" placeholder="yyyy-mm-dd" maxlength="10" />
+              </div>
+              <div class="actions">
+                <button class="btn" (click)="closeCopyConfirm()">취소</button>
+                <button class="btn primary" (click)="confirmCopyViaModal()" [disabled]="ui.copyingBusy() || !isValidDateString(ui.confirmFromDate) || !isValidDateString(ui.confirmToDate)">확인</button>
               </div>
             </div>
           </div>
@@ -911,6 +938,51 @@ export class AuditEvaluationComponent implements OnInit {
     } catch {}
   }
 
+  openCopyConfirm(){
+    // initialize confirm modal defaults
+    this.ui.confirmFromDate = '';
+    this.ui.confirmToDate = '';
+    this.ui.copyConfirmOpen = true;
+  }
+  closeCopyConfirm(){
+    this.ui.copyConfirmOpen = false;
+  }
+
+  async confirmCopyViaModal(){
+    const from = this.ui.confirmFromDate;
+    const to = this.ui.confirmToDate || this.state.selectedDate() || this.state.today();
+    if (!from || !to){
+      alert('원본 날짜와 대상 날짜를 선택하세요.');
+      return;
+    }
+    if (!this.isValidDateString(from) || !this.isValidDateString(to)){
+      alert('날짜 형식은 yyyy-mm-dd 이어야 합니다.');
+      return;
+    }
+    this.ui.copyFromDate = from;
+    this.state.selectedDate.set(to);
+    this.ui.copyConfirmOpen = false;
+    await this.confirmCopy();
+  }
+
+  // yyyy-mm-dd 입력 보정 (숫자만 입력 시 자동으로 대시 삽입)
+  onConfirmDateInput(which: 'from'|'to', raw: string){
+    const digits = String(raw || '').replace(/[^0-9]/g, '').slice(0, 8);
+    let out = digits;
+    if (digits.length >= 5) out = digits.slice(0,4) + '-' + digits.slice(4);
+    if (digits.length >= 7) out = digits.slice(0,4) + '-' + digits.slice(4,6) + '-' + digits.slice(6);
+    if (which === 'from') this.ui.confirmFromDate = out;
+    else this.ui.confirmToDate = out;
+  }
+
+  isValidDateString(s: string | null): boolean {
+    if (!s) return false;
+    const m = /^\d{4}-\d{2}-\d{2}$/.test(s);
+    if (!m) return false;
+    const d = new Date(s);
+    return !isNaN(d.getTime()) && s === `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
   private confirmCancelCopy(): boolean {
     if (!this.ui.copyingBusy()) return true;
     return confirm('복사를 취소할까요? 진행 중인 작업이 중단됩니다.');
@@ -945,6 +1017,7 @@ export class AuditEvaluationComponent implements OnInit {
         alert('복사할 날짜를 선택하세요.');
         return;
       }
+      // confirmation handled via custom modal
       
       const { data: rows } = await this.audit.listGivaudanProgressByDate(from);
       const payload = (rows || []).map((r: any) => ({
@@ -952,7 +1025,10 @@ export class AuditEvaluationComponent implements OnInit {
         status: r.status || null,
         note: r.note || null,
         departments: r.departments || [],
+        owners: r.owners || [],
         companies: r.companies || [],
+        comments: r.comments || [],
+        company: r.company || null,
         audit_date: target,
         updated_by: this.state.currentUserId,
         updated_by_name: this.state.userDisplay
@@ -962,11 +1038,15 @@ export class AuditEvaluationComponent implements OnInit {
         await this.audit.upsertGivaudanProgressMany(payload);
       }
       
+      // 새 데이터가 즉시 반영되도록 캐시 무효화 후 재로딩
+      this.data.invalidateCache();
       await this.data.loadByDate();
       await this.data.loadSavedDates();
       
       this.state.showToast('복사가 완료되었습니다');
       this.ui.copyJustFinished.set(true);
+      // 모달 닫고 본 화면에서 변경 사항을 바로 확인
+      this.closeCopy();
     } finally {
       this.ui.copyingBusy.set(false);
     }

@@ -29,6 +29,10 @@ export class AuditUiService {
   copyFromDate: string | null = null;
   copyingBusy = signal<boolean>(false);
   copyJustFinished = signal<boolean>(false);
+  // Copy confirm modal
+  copyConfirmOpen = false;
+  confirmFromDate: string | null = null;
+  confirmToDate: string | null = null;
   
   // Drag & Drop 상태
   linkDragItemId: number | null = null;
