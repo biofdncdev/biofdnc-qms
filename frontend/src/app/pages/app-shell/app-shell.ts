@@ -109,22 +109,22 @@ export class AppShellComponent implements OnDestroy {
             { label: '자재등록', path: '/app/material/form' },
             { label: '자재정보 업데이트', path: '/app/material/update' }
           ] },
-          {
-            key: 'organization', icon: 'groups', label: 'Organization',
-            submenu: [
-              { label: '조직도', path: '/app/organization/chart' },
-              { label: '조직도2', path: '/app/organization/chart2' },
-              { label: '업무분장 · 원료제조', path: '/app/organization/roles?dept=rm' },
-              { label: '업무분장 · 품질보증', path: '/app/organization/roles?dept=qa' },
-              ...(this.isAdmin ? [{ label: '회사ㆍ부서 코드 등록', path: '/app/organization/departments' }] : []),
-            ]
-          },
+        {
+          key: 'organization', icon: 'groups', label: 'Organization',
+          submenu: [
+            ...(this.isAdmin ? [{ label: '회사ㆍ부서 코드 등록', path: '/app/organization/departments' }] : []),
+            { label: '조직도', path: '/app/organization/chart' },
+            { label: '조직도2', path: '/app/organization/chart2' },
+            { label: '업무분장 · 원료제조', path: '/app/organization/roles?dept=rm' },
+            { label: '업무분장 · 품질보증', path: '/app/organization/roles?dept=qa' }
+          ]
+        },
         ] : []),
         {
           key: 'standard', icon: 'gavel', label: 'Standard',
           submenu: [
-            { label: '원료제조팀 규정', path: '/app/standard/rmd' },
-            ...(this.isGivaudanAudit ? [] : [{ label: '규정 카테고리 등록', path: '/app/standard/rmd-categories' }])
+            ...(this.isGivaudanAudit ? [] : [{ label: '규정 카테고리 등록', path: '/app/standard/rmd-categories' }]),
+            { label: '원료제조팀 규정', path: '/app/standard/rmd' }
           ]
         },
         {

@@ -268,58 +268,33 @@ export class RecordService {
 
   // ===== RMD Standard Categories & Records =====
   async listRmdCategories() {
-    try {
-      const { data, error } = await this.client
-        .from('rmd_standard_categories')
-        .select('*')
-        .order('doc_prefix', { ascending: true });
-      if (!error && Array.isArray(data)) return data;
-      throw error;
-    } catch {
-      try {
-        const { data } = await this.client
-          .from('standard_categories')
-          .select('*')
-          .order('doc_prefix', { ascending: true });
-        return Array.isArray(data) ? data : [];
-      } catch { 
-        return [] as any[]; 
-      }
-    }
+    const { data } = await this.client
+      .from('standard_categories')
+      .select('*')
+      .order('doc_prefix', { ascending: true });
+    return Array.isArray(data) ? data : [];
   }
   
   async upsertRmdCategory(row: { 
     id?: string; 
     name: string; 
     doc_prefix: string; 
-    department_code?: string | null 
+    department_code?: string | null; 
+    company_code?: string | null 
   }) {
     const now = new Date().toISOString();
     const payload: any = { ...row, updated_at: now };
     if (!payload.id) payload.id = crypto.randomUUID();
-    
-    try {
-      return await this.client
-        .from('rmd_standard_categories')
-        .upsert(payload, { onConflict: 'id' })
-        .select('*')
-        .single();
-    } catch {
-      // Fallback to renamed table
-      return await this.client
-        .from('standard_categories')
-        .upsert(payload, { onConflict: 'id' })
-        .select('*')
-        .single();
-    }
+    // Strict path: use rmd_standard_categories with company_code only
+    return await this.client
+      .from('standard_categories')
+      .upsert(payload, { onConflict: 'id' })
+      .select('*')
+      .single();
   }
   
   async deleteRmdCategory(id: string) {
-    try { 
-      return await this.client.from('rmd_standard_categories').delete().eq('id', id); 
-    } catch { 
-      return await this.client.from('standard_categories').delete().eq('id', id); 
-    }
+    return await this.client.from('standard_categories').delete().eq('id', id);
   }
 
   // ===== RMD Records CRUD =====

@@ -29,19 +29,11 @@ interface Dept { id: string; name: string; code: string; company_code?: string }
         <label>부서코드</label>
         <input type="text" [(ngModel)]="code" placeholder="예: RM" style="height:32px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px; width:120px;" />
       </div>
-      <div style="display:flex; flex-direction:column;">
+      <div style="display:flex; flex-direction:column; min-width:260px;">
         <label>부서명</label>
         <input type="text" [(ngModel)]="name" placeholder="예: 원료제조팀" style="height:32px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px;" />
       </div>
-      <div style="display:flex; flex-direction:column; min-width:220px;">
-        <label>회사코드 선택</label>
-        <select [(ngModel)]="selectedCompanyCode" (change)="onSelectCompany()" style="height:32px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px;">
-          <option [ngValue]="''">회사코드 선택</option>
-          <option *ngFor="let c of companies()" [ngValue]="c.code">{{ c.code }} · {{ c.name }}</option>
-        </select>
-      </div>
       <button class="btn" (click)="save()" [disabled]="busyDept()" style="height:32px; padding:0 12px;">{{ busyDept() ? '저장중…' : '저장' }}</button>
-      
     </div>
 
     <div class="list" style="border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; max-width:880px;">
@@ -58,11 +50,10 @@ interface Dept { id: string; name: string; code: string; company_code?: string }
     </div>
 
     <div class="list" style="border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; max-width:880px; margin-top:16px;">
-      <div style="display:grid; grid-template-columns: 120px 120px 1fr 90px 80px; gap:0; background:#f8fafc; border-bottom:1px solid #e5e7eb; padding:8px 10px; font-weight:700;">
-        <div>회사코드</div><div>부서코드</div><div>부서명</div><div>수정</div><div>삭제</div>
+      <div style="display:grid; grid-template-columns: 120px 1fr 90px 80px; gap:0; background:#f8fafc; border-bottom:1px solid #e5e7eb; padding:8px 10px; font-weight:700;">
+        <div>부서코드</div><div>부서명</div><div>수정</div><div>삭제</div>
       </div>
-      <div *ngFor="let d of depts()" style="display:grid; grid-template-columns: 120px 120px 1fr 90px 80px; gap:0; padding:8px 10px; border-bottom:1px solid #f1f5f9; align-items:center;">
-        <div>{{ d.company_code ? d.company_code : '-' }}</div>
+      <div *ngFor="let d of depts()" style="display:grid; grid-template-columns: 120px 1fr 90px 80px; gap:0; padding:8px 10px; border-bottom:1px solid #f1f5f9; align-items:center;">
         <div>{{ d.code }}</div>
         <div>{{ d.name }}</div>
         <div><button class="btn" (click)="edit(d)" [disabled]="busyDept()">수정</button></div>
@@ -121,22 +112,18 @@ export class DeptRegisterComponent {
     this.companyName = found?.name || this.companyName;
   }
   async save(){
-    // Require dept code, dept name, and company selection
-    if (!this.selectedCompanyCode && !(this.companyCode||'').trim()){
-      alert('회사코드를 선택해 주세요.');
-      return;
-    }
+    // Require dept code and dept name only (회사코드 선택 제거)
     if(!(this.code||'').trim()) { alert('부서코드는 필수입니다.'); return; }
     if(!(this.name||'').trim()) { alert('부서명은 필수입니다.'); return; }
     this.busyDept.set(true);
     try{
-      const cc = (this.selectedCompanyCode || this.companyCode || '').trim();
-      const cn = cc ? (((this.companies() || []).find(c => c.code === cc)?.name) || (this.companyName||'').trim() || null) : null;
+      const cc = '';
+      const cn = null;
       await this.orgService.upsertDepartment({
         name: this.name.trim(),
         code: this.code.trim(),
-        company_code: cc || null,
-        company_name: cn,
+        company_code: null,
+        company_name: null,
       } as any);
       this.name=''; this.code='';
       await this.load();

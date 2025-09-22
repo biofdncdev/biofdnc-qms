@@ -4,7 +4,7 @@ import { RecordService } from '../../services/record.service';
 import { OrganizationService } from '../../services/organization.service';
 import { FormsModule } from '@angular/forms';
 
-interface Cat { id: string; name: string; doc_prefix: string; department_code?: string | null; created_at?: string; updated_at?: string }
+interface Cat { id: string; name: string; doc_prefix: string; department_code?: string | null; company_code?: string | null; created_at?: string; updated_at?: string }
 
 @Component({
   selector: 'app-rmd-categories',
@@ -15,10 +15,10 @@ interface Cat { id: string; name: string; doc_prefix: string; department_code?: 
     <h2 style="margin:0 0 12px 0;">규정 카테고리 등록</h2>
     <div class="form" style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px;">
       <div style="display:flex; flex-direction:column;">
-        <label>회사·부서코드</label>
-        <select [(ngModel)]="form.department_code" style="height:32px; border:1px solid #d1d5db; border-radius:8px; min-width:220px;">
+        <label>회사코드</label>
+        <select [(ngModel)]="form.company_code" style="height:32px; border:1px solid #d1d5db; border-radius:8px; min-width:220px;">
           <option [ngValue]="null">선택</option>
-          <option *ngFor="let d of depts()" [ngValue]="d.code">{{ d.company ? (d.company + '-') : '' }}{{ d.code }} {{ d.name }}</option>
+          <option *ngFor="let c of companies()" [ngValue]="c.code">{{ c.code }} · {{ c.name }}</option>
         </select>
       </div>
       <div style="display:flex; flex-direction:column;">
@@ -34,10 +34,10 @@ interface Cat { id: string; name: string; doc_prefix: string; department_code?: 
 
     <div class="list" style="border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
       <div style="display:grid; grid-template-columns: 1fr 1fr 1.4fr 90px 80px; gap:0; background:#f8fafc; border-bottom:1px solid #e5e7eb; padding:8px 10px; font-weight:700;">
-        <div>회사·부서코드</div><div>규정카테고리코드</div><div>규정카테고리명</div><div>수정</div><div>삭제</div>
+        <div>회사코드</div><div>규정카테고리코드</div><div>규정카테고리명</div><div>수정</div><div>삭제</div>
       </div>
       <div *ngFor="let c of cats()" style="display:grid; grid-template-columns: 1fr 1fr 1.4fr 90px 80px; gap:0; padding:8px 10px; border-bottom:1px solid #f1f5f9; align-items:center;">
-        <div>{{ formatCompanyDept(c.department_code) }}</div>
+        <div>{{ c.company_code || '-' }}</div>
         <div>{{ c.doc_prefix }}</div>
         <div>{{ c.name }}</div>
         <div><button class="btn" (click)="openEdit(c)" [disabled]="busy()">수정</button></div>
@@ -52,10 +52,10 @@ interface Cat { id: string; name: string; doc_prefix: string; department_code?: 
         <h3 style="margin:0 0 12px 0; font-size:18px;">규정 카테고리 수정</h3>
         <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px;">
           <div style="display:flex; flex-direction:column;">
-            <label>회사·부서코드</label>
-            <select [ngModel]="editForm().department_code" (ngModelChange)="setEditField('department_code',$event)" style="height:32px; border:1px solid #d1d5db; border-radius:8px; min-width:220px;">
+            <label>회사코드</label>
+            <select [ngModel]="editForm().company_code" (ngModelChange)="setEditField('company_code',$event)" style="height:32px; border:1px solid #d1d5db; border-radius:8px; min-width:220px;">
               <option [ngValue]="null">선택</option>
-              <option *ngFor="let d of depts()" [ngValue]="d.code">{{ d.company ? (d.company + '-') : '' }}{{ d.code }} {{ d.name }}</option>
+              <option *ngFor="let c of companies()" [ngValue]="c.code">{{ c.code }} · {{ c.name }}</option>
             </select>
           </div>
           <div style="display:flex; flex-direction:column;">
@@ -85,50 +85,51 @@ interface Cat { id: string; name: string; doc_prefix: string; department_code?: 
 export class RmdCategoriesComponent {
   cats = signal<Cat[]>([]);
   busy = signal<boolean>(false);
-  form: { name: string; doc_prefix: string; department_code: string | null } = { name: '', doc_prefix: '', department_code: null };
-  depts = signal<Array<{ code: string; name: string; company?: string }>>([]);
+  form: { name: string; doc_prefix: string; company_code: string | null } = { name: '', doc_prefix: '', company_code: null };
+  companies = signal<Array<{ code: string; name: string }>>([]);
   constructor(
     private record: RecordService,
     private org: OrganizationService
   ) { this.load(); }
   async load(){
     this.cats.set(await this.record.listRmdCategories());
-    const ds = await this.org.listDepartments();
-    this.depts.set((ds||[]).map((d:any)=>({ code: d.code, name: d.name, company: d.company_code || null })));
+    try {
+      const list = (await (this.org as any).listCompanies?.()) || [];
+      this.companies.set(list);
+    } catch {
+      this.companies.set([]);
+    }
   }
   async save(){
-    if(!this.form.department_code){ alert('회사·부서코드를 선택해 주세요.'); return; }
+    if(!this.form.company_code){ alert('회사코드를 선택해 주세요.'); return; }
     if(!(this.form.doc_prefix||'').trim()){ alert('규정카테고리코드는 필수입니다.'); return; }
     if(!(this.form.name||'').trim()){ alert('규정카테고리명은 필수입니다.'); return; }
     this.busy.set(true);
     try{
-      await this.record.upsertRmdCategory({ name: this.form.name.trim(), doc_prefix: this.form.doc_prefix.trim(), department_code: this.form.department_code || null } as any);
-      this.form = { name:'', doc_prefix:'', department_code: null };
+      const res = await this.record.upsertRmdCategory({ name: this.form.name.trim(), doc_prefix: this.form.doc_prefix.trim(), company_code: this.form.company_code || null } as any);
+      if ((res as any)?.error) console.warn('[save] upsertRmdCategory returned error', (res as any).error);
+      this.form = { name:'', doc_prefix:'', company_code: this.form.company_code };
       await this.load();
     }
     finally{ this.busy.set(false); }
   }
-  formatCompanyDept(code: string | null | undefined){
-    if (!code) return '-';
-    const d = (this.depts() || []).find(x => x.code === code);
-    return (d && d.company) ? `${d.company}-${code}` : code;
-  }
   editOpen = signal<boolean>(false);
-  editForm = signal<{ id?: string; department_code: string | null; doc_prefix: string; name: string }>({ department_code: null, doc_prefix: '', name: '' });
-  openEdit(c: Cat){ this.editForm.set({ id: (c as any).id, department_code: c.department_code || null, doc_prefix: c.doc_prefix, name: c.name }); this.editOpen.set(true); }
+  editForm = signal<{ id?: string; company_code: string | null; doc_prefix: string; name: string }>({ company_code: null, doc_prefix: '', name: '' });
+  openEdit(c: Cat){ this.editForm.set({ id: (c as any).id, company_code: (c as any).company_code || null, doc_prefix: c.doc_prefix, name: c.name }); this.editOpen.set(true); }
   closeEdit(){ this.editOpen.set(false); }
-  setEditField(key: 'department_code'|'doc_prefix'|'name', value: any){ const cur = this.editForm(); this.editForm.set({ ...cur, [key]: value }); }
+  setEditField(key: 'company_code'|'doc_prefix'|'name', value: any){ const cur = this.editForm(); this.editForm.set({ ...cur, [key]: value }); }
   async submitEdit(){
     const f = this.editForm();
-    if(!f.department_code){ alert('회사·부서코드를 선택해 주세요.'); return; }
+    if(!f.company_code){ alert('회사코드를 선택해 주세요.'); return; }
     if(!(f.doc_prefix||'').trim()){ alert('규정카테고리코드는 필수입니다.'); return; }
     if(!(f.name||'').trim()){ alert('규정카테고리명은 필수입니다.'); return; }
     this.busy.set(true);
     try{
-      await this.record.upsertRmdCategory({ id: f.id as any, name: f.name.trim(), doc_prefix: f.doc_prefix.trim(), department_code: f.department_code } as any);
+      const res = await this.record.upsertRmdCategory({ id: f.id as any, name: f.name.trim(), doc_prefix: f.doc_prefix.trim(), company_code: f.company_code } as any);
+      if ((res as any)?.error) console.warn('[submitEdit] upsertRmdCategory returned error', (res as any).error);
       this.editOpen.set(false);
       await this.load();
     } finally{ this.busy.set(false); }
   }
-  async remove(c: Cat){ if(!confirm('삭제할까요?')) return; this.busy.set(true); try{ await this.record.deleteRmdCategory(c.id); await this.load(); } finally{ this.busy.set(false); } }
+  async remove(c: Cat){ if(!confirm('삭제할까요?')) return; this.busy.set(true); try{ const res = await this.record.deleteRmdCategory(c.id); if ((res as any)?.error) console.warn('[remove] deleteRmdCategory returned error', (res as any).error); await this.load(); } finally{ this.busy.set(false); } }
 }
