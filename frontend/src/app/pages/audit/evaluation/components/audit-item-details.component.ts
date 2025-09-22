@@ -27,13 +27,13 @@ import { AuditUiService } from '../services/audit-ui.service';
       </textarea>
 
       <!-- Column 2: Links -->
-      <div class="link-cell" style="grid-row:1; grid-column:2; display:flex; flex-direction:column; gap:6px; width:100%;">
+      <div class="link-cell" #linkCellRef style="grid-row:1; grid-column:2; display:flex; flex-direction:column; gap:6px; width:100%;">
         <button class="btn mini pick-btn" 
                 style="align-self:flex-start; margin:4px 0;" 
                 (click)="onOpenRecordPicker.emit()">
           규정/기록 선택
         </button>
-        <div class="link-list" 
+        <div class="link-list" #linkListRef
              style="display:flex; flex-direction:column; gap:6px; width:100%;"
              (dragover)="onLinkListDragOver.emit($event)" 
              (drop)="onLinkListDrop.emit($event)">
@@ -304,7 +304,17 @@ export class AuditItemDetailsComponent implements AfterViewInit, OnChanges {
     const base = 120;
     const cap = 480;
     const scrollHeight = ta.scrollHeight;
-    const finalH = Math.min(cap, Math.max(base, scrollHeight));
+    // 단일 라인 등 내용이 짧을 때는 기본 높이를 유지
+    const value = (ta.value || '').trim();
+    const isSingleLine = value.length > 0 && !value.includes('\n');
+    const underBase = scrollHeight <= base;
+    const shortText = isSingleLine && value.length <= 60; // 폭에 따른 wrap 고려 여유치
+    // 링크 칩 높이를 최소 높이로 강제
+    const linksMin = Math.max(0, this.getLinksMinHeight());
+    const minH = Math.max(base, linksMin);
+    const finalH = (underBase || shortText) 
+      ? minH 
+      : Math.min(cap, Math.max(minH, scrollHeight));
     
     ta.style.height = finalH + 'px';
     
@@ -324,10 +334,21 @@ export class AuditItemDetailsComponent implements AfterViewInit, OnChanges {
   // Refs for initial height calculation
   @ViewChild('slide1') slide1?: ElementRef<HTMLTextAreaElement>;
   @ViewChild('slide3') slide3?: ElementRef<HTMLTextAreaElement>;
+  @ViewChild('linkCellRef') linkCellRef?: ElementRef<HTMLDivElement>;
+  @ViewChild('linkListRef') linkListRef?: ElementRef<HTMLDivElement>;
+  private linkResizeObs?: ResizeObserver;
 
   ngAfterViewInit(): void {
     // Measure immediately after view init to avoid initial clipping
     setTimeout(() => this.measureInitialHeights(), 0);
+    // Observe link area height changes to sync textarea heights
+    try {
+      const target = this.linkCellRef?.nativeElement;
+      if (target && 'ResizeObserver' in window) {
+        this.linkResizeObs = new ResizeObserver(() => this.syncHeightsWithLinks());
+        this.linkResizeObs.observe(target);
+      }
+    } catch {}
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -340,8 +361,40 @@ export class AuditItemDetailsComponent implements AfterViewInit, OnChanges {
   private measureInitialHeights(){
     try{
       const base = 120; const cap = 480;
-      const ta1 = this.slide1?.nativeElement; if (ta1){ ta1.style.height='auto'; ta1.style.overflowY='hidden'; const h=Math.min(cap, Math.max(base, ta1.scrollHeight)); ta1.style.height=h+'px'; (this.item as any).__h1=h; }
-      const ta3 = this.slide3?.nativeElement; if (ta3){ ta3.style.height='auto'; ta3.style.overflowY='hidden'; const h=Math.min(cap, Math.max(base, ta3.scrollHeight)); ta3.style.height=h+'px'; (this.item as any).__h3=h; }
+      const minH = Math.max(base, this.getLinksMinHeight());
+      const ta1 = this.slide1?.nativeElement; if (ta1){
+        ta1.style.height='auto'; ta1.style.overflowY='hidden';
+        const v=(ta1.value||'').trim();
+        const isSingleLine=v.length>0 && !v.includes('\n');
+        const short=isSingleLine && v.length<=60;
+        const h = (ta1.scrollHeight<=minH || short) ? minH : Math.min(cap, Math.max(minH, ta1.scrollHeight));
+        ta1.style.height=h+'px'; (this.item as any).__h1=h; }
+      const ta3 = this.slide3?.nativeElement; if (ta3){
+        ta3.style.height='auto'; ta3.style.overflowY='hidden';
+        const v=(ta3.value||'').trim();
+        const isSingleLine=v.length>0 && !v.includes('\n');
+        const short=isSingleLine && v.length<=60;
+        const h = (ta3.scrollHeight<=minH || short) ? minH : Math.min(cap, Math.max(minH, ta3.scrollHeight));
+        ta3.style.height=h+'px'; (this.item as any).__h3=h; }
+    }catch{}
+  }
+
+  private getLinksMinHeight(): number {
+    try{
+      const el = this.linkCellRef?.nativeElement;
+      if (!el) return 0;
+      const rect = el.getBoundingClientRect();
+      // subtract button height if present? keep full height since we want parity with chips area
+      return Math.max(0, Math.round(rect.height));
+    }catch{ return 0; }
+  }
+
+  private syncHeightsWithLinks(){
+    try{
+      const minH = Math.max(120, this.getLinksMinHeight());
+      const cap = 480;
+      const ta1 = this.slide1?.nativeElement; if (ta1){ ta1.style.height = Math.min(cap, Math.max(minH, ta1.scrollHeight, 120)) + 'px'; (this.item as any).__h1 = parseInt(ta1.style.height, 10); }
+      const ta3 = this.slide3?.nativeElement; if (ta3){ ta3.style.height = Math.min(cap, Math.max(minH, ta3.scrollHeight, 120)) + 'px'; (this.item as any).__h3 = parseInt(ta3.style.height, 10); }
     }catch{}
   }
 }

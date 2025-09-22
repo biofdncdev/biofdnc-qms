@@ -400,9 +400,13 @@ export class AuditItemListComponent {
   }
 
   removeSelectedLink(it: AuditItem, l: any) {
-    // Forward to parent component
-    // This will be handled by the main audit-evaluation component
-    console.log('Remove link requested:', l);
+    try {
+      if (!it || !Array.isArray(it.selectedLinks)) return;
+      it.selectedLinks = (it.selectedLinks || []).filter((x: any) => x?.id !== l?.id);
+      this.onSaveProgress.emit(it);
+    } catch (e) {
+      console.warn('Failed to remove link', e);
+    }
   }
 
   private normalizeCompanyName(name: string): string {

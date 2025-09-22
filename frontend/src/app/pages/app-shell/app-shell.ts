@@ -133,8 +133,8 @@ export class AppShellComponent implements OnDestroy {
         {
           key: 'audit', icon: 'rule', label: 'Audit', submenu: [
             ...(this.isGivaudanAudit ? [] : [{ label: 'Audit 업체 등록', path: '/app/audit/companies' }]),
-            { label: 'Audit 평가 항목', path: '/app/audit' },
-            ...(this.isAdmin ? [{ label: 'Audit 평가 항목 관리', path: '/app/audit/items-management' }] : [])
+            ...(this.isAdmin ? [{ label: 'Audit 평가 항목 관리', path: '/app/audit/items-management' }] : []),
+            { label: 'Audit 평가 기록', path: '/app/audit' }
           ]
         },
       );
