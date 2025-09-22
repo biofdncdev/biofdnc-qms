@@ -148,6 +148,84 @@ import { AuditUiService } from '../services/audit-ui.service';
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
     
+    /* Link chips/list */
+    .link-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+    
+    .link-button {
+      width: 100%;
+      text-align: left;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
+      background: #ffffff;
+      font-weight: 600;
+      color: #0f172a;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      white-space: normal;
+      line-height: 1.4;
+      height: auto;
+      min-height: 36px;
+    }
+    
+    /* 규정 칩: 연한 파란색 배경 */
+    .link-button.link-standard {
+      background: #eaf2ff;
+      border-color: #c7ddff;
+      box-shadow: 0 2px 4px rgba(59, 130, 246, 0.15), 0 1px 2px rgba(59, 130, 246, 0.1);
+    }
+    
+    /* 기록 칩: 배경색 제거(기본 스타일 유지, 초록 점만 표시) */
+    .link-button.link-record {
+      background: #ffffff;
+      border-color: #e5e7eb;
+    }
+    
+    .link-button .kind-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      margin-top: 7px;
+      flex: 0 0 auto;
+    }
+    .link-button .kind-dot.dot-standard { background: #3b82f6; }
+    .link-button .kind-dot.dot-record { background: #10b981; }
+    
+    .link-button .text {
+      font-weight: 600;
+      opacity: .9;
+      flex: 1;
+      min-width: 0;
+      white-space: normal;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      line-height: 1.4;
+    }
+    
+    .link-button .close-x {
+      font-weight: 700;
+      font-size: 14px;
+      color: #64748b;
+      padding: 0 6px;
+      align-self: flex-start;
+      flex: 0 0 auto;
+    }
+    
+    .link-button.dragging { opacity: .5; }
+    .link-button.drag-over { box-shadow: inset 0 0 0 2px #6366f1; border-color: #c7d2fe; }
+    
+    .link-drop-end {
+      height: 8px;
+      border-radius: 6px;
+    }
+    .link-drop-end.active { outline: 2px dashed #6366f1; outline-offset: 2px; }
+    
     .comments { grid-column: 4; }
     .comments .new { display:flex; gap:8px; align-items:flex-start; }
     .comments .new .comment-input { flex:1; min-width:0; max-width:100%; resize:vertical; min-height:64px; }
