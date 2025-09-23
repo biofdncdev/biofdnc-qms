@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { SupabaseService } from './supabase.service';
+import { SupabaseCoreService } from './supabase-core.service';
 import { StorageService } from './storage.service';
 
 @Injectable({
@@ -8,7 +8,7 @@ import { StorageService } from './storage.service';
 })
 export class RecordService {
   constructor(
-    private supabase: SupabaseService,
+    private supabase: SupabaseCoreService,
     private storage: StorageService
   ) {}
 

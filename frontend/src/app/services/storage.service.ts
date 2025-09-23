@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { SupabaseService } from './supabase.service';
+import { SupabaseCoreService } from './supabase-core.service';
 
 export interface RecordFileIndexEntry {
   originalName?: string | null;
@@ -19,10 +19,27 @@ export class StorageService {
   private recordIndexBucketId = 'rmd_records';
   private compositionTemplatePath = 'composition/template.xlsx';
 
-  constructor(private supabase: SupabaseService) {}
+  constructor(private supabase: SupabaseCoreService) {}
 
   private get client(): SupabaseClient {
     return this.supabase.getClient();
+  }
+
+  // ===== Audit Files =====
+  async uploadAuditFile(file: File, path: string) {
+    // Ensure a bucket named 'audit_resources' exists in Supabase Storage
+    const { data, error } = await this.client
+      .storage
+      .from('audit_resources')
+      .upload(path, file, { upsert: true });
+    
+    if (error) throw error;
+    
+    const { data: urlData } = this.client.storage
+      .from('audit_resources')
+      .getPublicUrl(data.path);
+    
+    return { path: data.path, publicUrl: urlData.publicUrl };
   }
 
   // ===== Record Images (Temperature/Humidity) =====

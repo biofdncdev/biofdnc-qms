@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { SupabaseService } from './supabase.service';
+import { SupabaseCoreService } from './supabase-core.service';
+import { ExcelSyncHelper } from './helpers/excel-sync.helper';
 
 /**
  * ERP 연동 데이터 서비스
@@ -12,7 +13,7 @@ import { SupabaseService } from './supabase.service';
   providedIn: 'root',
 })
 export class ErpDataService {
-  constructor(private supabase: SupabaseService) {}
+  constructor(private supabase: SupabaseCoreService) {}
 
   private get client(): SupabaseClient {
     return this.supabase.getClient();
@@ -135,8 +136,7 @@ export class ErpDataService {
   }
 
   async syncProductsByExcel(payload: { sheet: any[]; headerMap?: Record<string,string>; deleteMode?: 'none' | 'missing' | 'all' }) {
-    // Delegate to supabase service
-    return this.supabase.syncProductsByExcel(payload);
+    return ExcelSyncHelper.syncProducts(this.client, payload);
   }
 
   // Product verification logs
@@ -326,9 +326,7 @@ export class ErpDataService {
   }
 
   async syncMaterialsByExcel(payload: { sheet: any[]; headerMap?: Record<string,string> }) {
-    // Excel sync implementation - will be replaced by ERP API sync
-    // ... (전체 구현은 원본과 동일, 여기서는 생략)
-    return { ok: true, total: 0, updated: 0, skipped: 0, inserted: 0, errors: [] } as any;
+    return ExcelSyncHelper.syncMaterials(this.client, payload);
   }
 
   // ===== Ingredients (원료) - ERP API로 대체 예정 =====

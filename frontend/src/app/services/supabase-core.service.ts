@@ -6,8 +6,17 @@ import { environment } from '../../environments/environment';
 type G = typeof globalThis & { __supabase?: SupabaseClient };
 
 /**
- * Core Supabase service that manages the Supabase client instance.
- * All feature-specific operations are delegated to specialized services.
+ * Core Supabase Service
+ * 
+ * Supabase 클라이언트 인스턴스 관리만 담당합니다.
+ * 모든 비즈니스 로직은 도메인별 서비스로 분리되었습니다.
+ * 
+ * @see AuthService - 인증 및 사용자 관리
+ * @see ErpDataService - 제품, 자재, 원료 관리 (ERP 연동 예정)
+ * @see RecordService - 기록 및 문서 관리
+ * @see StorageService - 파일 저장소 관리
+ * @see AuditService - 감사 관리
+ * @see OrganizationService - 조직 및 부서 관리
  */
 @Injectable({
   providedIn: 'root',
@@ -18,10 +27,12 @@ export class SupabaseCoreService {
   constructor() {}
 
   /**
-   * Gets or creates the Supabase client instance.
-   * Uses a singleton pattern with global state to survive HMR.
+   * Supabase 클라이언트 인스턴스를 반환합니다.
+   * 싱글톤 패턴으로 구현되어 있으며, HMR(Hot Module Replacement)을 지원합니다.
+   * 
+   * @returns SupabaseClient 인스턴스
    */
-  private ensureClient(): SupabaseClient {
+  getClient(): SupabaseClient {
     if (this._client) return this._client;
 
     const g = globalThis as G;
@@ -29,6 +40,7 @@ export class SupabaseCoreService {
       if (!environment.supabaseUrl || !environment.supabaseKey) {
         throw new Error('Supabase environment variables are missing');
       }
+      
       g.__supabase = createClient(
         environment.supabaseUrl,
         environment.supabaseKey,
@@ -45,42 +57,8 @@ export class SupabaseCoreService {
         }
       );
     }
+    
     this._client = g.__supabase;
     return this._client;
-  }
-
-  /**
-   * Gets the Supabase client instance.
-   * Used by other services to access the database.
-   */
-  getClient(): SupabaseClient {
-    return this.ensureClient();
-  }
-
-  /**
-   * Direct database access for simple queries.
-   * Complex operations should use specialized services.
-   */
-  get db() {
-    return {
-      from: (table: string) => this.ensureClient().from(table),
-      rpc: (fn: string, args?: any) => this.ensureClient().rpc(fn, args),
-    };
-  }
-
-  /**
-   * Direct storage access for file operations.
-   * Complex operations should use StorageService.
-   */
-  get storage() {
-    return this.ensureClient().storage;
-  }
-
-  /**
-   * Direct auth access for authentication operations.
-   * Complex operations should use AuthService.
-   */
-  get auth() {
-    return this.ensureClient().auth;
   }
 }

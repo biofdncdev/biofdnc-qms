@@ -1,12 +1,12 @@
 import { Injectable } from '@angular/core';
 import { SupabaseClient, User } from '@supabase/supabase-js';
-import { SupabaseService } from './supabase.service';
+import { SupabaseCoreService } from './supabase-core.service';
 
 @Injectable({
   providedIn: 'root',
 })
 export class AuthService {
-  constructor(private supabase: SupabaseService) {}
+  constructor(private supabase: SupabaseCoreService) {}
 
   private get client(): SupabaseClient {
     return this.supabase.getClient();
