@@ -73,11 +73,13 @@ type SyncError = { product_code: string; column?: string; message: string };
       </div>
       <div *ngIf="compErrors().length">
         <h4>에러 목록</h4>
-        <table class="compact"><thead><tr><th>품번</th><th>INCI</th><th>메시지</th></tr></thead>
-          <tbody>
-            <tr *ngFor="let e of compErrors()"><td>{{e.product_code}}</td><td>{{e.inci||'-'}}</td><td class="wrap">{{e.message}}</td></tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="compact"><thead><tr><th>품번</th><th>INCI</th><th>메시지</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let e of compErrors()"><td>{{e.product_code}}</td><td>{{e.inci||'-'}}</td><td class="wrap">{{e.message}}</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -92,8 +94,9 @@ type SyncError = { product_code: string; column?: string; message: string };
       </div>
     </section>
 
-    <section *ngIf="errors().length" class="errors">
+  <section *ngIf="errors().length" class="errors">
       <h3>에러 목록</h3>
+    <div class="table-scroll">
       <table class="compact">
         <thead><tr><th>품번</th><th>컬럼</th><th>메시지</th></tr></thead>
         <tbody>
@@ -104,6 +107,7 @@ type SyncError = { product_code: string; column?: string; message: string };
           </tr>
         </tbody>
       </table>
+    </div>
     </section>
   </div>
   `,
@@ -136,6 +140,8 @@ type SyncError = { product_code: string; column?: string; message: string };
     th, td{ border-bottom:1px solid #eef2f7; padding:6px 8px; }
     td.wrap{ white-space:normal; word-break:break-word; }
     .hidden-input{ display:none; }
+    .table-scroll{ max-height:360px; overflow:auto; border:1px solid #eef2f7; border-radius:8px; }
+    .table-scroll thead th{ position:sticky; top:0; background:#f8fafc; z-index:1; }
   `]
 })
 export class ProductUpdateComponent implements OnInit {

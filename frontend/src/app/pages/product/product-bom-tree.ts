@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ErpDataService } from '../../services/erp-data.service';
 import { AuthService } from '../../services/auth.service';
+import { TabService } from '../../services/tab.service';
 
 type BomNode = { code: string; name: string; percent?: number | null; children?: BomNode[] };
 
@@ -42,14 +43,14 @@ export class ChildrenComponent { nodes?: BomNode[]; }
           <thead><tr><th>품번</th><th>품명</th></tr></thead>
           <tbody>
             <tr *ngFor="let p of selectedProducts()" (click)="onProductClick(p)" [class.active]="p.product_code===currentProductCode">
-              <td><span class="dot" [class.blue]="hasCompositions(p.product_code)" [class.orange]="!hasCompositions(p.product_code)"></span>{{ p.product_code }}</td>
+              <td><span class="dot" [class.red]="getStatusForCode(p.product_code)==='red'" [class.orange]="getStatusForCode(p.product_code)==='orange'" [class.blue]="getStatusForCode(p.product_code)==='blue'" [class.double]="getStatusForCode(p.product_code)==='double'"></span>{{ p.product_code }}</td>
               <td>{{ p.name_kr }}</td>
             </tr>
           </tbody>
         </table>
       </div>
       <div class="col midl small">
-        <div class="title">조성비</div>
+        <div class="title">조성비 <button class="btn-mini" (click)="openEditSelected()">수정</button></div>
         <table class="tbl">
           <thead><tr><th>품번</th><th>성분</th><th>%</th></tr></thead>
           <tbody>
@@ -99,6 +100,7 @@ export class ChildrenComponent { nodes?: BomNode[]; }
         <input class="search" autofocus [(ngModel)]="search" (input)="debouncedSearch()" (keydown.arrowDown)="movePointer(1)" (keydown.arrowUp)="movePointer(-1)" (keydown.enter)="onEnterInSearch()" (keydown.escape)="onEscInSearch()" placeholder="품번/품명/영문명/CAS/사양/검색어 검색 (공백=AND)" />
         <ul class="sr-list">
           <li *ngFor="let r of searchResults(); let i=index" [class.sel]="i===pointer" (click)="addProduct(r)">
+            <span class="dot" [class.red]="r.status==='red'" [class.orange]="r.status==='orange'" [class.blue]="r.status==='blue'" [class.double]="r.status==='double'"></span>
             {{ r.product_code }} · {{ r.name_kr }}<span *ngIf="r.name_en"> · {{ r.name_en }}</span>
           </li>
         </ul>
@@ -118,6 +120,7 @@ export class ChildrenComponent { nodes?: BomNode[]; }
   .grid5{ display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap:12px; margin-top:8px; }
   .col{ border:1px solid #eef2f7; border-radius:10px; padding:8px; min-height:240px; }
   .title{ font-size:12px; color:#6b7280; margin-bottom:6px; font-weight:700; }
+  .title .btn-mini{ margin-left:6px; height:22px; padding:0 8px; font-size:11px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer; }
   .small{ font-size:12px; }
   .list{ list-style:none; margin:0; padding:0; }
   .list li{ padding:4px 6px; cursor:pointer; border-radius:6px; }
@@ -131,8 +134,10 @@ export class ChildrenComponent { nodes?: BomNode[]; }
   .clickable{ cursor:pointer; }
   .tbl tr.active{ box-shadow:inset 0 0 0 9999px rgba(2,132,199,0.06); }
   .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; position:relative; top:-1px; }
+  .dot.red{ background:#ef4444; }
   .dot.blue{ background:#38bdf8; }
   .dot.orange{ background:#f59e0b; }
+  .dot.double{ background:conic-gradient(from 0deg, #38bdf8 0 50%, #0ea5e9 50% 100%); box-shadow: inset 0 0 0 2px #38bdf8; }
   .overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.08); }
   .popup{ position:absolute; width:520px; max-height:70vh; background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 6px 24px rgba(0,0,0,0.18); padding:10px; }
   .pop-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
@@ -146,7 +151,7 @@ export class ProductBomTreeComponent implements OnInit {
   // search
   search = '';
   searchOpen = signal(false);
-  searchResults = signal<Array<{ id: string; product_code: string; name_kr: string; name_en?: string }>>([]);
+  searchResults = signal<Array<{ id: string; product_code: string; name_kr: string; name_en?: string; status?: 'red' | 'orange' | 'blue' | 'double' }>>([]);
   debTimer: any = null;
   pointer = -1;
   popTop = 0; popLeft = 0;
@@ -162,10 +167,28 @@ export class ProductBomTreeComponent implements OnInit {
   materialCandidates = signal<any[]>([]);
   chosenMaterials = signal<any[]>([]);
   private selectionsMap: Record<string, any> = {};
+  private readonly stateKey = 'product.bom.tree.state.v1';
 
   constructor(private erpData: ErpDataService,
-    private auth: AuthService) {}
-  async ngOnInit(){ }
+    private auth: AuthService,
+    private tabBus: TabService) {}
+  async ngOnInit(){
+    // restore state if any
+    try{
+      const raw = sessionStorage.getItem(this.stateKey);
+      if (raw){
+        const st = JSON.parse(raw);
+        if (Array.isArray(st.selected) && st.selected.length){
+          this.selectedProducts.set(st.selected);
+          await this.rebuildFromSelection();
+          if (st.currentProductCode){
+            const p = st.selected.find((x:any)=> x.product_code===st.currentProductCode) || st.selected[0];
+            if (p) this.onProductClick(p);
+          }
+        }
+      }
+    }catch{}
+  }
 
   openSearch(){
     this.searchOpen.set(true);
@@ -189,6 +212,12 @@ export class ProductBomTreeComponent implements OnInit {
     }, 0);
   }
   closeSearch(){ this.searchOpen.set(false); }
+  openEditSelected(){
+    const code = this.currentProductCode || (this.selectedProducts()[0]?.product_code);
+    if (!code) return;
+    const navUrl = `/app/product/form?id=${encodeURIComponent(this.selectedProducts()[0]?.id || '')}`;
+    this.tabBus.requestOpen('품목등록', '/app/product/form', navUrl);
+  }
   debouncedSearch(){ if (this.debTimer) clearTimeout(this.debTimer); this.debTimer = setTimeout(()=> this.runSearch(), 200); }
   async runSearch(){
     const kw = (this.search||'').trim(); if (!kw){ this.searchResults.set([]); return; }
@@ -196,11 +225,68 @@ export class ProductBomTreeComponent implements OnInit {
     const cols = ['product_code','name_kr','name_en','cas_no','spec','specification','keywords_alias'];
     const makeGroup = (w:string)=> cols.map(c=> `${c}.ilike.*${w}*`).join(',');
     const orLogic = words.map(w=> `or(${makeGroup(w)})`).join(',');
-    const { data } = await this.auth.getClient().from('products').select('id, product_code, name_kr, name_en, cas_no, spec, specification, keywords_alias').or(orLogic).limit(100) as any;
+    const client = this.auth.getClient();
+    const { data } = await client.from('products').select('id, product_code, name_kr, name_en, cas_no, spec, specification, keywords_alias').or(orLogic).limit(100) as any;
     const rows: any[] = Array.isArray(data)? data: [];
     const toHay = (r:any)=> `${r.product_code||''} ${r.name_kr||''} ${r.name_en||''} ${r.cas_no||''} ${r.spec||''} ${r.specification||''} ${r.keywords_alias||''}`.toLowerCase();
     const filtered = rows.filter(r=> words.every(w=> toHay(r).includes(w.toLowerCase())));
-    this.searchResults.set(filtered);
+    // Compute status indicators in batch
+    const ids = filtered.map(r=> r.id);
+    const codes = filtered.map(r=> r.product_code);
+    // 1) compositions per product
+    const { data: compRows } = await client
+      .from('product_compositions')
+      .select('product_id, ingredient:ingredients(inci_name)')
+      .in('product_id', ids) as any;
+    const compCountById = new Map<string, number>();
+    const compSetById = new Map<string, Set<string>>();
+    for (const r of (compRows||[])){
+      const pid = r.product_id as string; const ing = (r?.ingredient?.inci_name||'').trim();
+      compCountById.set(pid, (compCountById.get(pid)||0)+1);
+      const s = compSetById.get(pid) || new Set<string>(); if (ing) s.add(ing); compSetById.set(pid, s);
+    }
+    // 2) selections per product_code
+    const { data: selRows } = await client
+      .from('product_bom_material_map')
+      .select('product_code, ingredient_name, selected_material_id, selected_material_number')
+      .in('product_code', codes) as any;
+    const matchedCountByCode = new Map<string, number>();
+    const matchedSetByCode = new Map<string, Set<string>>();
+    for (const r of (selRows||[])){
+      const code = (r.product_code||'') as string; const ing = (r.ingredient_name||'').toLowerCase();
+      const hasSel = !!(r.selected_material_id || r.selected_material_number);
+      if (hasSel){
+        matchedCountByCode.set(code, (matchedCountByCode.get(code)||0)+1);
+        const s = matchedSetByCode.get(code) || new Set<string>(); if (ing) s.add(ing); matchedSetByCode.set(code, s);
+      }
+    }
+    // 3) verification logs (materials)
+    const { data: verifyRows } = await client
+      .from('products')
+      .select('id, materials_verify_logs')
+      .in('id', ids) as any;
+    const verifiedById = new Map<string, boolean>();
+    for (const r of (verifyRows||[])){
+      const logs = (r?.materials_verify_logs || []) as any[];
+      verifiedById.set(r.id, Array.isArray(logs) && logs.length>0);
+    }
+    const withStatus = filtered.map(r=>{
+      const hasComp = (compCountById.get(r.id)||0) > 0;
+      let status: 'red' | 'orange' | 'blue' | 'double' | undefined = undefined;
+      if (!hasComp){ status = 'red'; }
+      else {
+        status = 'orange';
+        const compSet = compSetById.get(r.id) || new Set<string>();
+        const matchedSet = matchedSetByCode.get(r.product_code) || new Set<string>();
+        if (compSet.size > 0 && matchedSet.size >= compSet.size){
+          status = 'double';
+        } else if (verifiedById.get(r.id)) {
+          status = 'blue';
+        }
+      }
+      return { ...r, status };
+    });
+    this.searchResults.set(withStatus);
     this.pointer = Math.min(this.pointer<0?0:this.pointer, Math.max(0, filtered.length-1));
   }
   async onEnterInSearch(){
@@ -215,7 +301,7 @@ export class ProductBomTreeComponent implements OnInit {
   async addProduct(row: { id: string; product_code: string; name_kr: string }){
     // accumulate
     const exists = this.selectedProducts().some(p=> p.id===row.id);
-    if (!exists){ this.selectedProducts.set([ ...this.selectedProducts(), row ]); await this.rebuildFromSelection(); }
+    if (!exists){ this.selectedProducts.set([ ...this.selectedProducts(), row ]); await this.rebuildFromSelection(); this.saveState(); }
   }
   async rebuildFromSelection(){
     // Build compositions and unique ingredient list for all selected products
@@ -244,6 +330,7 @@ export class ProductBomTreeComponent implements OnInit {
     this.selectionsMap = {}; for(const s of saved){ this.selectionsMap[(s.ingredient_name||'').toLowerCase()] = s; }
     // refresh chosen materials list
     this.refreshChosenMaterials();
+    this.saveState();
   }
   onProductClick(p: { id: string; product_code: string; name_kr: string }){
     this.currentProductId = p.id;
@@ -256,8 +343,21 @@ export class ProductBomTreeComponent implements OnInit {
     this.uniqueIngredients.set(Array.from(set).sort());
     // clear middle candidates until a new ingredient is clicked
     this.materialCandidates.set([]);
+    this.saveState();
   }
+  // Status for selected list as well
   hasCompositions(code: string){ return this.allCompositions.some(r=> r.product_code === code); }
+  getStatusForCode(code: string): 'red' | 'orange' | 'blue' | 'double' {
+    const hasComp = this.allCompositions.some(r=> r.product_code === code);
+    if (!hasComp) return 'red';
+    // If saved selections cover all ingredients for this code -> double
+    const compSet = new Set(this.allCompositions.filter(r=> r.product_code===code).map(r=> r.ingredient.toLowerCase()));
+    const matchedSet = new Set(Object.keys(this.selectionsMap));
+    if (compSet.size>0 && [...compSet].every(k => matchedSet.has(k))) return 'double';
+    // If any verification logs exist for this product, show blue; otherwise orange
+    // We don't have logs here, so default to orange until expanded later
+    return 'orange';
+  }
   context: { ingredient: string; product_code?: string } | null = null;
   currentContext(){ return this.context; }
   async onIngredientClick(ing: string, product_code?: string){
@@ -287,6 +387,16 @@ export class ProductBomTreeComponent implements OnInit {
     const seen = new Set<string>();
     const uniq = list.filter(m=>{ const k=m.material_number||m.material_name; if (seen.has(k)) return false; seen.add(k); return true; });
     this.chosenMaterials.set(uniq);
+  }
+
+  private saveState(){
+    try{
+      const st = {
+        selected: this.selectedProducts(),
+        currentProductCode: this.currentProductCode,
+      };
+      sessionStorage.setItem(this.stateKey, JSON.stringify(st));
+    }catch{}
   }
 }
 
