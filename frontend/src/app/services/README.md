@@ -50,23 +50,22 @@ The services have been refactored to improve maintainability and prepare for ERP
 - Company management
 - Usage tracking
 
-## Migration Guide
+## Migration Status ✅
 
-### For existing code:
-1. The original `SupabaseService` methods are still available but marked as deprecated
-2. Gradually migrate to use the new specialized services
-3. Import the specific service you need instead of SupabaseService
+### Migration Complete!
+All components have been successfully migrated to use domain-specific services directly.
+The compatibility layer (`supabase.service.ts`) has been removed.
 
-### Examples:
+### Current Usage:
 
 ```typescript
-// Old way (deprecated)
-constructor(private supabase: SupabaseService) {}
-const products = await this.supabase.listProducts(params);
-
-// New way
-constructor(private erpData: ErpDataService) {}
-const products = await this.erpData.listProducts(params);
+// All components now use domain services directly
+constructor(private auth: AuthService) {}  // For authentication
+constructor(private erpData: ErpDataService) {}  // For products/materials
+constructor(private record: RecordService) {}  // For records
+constructor(private storage: StorageService) {}  // For file storage
+constructor(private audit: AuditService) {}  // For audits
+constructor(private organization: OrganizationService) {}  // For org management
 ```
 
 ## ERP API Integration
