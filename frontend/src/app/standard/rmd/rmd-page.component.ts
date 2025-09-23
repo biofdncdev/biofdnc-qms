@@ -311,21 +311,30 @@ export class RmdPageComponent {
     document.addEventListener('keydown', this.onGlobalKeydown, { passive: false });
   }
 
-  private async loadDocWithFallback(id: string): Promise<string | null> {
+  private async loadDoc(id: string): Promise<string | null> {
     const primary = `/rmd/${id}.html`;
     try {
       const html = await this.http.get(primary, { responseType: 'text' }).toPromise();
-      if (html) return html as string;
+      if (this.isValidDoc(html as string)) return this.normalizeDocNumbers(html as string, id);
     } catch {}
-    // If not found and id uses BF-RM-, try BF-RMD-
-    const alt = id.replace(/^BF-RM-/, 'BF-RMD-');
-    if (alt !== id) {
-      try {
-        const html = await this.http.get(`/rmd/${alt}.html`, { responseType: 'text' }).toPromise();
-        if (html) return html as string;
-      } catch {}
-    }
     return null;
+  }
+
+  private isValidDoc(html: string): boolean {
+    if (!html) return false;
+    const text = String(html).toLowerCase();
+    if (text.includes('class="doc"') || text.includes('<div class="doc"')) return true;
+    if (text.includes('<app-root')) return false;
+    return false;
+  }
+
+  private normalizeDocNumbers(html: string, id: string): string {
+    try{
+      // Replace legacy prefixes in displayed document numbers
+      const re1 = /문서번호\s*:\s*BF-RM-([A-Z]{2}-\d+)/g;
+      const re2 = /문서번호\s*:\s*BF-RMD-([A-Z]{2}-\d+)/g;
+      return String(html).replace(re1, '문서번호: BF-$1').replace(re2, '문서번호: BF-$1');
+    }catch{ return html; }
   }
 
   async buildIndex(){
@@ -346,7 +355,7 @@ export class RmdPageComponent {
       const items: RegulationItem[] = this.categories.flatMap((c: RegulationCategory) => c.items);
       for (const it of items){
         try{
-          const html = await this.loadDocWithFallback(it.id);
+          const html = await this.loadDoc(it.id);
           if (!html) continue;
           const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g,' ').trim();
           this.docs.push({ id: it.id, title: it.title, content: text.toLowerCase() });
@@ -594,9 +603,7 @@ export class RmdPageComponent {
     this.loading.set(true);
     try {
       const q = this.term();
-      // We pass both current id and an optional fallback id to the viewer, so it can try BF-RMD- if BF-RM- is missing
-      const alt = item.id.replace(/^BF-RM-/, 'BF-RMD-');
-      const viewer = `/rmd/view.html?id=${encodeURIComponent(item.id)}${q ? `&q=${encodeURIComponent(q)}` : ''}&alt=${encodeURIComponent(alt)}`;
+      const viewer = `/rmd/view.html?id=${encodeURIComponent(item.id)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
       this.docUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(viewer));
       if (resetScroll) setTimeout(() => { this.contentPane?.nativeElement?.scrollTo({ top: 0, behavior: 'auto' }); }, 0);
       // proactively try to restore iframe scroll even if 'ready' races
@@ -668,14 +675,34 @@ export class RmdPageComponent {
     if (!sel) return;
     
     try {
-      // HTML 파일 내용 가져오기
-      const response = await fetch(`/rmd/${sel.id}.html`);
-      if (!response.ok) {
-        console.error('문서를 불러올 수 없습니다.');
-        return;
-      }
-      
-      const htmlContent = await response.text();
+      // 문서 내용 가져오기 (폴백 포함)
+      const getWithFallback = async (id: string) => {
+        const res = await fetch(`/rmd/${id}.html`);
+        if (res.ok) {
+          const txt = await res.text();
+          if (this.isValidDoc(txt)) return txt;
+        }
+        const makeAlts = (raw: string): string[] => {
+          const alts: string[] = [];
+          if (/^BF-RM-/.test(raw)) {
+            const rest = raw.replace(/^BF-RM-/, '');
+            alts.push(`BF-${rest}`);
+            alts.push(`BF-RMD-${rest}`);
+          } else if (/^BF-/.test(raw)) {
+            const rest = raw.replace(/^BF-/, '');
+            alts.push(`BF-RM-${rest}`);
+            alts.push(`BF-RMD-${rest}`);
+          }
+          return alts;
+        };
+        for (const alt of makeAlts(id)){
+          const r = await fetch(`/rmd/${alt}.html`);
+          if (r.ok){ const t = await r.text(); if (this.isValidDoc(t)) return t; }
+        }
+        throw new Error('문서를 불러올 수 없습니다.');
+      };
+
+      const htmlContent = await getWithFallback(sel.id);
       
       // 출력용 iframe 생성
       const printFrame = document.createElement('iframe');

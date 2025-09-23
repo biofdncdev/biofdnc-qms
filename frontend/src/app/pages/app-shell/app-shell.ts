@@ -152,9 +152,7 @@ export class AppShellComponent implements OnDestroy {
   private buildRecordSubmenu(){
     // Only two fixed submenu items
     const base: Array<{ label: string; path: string }> = [];
-    if (!this.isGivaudanAudit) base.push({ label: '전체 기록', path: '/app/record/rmd-forms' });
-    // 원료제조팀 기록: useDepartments에 원료제조팀 포함 필터 파라미터 사용
-    base.push({ label: '원료제조팀 기록', path: '/app/record/rmd-forms?dept=RM' });
+    if (!this.isGivaudanAudit) base.push({ label: '기록 관리', path: '/app/record/rmd-forms' });
     return base;
   }
 

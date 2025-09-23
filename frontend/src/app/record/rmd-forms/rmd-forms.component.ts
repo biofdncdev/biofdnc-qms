@@ -112,15 +112,22 @@ export class RmdFormsComponent {
         });
       }
     }
-    // Build standard category dropdown options like BF-RM-GM 회사-부서-규정카테고리
+    // Build standard category dropdown options like BF-GM (or legacy BF-RM-GM)
     try{
       // Build options by pairing company/department codes with regulation category code from first item
       const options: Array<{ value: string; label: string }> = [];
       for (const cat of RMD_STANDARDS){
         const example = cat.items?.[0]?.id || '';
-        const parts = example.split('-');
-        // Expect like BF-RM-GM-01 -> company(BF), dept(RMD), catCode(GM)
-        const codeLabel = parts.length >= 3 ? `${parts[0]}-${parts[1]}-${parts[2]}` : '';
+        // Extract label prefix from both new(BF-GM-01) and legacy(BF-RM-GM-01)
+        let codeLabel = '';
+        try{
+          const m = example.match(/^BF-(?:RM-)?([A-Z]{2})-/);
+          if (m) codeLabel = `BF-${m[1]}`;
+          else {
+            const parts = example.split('-');
+            codeLabel = parts.slice(0, Math.min(2, parts.length)).join('-');
+          }
+        }catch{ codeLabel = example; }
         options.push({ value: cat.category, label: `${codeLabel} ${cat.category}`.trim() });
       }
       this.stdCategoryOptions = options;

@@ -17,7 +17,7 @@
     (function(){
       const qs = new URLSearchParams(location.search);
       const id = qs.get('id');
-      const alt = qs.get('alt');
+      const alt = null; // legacy fallbacks removed
       const title = (qs.get('title')||'').trim();
       const initialQ = (qs.get('q')||'').trim();
       const host = window.parent;
@@ -63,17 +63,35 @@
 
       if(title){ try{ document.getElementById('doc-title').textContent = title; }catch{} }
 
+      function tryAlts(list){ return Promise.reject('noalts'); }
+
+      function isValidDoc(html){
+        if(!html) return false;
+        const text = String(html).toLowerCase();
+        // Valid RMD doc files start with a root 
+        // container like <div class="doc"> and do NOT contain the app shell
+        if (text.includes('class="doc"') || text.includes('<div class="doc"')) return true;
+        if (text.includes('<app-root')) return false;
+        return false;
+      }
+
+      function normalizeDocNumbers(html, id){
+        try{
+          const re1 = /문서번호\s*:\s*BF-RM-([A-Z]{2}-\d+)/g;
+          const re2 = /문서번호\s*:\s*BF-RMD-([A-Z]{2}-\d+)/g;
+          let out = String(html).replace(re1, '문서번호: BF-$1').replace(re2, '문서번호: BF-$1');
+          return out;
+        }catch{ return html; }
+      }
+
       fetch(path)
         .then(r => { if(!r.ok) throw new Error('notfound'); return r.text(); })
-        .then(html => { content.innerHTML = html; loaded = true; host.postMessage({type:'ready'}, '*'); if(initialQ){ highlight(initialQ); } else if(term){ highlight(term); } })
+        .then(html => {
+          // no fallbacks; rely on primary path only
+          return html;
+        })
+        .then(html => { html = normalizeDocNumbers(html, id); content.innerHTML = html; loaded = true; host.postMessage({type:'ready'}, '*'); if(initialQ){ highlight(initialQ); } else if(term){ highlight(term); } })
         .catch(() => {
-          // Try fallback if provided (e.g., BF-RMD- when BF-RM- missing)
-          if(alt){
-            fetch(`/rmd/${alt}.html`).then(r => { if(!r.ok) throw new Error('notfound'); return r.text(); })
-              .then(html => { content.innerHTML = html; loaded = true; host.postMessage({type:'ready'}, '*'); if(initialQ){ highlight(initialQ); } else if(term){ highlight(term); } })
-              .catch(() => { content.innerHTML = `<p style=\"color:#c00\">문서를 불러올 수 없습니다. (${id})</p>`; loaded = true; host.postMessage({type:'ready'}, '*'); });
-            return;
-          }
           content.innerHTML = `<p style=\"color:#c00\">문서를 불러올 수 없습니다. (${id})</p>`; loaded = true; host.postMessage({type:'ready'}, '*');
         });
 
