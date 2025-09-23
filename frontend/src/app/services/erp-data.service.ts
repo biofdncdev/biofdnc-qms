@@ -134,11 +134,9 @@ export class ErpDataService {
     return Array.isArray(data) ? data : [];
   }
 
-  async syncProductsByExcel(payload: { sheet: any[]; headerMap?: Record<string,string> }) {
-    // Excel sync implementation - will be replaced by ERP API sync
-    // ... (전체 구현은 원본과 동일, 여기서는 생략)
-    // 실제 구현시 원본 코드의 syncProductsByExcel 메서드 전체를 복사
-    return { ok: true, total: 0, updated: 0, skipped: 0, inserted: 0, errors: [] } as any;
+  async syncProductsByExcel(payload: { sheet: any[]; headerMap?: Record<string,string>; deleteMode?: 'none' | 'missing' | 'all' }) {
+    // Delegate to supabase service
+    return this.supabase.syncProductsByExcel(payload);
   }
 
   // Product verification logs

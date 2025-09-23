@@ -1653,10 +1653,11 @@ export class SupabaseService {
   }
 
   // Excel sync implementation with diffing and error reporting
-  async syncProductsByExcel(payload: { sheet: any[]; headerMap?: Record<string,string> }){
+  async syncProductsByExcel(payload: { sheet: any[]; headerMap?: Record<string,string>; deleteMode?: 'none' | 'missing' | 'all' }){
     const rows = payload?.sheet || [];
+    const deleteMode = payload?.deleteMode || 'missing'; // default: delete items not in CSV
     const errors: Array<{ product_code: string; column?: string; message: string }> = [];
-    if (!rows.length) return { ok: true, total: 0, updated: 0, skipped: 0, inserted: 0, errors } as any;
+    if (!rows.length) return { ok: true, total: 0, updated: 0, skipped: 0, inserted: 0, deleted: 0, errors } as any;
 
     // Build mapping: DB mapping first, then fallback to built-ins, then caller overrides
     const { data: mapRows } = await this.ensureClient().from('product_column_map').select('sheet_label_kr, db_column');
@@ -1683,7 +1684,7 @@ export class SupabaseService {
 
     // Determine header that provides product_code
     const codeHeaders = Object.keys(map).filter(k => map[k] === 'product_code');
-    let updated = 0, skipped = 0, inserted = 0;
+    let updated = 0, skipped = 0, inserted = 0, deleted = 0;
 
     // Normalize upload rows and collect columns present
     const normalized: Array<{ product_code: string; row: any }> = [];
@@ -1738,24 +1739,48 @@ export class SupabaseService {
       }
       normalized.push({ product_code: code, row: obj });
     }
-    if (!normalized.length) return { ok: true, total: rows.length, updated, skipped, inserted, errors } as any;
+    if (!normalized.length) return { ok: true, total: rows.length, updated, skipped, inserted, deleted, errors } as any;
 
-    // Fetch existing rows (only necessary columns + attrs for row_hash)
-    const codes = normalized.map(n => n.product_code);
+    // Fetch ALL existing rows to detect deletions
+    const uploadedCodes = normalized.map(n => n.product_code);
     const selectCols = Array.from(new Set<string>([...Array.from(colsInUpload), 'attrs'])).join(',');
-    const { data: existingList } = await this.ensureClient().from('products').select(selectCols).in('product_code', codes) as any;
+    
+    // Get all existing products for comparison
+    const { data: allExisting } = await this.ensureClient().from('products').select('product_code, ' + selectCols) as any;
     const codeToExisting: Record<string, any> = {};
-    for (const ex of (existingList || [])) codeToExisting[ex.product_code] = ex;
+    const allExistingCodes = new Set<string>();
+    
+    for (const ex of (allExisting || [])) {
+      allExistingCodes.add(ex.product_code);
+      if (uploadedCodes.includes(ex.product_code)) {
+        codeToExisting[ex.product_code] = ex;
+      }
+    }
 
     const toUpsert: any[] = [];
-    // Simple stable signature of a row for fast skip
+    // Improved signature function that normalizes values for better comparison
+    const normalizeValue = (val: any): string => {
+      if (val === undefined || val === null) return '';
+      if (typeof val === 'string') return val.trim();
+      if (typeof val === 'number') return val.toString();
+      if (typeof val === 'boolean') return val ? 'true' : 'false';
+      if (val instanceof Date) return val.toISOString();
+      return JSON.stringify(val);
+    };
+    
     const signatureOf = (row:any) => {
       const keys = Array.from(colsInUpload).filter(k=>k!=='product_code').sort();
-      const parts = keys.map(k => `${k}:${row[k]===undefined||row[k]===null?'':String(row[k])}`);
-      // djb2
-      let h = 5381; const s = parts.join('|');
-      for (let i=0;i<s.length;i++){ h = ((h << 5) + h) ^ s.charCodeAt(i); }
-      // to unsigned string to reduce size
+      const parts = keys.map(k => {
+        const val = row[k];
+        const norm = normalizeValue(val);
+        return `${k}:${norm}`;
+      });
+      // djb2 hash for compact signature
+      let h = 5381; 
+      const s = parts.join('|');
+      for (let i=0;i<s.length;i++){ 
+        h = ((h << 5) + h) ^ s.charCodeAt(i); 
+      }
       return (h >>> 0).toString(36);
     };
 
@@ -1772,31 +1797,59 @@ export class SupabaseService {
         inserted++;
         continue;
       }
-      // Fast path: skip if signature unchanged
+      // Create comparable version of existing data with only columns from upload
+      const existingFiltered: any = { product_code: n.product_code };
+      for (const col of colsInUpload) {
+        if (col !== 'product_code') {
+          existingFiltered[col] = (existing as any)[col];
+        }
+      }
+      
+      // Compare signatures
       const newSig = signatureOf(n.row);
-      const oldSig = (existing as any)?.attrs?.row_hash || null;
-      if (oldSig && newSig === oldSig){ skipped++; continue; }
+      const oldSig = signatureOf(existingFiltered);
+      if (newSig === oldSig){ skipped++; continue; }
 
-      // Compute diff only on columns present in upload when signature changed
+      // Compute diff with improved normalization
       const diff: any = { product_code: n.product_code };
       const REQUIRED = new Set<string>(['name_kr','asset_category']);
       let changed = false;
+      
       for (const col of colsInUpload){
         if (col==='product_code') continue;
+        
         const newVal = (n.row as any)[col];
-        if (newVal === undefined) continue;
         const oldVal = (existing as any)[col];
-        const oldNorm = (oldVal===undefined || oldVal===null || String(oldVal).trim()==='') ? null : oldVal;
-        let newNorm = (newVal===undefined || newVal===null || (typeof newVal==='string' && newVal.trim()==='')) ? null : newVal;
-        // 영문명은 공백이 들어와도 null로 처리해 제거하거나 값이 있으면 업데이트
-        if ((col as string) === 'name_en'){
-          if (newVal === undefined) continue; // not provided
-          const cleaned = (typeof newVal==='string') ? newVal.trim() : newVal;
-          newNorm = (cleaned===undefined || cleaned===null || cleaned==='') ? null : cleaned;
+        
+        // Normalize both values for comparison
+        const normalizeForComparison = (v: any): any => {
+          if (v === undefined || v === null) return null;
+          if (typeof v === 'string') {
+            const trimmed = v.trim();
+            return trimmed === '' ? null : trimmed;
+          }
+          if (typeof v === 'number' && isNaN(v)) return null;
+          return v;
+        };
+        
+        const oldNorm = normalizeForComparison(oldVal);
+        let newNorm = normalizeForComparison(newVal);
+        
+        // Skip if new value is undefined (not provided in upload)
+        if (newVal === undefined) continue;
+        
+        // Skip updating required fields to null
+        if (newNorm === null && REQUIRED.has(col as string)) continue;
+        
+        // Compare normalized values
+        const oldStr = JSON.stringify(oldNorm);
+        const newStr = JSON.stringify(newNorm);
+        
+        if (oldStr !== newStr) { 
+          (diff as any)[col] = newNorm; 
+          changed = true;
+          console.log(`Field ${col} changed from '${oldStr}' to '${newStr}' for ${n.product_code}`);
         }
-        // 빈 값이면 필수 컬럼은 건너뜀
-        if (newNorm === null && REQUIRED.has(col as string)) { continue; }
-        if (JSON.stringify(oldNorm) !== JSON.stringify(newNorm)) { (diff as any)[col] = newNorm; changed = true; }
       }
       // Safety: always include required fields so accidental INSERT by upsert won't violate NOT NULL
       const fallbackName = (existing && (existing as any).name_kr) || (n.row as any).name_kr || n.product_code;
@@ -1804,10 +1857,28 @@ export class SupabaseService {
       (diff as any).name_kr = fallbackName;
       (diff as any).asset_category = fallbackCat;
       if (changed){
+        // Always include required fields to prevent null violations
+        diff.name_kr = (n.row as any).name_kr || (existing as any).name_kr || n.product_code;
+        diff.asset_category = (n.row as any).asset_category || (existing as any).asset_category || 'unspecified';
+        
         const prevAttrs = (existing as any)?.attrs || {};
-        diff.attrs = { ...prevAttrs, row_hash: newSig };
-        toUpsert.push(diff); updated++;
-      } else { skipped++; }
+        diff.attrs = { ...prevAttrs, row_hash: newSig, last_sync: new Date().toISOString() };
+        toUpsert.push(diff); 
+        updated++;
+      } else { 
+        skipped++; 
+      }
+    }
+
+    // Handle deletions if deleteMode is enabled
+    const toDelete: string[] = [];
+    if (deleteMode === 'missing' || deleteMode === 'all') {
+      const uploadedCodeSet = new Set(uploadedCodes);
+      for (const existingCode of allExistingCodes) {
+        if (!uploadedCodeSet.has(existingCode)) {
+          toDelete.push(existingCode);
+        }
+      }
     }
 
     if (toUpsert.length){
@@ -1825,7 +1896,35 @@ export class SupabaseService {
       }
     }
 
-    return { ok: true, total: rows.length, updated, skipped, inserted, errors } as any;
+    // Delete products not in the upload
+    if (toDelete.length > 0 && deleteMode !== 'none') {
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
+        const batch = toDelete.slice(i, i + BATCH_SIZE);
+        try {
+          const { error } = await this.ensureClient()
+            .from('products')
+            .delete()
+            .in('product_code', batch);
+          
+          if (error) {
+            errors.push({ 
+              product_code: batch.join(','), 
+              message: `삭제 실패: ${error.message || String(error)}` 
+            });
+          } else {
+            deleted += batch.length;
+          }
+        } catch (e: any) {
+          errors.push({ 
+            product_code: batch.join(','), 
+            message: `삭제 중 오류: ${e?.message || String(e)}` 
+          });
+        }
+      }
+    }
+
+    return { ok: true, total: rows.length, updated, skipped, inserted, deleted, errors } as any;
   }
 
   // ===== RMD Standard Categories & Records =====

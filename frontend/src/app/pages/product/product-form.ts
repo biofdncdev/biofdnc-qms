@@ -26,12 +26,22 @@ import { AuthService } from '../../services/auth.service';
     <section *ngIf="activeTab==='composition'" class="comp-layout">
       <!-- 좌측: 일반사항 요약 표시 -->
       <aside class="left-placeholder">
+        <!-- 품목 선택 박스를 최상단으로 분리 배치 -->
+        <section class="form-body pick-card">
+          <div class="product-picker">
+            <label class="picker-label"><b>품목 선택</b></label>
+            <input class="picker-input" [(ngModel)]="productQuery" (keydown.arrowDown)="moveProductPointer(1)" (keydown.arrowUp)="moveProductPointer(-1)" (keydown.enter)="onProductEnterOrSearch($event)" (keydown.escape)="onProductEsc($event)" placeholder="품번/품명/영문명/CAS/사양/검색어 검색 (공백=AND)" />
+            <ul class="picker-list" *ngIf="productResults.length">
+              <li *ngFor="let p of productResults; let i = index" [class.selected]="i===productPointer" (click)="pickProduct(p)">{{ p.product_code }} · {{ p.name_kr }} · {{ p.spec || p.specification || '-' }}</li>
+            </ul>
+          </div>
+        </section>
         <section class="form-body ro left-card">
           <div class="grid-ro">
-            <div class="field"><label>등록상태</label><div class="ro-display">{{ model.item_status }}</div></div>
-            <div class="field"><label>품목자산분류</label><div class="ro-display">{{ model.asset_category }}</div></div>
             <div class="field key"><label>품번</label><div class="ro-display">{{ model.product_code }}</div></div>
             <div class="field key"><label>품명</label><div class="ro-display">{{ model.name_kr }}</div></div>
+            <div class="field"><label>등록상태</label><div class="ro-display" [class.warn]="!isEditable()">{{ model.item_status }}</div></div>
+            <div class="field"><label>품목자산분류</label><div class="ro-display">{{ model.asset_category }}</div></div>
             <div class="field"><label>영문명</label><div class="ro-display">{{ model.name_en }}</div></div>
             <div class="field"><label>규격</label><div class="ro-display">{{ model.spec }}</div></div>
             <div class="field"><label>CAS</label><div class="ro-display">{{ model.cas_no }}</div></div>
@@ -42,23 +52,16 @@ import { AuthService } from '../../services/auth.service';
             <div class="field"><label>포장단위</label><div class="ro-display">{{ model.package_unit }}</div></div>
             <div class="field col-span-2"><label>검색어(이명)</label><div class="ro-display">{{ model.keywords_alias }}</div></div>
           </div>
-          <div class="product-picker">
-            <label class="picker-label">품목 선택</label>
-            <input class="picker-input" [(ngModel)]="productQuery" (keydown.arrowDown)="moveProductPointer(1)" (keydown.arrowUp)="moveProductPointer(-1)" (keydown.enter)="onProductEnterOrSearch($event)" (keydown.escape)="onProductEsc($event)" placeholder="품번/품명/영문명/CAS/사양/검색어 검색 (공백=AND)" />
-            <ul class="picker-list" *ngIf="productResults.length">
-              <li *ngFor="let p of productResults; let i = index" [class.selected]="i===productPointer" (click)="pickProduct(p)">{{ p.product_code }} · {{ p.name_kr }} · {{ p.spec || p.specification || '-' }}</li>
-            </ul>
-          </div>
         </section>
       </aside>
       <!-- 우측 메인 테이블 -->
-      <div class="right-main comp-wrap">
+      <div class="right-main comp-wrap" [class.readonly]="!isEditable()">
         <div class="toolbar">
           <div class="title">조성성분</div>
           <div class="spacer"></div>
           <span class="status" [class.saved]="saved" [class.unsaved]="!saved">{{ saved? '저장됨' : '저장되지 않음' }}</span>
-          <button class="btn" (click)="saveCompositions()">저장</button>
-          <button class="btn primary" (click)="openPicker()">성분 추가</button>
+          <button class="btn" [disabled]="!isEditable()" (click)="saveCompositions()">저장</button>
+          <button class="btn primary" [disabled]="!isEditable()" (click)="openPicker()">성분 추가</button>
         </div>
         <div class="table-scroll" #compTableRef>
           <table class="grid">
@@ -80,8 +83,8 @@ import { AuthService } from '../../services/auth.service';
                 <td class="col-kor">{{ c.korean_name }}</td>
                 <td class="col-cn">{{ c.chinese_name || '' }}</td>
                 <td class="col-cas">{{ c.cas_no || '' }}</td>
-                <td class="col-pct"><input type="number" step="0.01" [(ngModel)]="c.percent" (ngModelChange)="onPercentChange()" (keydown.enter)="navigatePercent($event, i, 1)" (keydown.arrowDown)="navigatePercent($event, i, 1)" (keydown.arrowUp)="navigatePercent($event, i, -1)" /></td>
-                <td class="col-act"><button class="btn mini" (click)="$event.stopPropagation(); removeRow(c)">삭제</button></td>
+                <td class="col-pct"><input type="number" step="0.01" [(ngModel)]="c.percent" [disabled]="!isEditable()" (ngModelChange)="onPercentChange()" (keydown.enter)="navigatePercent($event, i, 1)" (keydown.arrowDown)="navigatePercent($event, i, 1)" (keydown.arrowUp)="navigatePercent($event, i, -1)" /></td>
+                <td class="col-act"><button class="btn mini" [disabled]="!isEditable()" (click)="$event.stopPropagation(); removeRow(c)">삭제</button></td>
               </tr>
               <tr *ngIf="compositions.length===0"><td colspan="7" class="empty">성분을 추가해 주세요.</td></tr>
             </tbody>
@@ -134,8 +137,8 @@ import { AuthService } from '../../services/auth.service';
           </div>
         </div>
 
-        <!-- 투입품목/자재 섹션 -->
-        <div class="mat-wrap">
+        <!-- 투입품목/자재 섹션 (요청에 따라 화면에서 숨김) -->
+        <div class="mat-wrap" *ngIf="false">
           <div class="toolbar">
             <div class="title">투입품목/자재</div>
             <div class="spacer"></div>
@@ -251,8 +254,9 @@ import { AuthService } from '../../services/auth.service';
     .ro .field label{ font-size:11px; color:#6b7280; }
     .ro input, .ro textarea{ height:26px; padding:3px 6px; font-size:12px; }
     .ro .ro-display{ min-height:26px; padding:4px 6px; border:1px solid #e5e7eb; border-radius:8px; background:#f9fafb; font-size:12px; line-height:1.3; white-space:normal; word-break:break-word; color:#6b7280; }
-    /* 강조 표시: 품번/품명 (연한 녹색 계열) */
-    .ro .field.key .ro-display{ background:#f0fdf4; color:#000000; font-weight:400; border-color:#bbf7d0; }
+    /* 강조 표시: 품번/품명 (연한 파랑 + 그림자) */
+    .ro .field.key .ro-display{ background:#eef6ff; color:#0f172a; font-weight:400; border-color:#c7d2fe; box-shadow:0 2px 6px rgba(59,130,246,.12); }
+    .ro .field .ro-display.warn{ background:#fff1f2; color:#7f1d1d; border-color:#fecaca; box-shadow:0 2px 6px rgba(239,68,68,.15); }
     .ro-note{ margin-top:6px; font-size:11px; color:#6b7280; }
     .row-3{ display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap:10px; align-items:end; }
     .row-1{ display:grid; grid-template-columns:1fr; gap:12px; margin-top:10px; }
@@ -272,8 +276,9 @@ import { AuthService } from '../../services/auth.service';
     .ing-search .results .inci{ min-width:200px; font-weight:600; }
     .ing-search .results .kor{ color:#4b5563; }
     .comp-layout{ display:grid; grid-template-columns: minmax(280px, 360px) 1fr; gap:30px; align-items:stretch; margin:24px 0 16px; }
-    .left-placeholder{ min-height:420px; max-width:100%; display:flex; }
+    .left-placeholder{ min-height:420px; max-width:100%; display:flex; flex-direction: column; }
     .left-card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.06); flex:1; }
+    .pick-card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.06); padding:8px; margin-bottom:10px; }
     .right-main{ min-height:420px; min-width:0; }
     .comp-wrap .toolbar{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
     .comp-wrap .toolbar .title{ font-weight:700; }
@@ -281,6 +286,7 @@ import { AuthService } from '../../services/auth.service';
     .status{ font-size:12px; }
     .status.saved{ color:#2563eb; }
     .status.unsaved{ color:#f97316; }
+    .comp-wrap.readonly{ opacity:.6; pointer-events:auto; }
     .grid{ width:100%; border-collapse:collapse; table-layout:fixed; }
     .grid th, .grid td{ border:1px solid #e5e7eb; padding:6px 8px; font-size:12px; }
     .grid thead th{ background:#f9fafb; position:sticky; top:0; z-index:1; }
@@ -706,6 +712,7 @@ export class ProductFormComponent implements OnInit {
   onProductEsc(ev:any){ if (ev?.preventDefault) ev.preventDefault(); this.productQuery = ''; this.productResults = []; this.productPointer = 0; }
 
   async saveCompositions(){
+    if (!this.isEditable()) return;
     if (!this.id()) { alert('품목이 선택되지 않았습니다. 좌측에서 품목을 검색하여 선택해 주세요.'); this.saved = false; return; }
     try{
       const pid = this.id()!;
@@ -757,6 +764,12 @@ export class ProductFormComponent implements OnInit {
       this.lastVerifiedAt = null;
       this.notice.set('조성성분이 저장되었습니다.'); setTimeout(()=> this.notice.set(null), 1800);
     }catch{ this.saved = false; }
+  }
+
+  // Editable state: allow when item_status is '사용' or '임시'
+  isEditable(){
+    const st = (this.model?.item_status || '').toString().trim();
+    return st === '사용' || st === '임시';
   }
 
   // Materials picker/search

@@ -87,6 +87,7 @@ type SyncError = { product_code: string; column?: string; message: string };
         <div><b>스킵</b> {{ stats().skipped }} 건</div>
         <div><b>업데이트</b> {{ stats().updated }} 건</div>
         <div><b>신규생성</b> {{ stats().inserted }} 건</div>
+        <div><b>삭제</b> {{ stats().deleted || 0 }} 건</div>
         <div><b>에러</b> {{ errors().length }} 건</div>
       </div>
     </section>
@@ -144,7 +145,7 @@ export class ProductUpdateComponent implements OnInit {
   private cancelRequested = false;
   ran = signal(false);
   errors = signal<SyncError[]>([]);
-  stats = signal({ total: 0, updated: 0, skipped: 0, inserted: 0 });
+  stats = signal({ total: 0, updated: 0, skipped: 0, inserted: 0, deleted: 0 });
   processed = signal(0);
   dragOver = signal(false);
   fileName = signal<string>('');
@@ -219,7 +220,7 @@ export class ProductUpdateComponent implements OnInit {
         payload.push(obj);
       }
       this.pendingRows.set(payload);
-      this.ran.set(false); this.errors.set([]); this.stats.set({ total: payload.length, updated: 0, skipped: 0, inserted: 0 });
+      this.ran.set(false); this.errors.set([]); this.stats.set({ total: payload.length, updated: 0, skipped: 0, inserted: 0, deleted: 0 });
     }catch(e:any){
       console.error(e);
       this.pendingRows.set([]);
@@ -259,7 +260,7 @@ export class ProductUpdateComponent implements OnInit {
       payload.push(obj);
     }
     this.pendingRows.set(payload);
-    this.ran.set(false); this.errors.set([]); this.stats.set({ total: payload.length, updated: 0, skipped: 0, inserted: 0 });
+    this.ran.set(false); this.errors.set([]); this.stats.set({ total: payload.length, updated: 0, skipped: 0, inserted: 0, deleted: 0 });
   }
 
   private async readWorkbookRowsFromArrayBuffer(ab: ArrayBuffer): Promise<any[][]>{
@@ -356,7 +357,7 @@ export class ProductUpdateComponent implements OnInit {
       const chunks: any[][] = [];
       for (let i=0;i<rows.length;i+=CHUNK) chunks.push(rows.slice(i, i+CHUNK));
 
-      const agg = { total: rows.length, updated: 0, skipped: 0, inserted: 0 } as any;
+      const agg = { total: rows.length, updated: 0, skipped: 0, inserted: 0, deleted: 0 } as any;
       const errs: SyncError[] = [];
       let next = 0;
       const runWorker = async () => {
@@ -364,8 +365,16 @@ export class ProductUpdateComponent implements OnInit {
           const idx = next++;
           const part = chunks[idx];
           try{
-            const res = await this.erpData.syncProductsByExcel({ sheet: part });
-            agg.updated += res.updated || 0; agg.skipped += res.skipped || 0; agg.inserted += res.inserted || 0;
+            // First chunk includes delete mode, subsequent chunks don't delete
+            const isFirstChunk = idx === 0;
+            const res = await this.erpData.syncProductsByExcel({ 
+              sheet: part, 
+              deleteMode: isFirstChunk ? 'missing' : 'none' 
+            });
+            agg.updated += res.updated || 0; 
+            agg.skipped += res.skipped || 0; 
+            agg.inserted += res.inserted || 0;
+            agg.deleted += res.deleted || 0;
             if (Array.isArray(res.errors)) errs.push(...res.errors);
           }catch(e:any){
             errs.push({ product_code: '-', message: e?.message || String(e) });
@@ -380,7 +389,13 @@ export class ProductUpdateComponent implements OnInit {
       const workers = Array.from({ length: Math.min(MAX_PAR, chunks.length) }, () => runWorker());
       await Promise.all(workers);
       this.errors.set(errs);
-      this.stats.set({ total: this.pendingRows().length, updated: agg.updated || 0, skipped: agg.skipped || 0, inserted: agg.inserted || 0 });
+      this.stats.set({ 
+        total: this.pendingRows().length, 
+        updated: agg.updated || 0, 
+        skipped: agg.skipped || 0, 
+        inserted: agg.inserted || 0,
+        deleted: agg.deleted || 0 
+      });
       this.ran.set(true);
     }finally{ this.listBusy.set(false); }
   }
@@ -399,7 +414,7 @@ export class ProductUpdateComponent implements OnInit {
   clear(fileInput: HTMLInputElement){
     this.pendingRows.set([]);
     this.errors.set([]);
-    this.stats.set({ total: 0, updated: 0, skipped: 0, inserted: 0 });
+    this.stats.set({ total: 0, updated: 0, skipped: 0, inserted: 0, deleted: 0 });
     this.processed.set(0);
     this.fileName.set('');
     if (fileInput) fileInput.value = '';
