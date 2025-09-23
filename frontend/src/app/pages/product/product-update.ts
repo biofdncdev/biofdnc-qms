@@ -29,10 +29,10 @@ type SyncError = { product_code: string; column?: string; message: string };
         </div>
       </div>
       <div class="controls">
-        <button class="btn" [disabled]="!pendingRows().length || busy()" (click)="run()">업데이트</button>
-        <button class="btn ghost" [disabled]="!busy()" (click)="cancel()">취소</button>
-        <button class="btn ghost" [disabled]="busy()" (click)="clear(fileInput)">지우기</button>
-        <div class="spinner" *ngIf="busy()"></div>
+        <button class="btn" [disabled]="!pendingRows().length || listBusy()" (click)="run()">업데이트</button>
+        <button class="btn ghost" [disabled]="!listBusy()" (click)="cancel()">취소</button>
+        <button class="btn ghost" [disabled]="listBusy()" (click)="clear(fileInput)">지우기</button>
+        <div class="spinner" *ngIf="listBusy()"></div>
       </div>
       <div class="progress-wrap" *ngIf="stats().total">
         <div class="progress"><div class="bar" [style.width.%]="progress()*100"></div></div>
@@ -53,9 +53,14 @@ type SyncError = { product_code: string; column?: string; message: string };
         </div>
       </div>
       <div class="controls">
-        <button class="btn" [disabled]="busy()" (click)="runComp()">업데이트</button>
-        <button class="btn ghost" [disabled]="!busy()" (click)="cancel()">취소</button>
-        <button class="btn ghost" [disabled]="busy()" (click)="clearComp(csvInput)">지우기</button>
+        <button class="btn" [disabled]="compBusy()" (click)="runComp()">업데이트</button>
+        <button class="btn ghost" [disabled]="!compBusy()" (click)="cancel()">취소</button>
+        <button class="btn ghost" [disabled]="compBusy()" (click)="clearComp(csvInput)">지우기</button>
+        <div class="spinner" *ngIf="compBusy()"></div>
+      </div>
+      <div class="progress-wrap" *ngIf="compTotal()">
+        <div class="progress"><div class="bar" [style.width.%]="compProgress()*100"></div></div>
+        <div class="progress-text">{{ compProcessed() }} / {{ compTotal() }} ({{ (compProgress()*100) | number:'1.0-0' }}%)</div>
       </div>
     </section>
 
@@ -134,7 +139,8 @@ type SyncError = { product_code: string; column?: string; message: string };
 })
 export class ProductUpdateComponent implements OnInit {
   pendingRows = signal<any[]>([]);
-  busy = signal(false);
+  listBusy = signal(false);
+  compBusy = signal(false);
   private cancelRequested = false;
   ran = signal(false);
   errors = signal<SyncError[]>([]);
@@ -149,6 +155,8 @@ export class ProductUpdateComponent implements OnInit {
   compRan = signal(false);
   compErrors = signal<Array<{ product_code: string; inci?: string; message: string }>>([]);
   compStats = signal({ total: 0, applied: 0, skipped: 0 });
+  compProcessed = signal(0);
+  compTotal = signal(0);
   private erpHeaderSet = new Set<string>([
     '품번','품목코드','대표품번','품명','대표품명','영문명','품목설명','품목상태','품목대분류','품목중분류','품목소분류','기준단위','규격','대표규격',
     '검색어(이명(異名))','사양','품목특이사항','CAS NO','MOQ','포장단위','Manufacturer','Country of Manufacture','Source of Origin(Method)',
@@ -178,6 +186,7 @@ export class ProductUpdateComponent implements OnInit {
   private async loadCsv(file: File){
     this.fileName.set(file.name);
     try{
+      this.listBusy.set(true);
       const text = await file.text();
       const wb = XLSX.read(text, { type: 'string', raw: true } as any);
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -218,7 +227,7 @@ export class ProductUpdateComponent implements OnInit {
         { product_code: '-', column: '-', message: '파일을 읽는 중 오류가 발생했습니다. 엑셀에서 "다른 이름으로 저장"하여 새 .xlsx(또는 CSV UTF-8)로 저장한 뒤 다시 시도해 주세요. 상세: ' + (e?.message || e) }
       ]);
       this.ran.set(true);
-    }
+    } finally { this.listBusy.set(false); }
   }
 
   private async afterRowsLoaded(rows:any[][]){
@@ -336,7 +345,7 @@ export class ProductUpdateComponent implements OnInit {
 
   async run(){
     if (!this.pendingRows().length) return;
-    this.busy.set(true);
+    this.listBusy.set(true);
     this.processed.set(0);
     this.cancelRequested = false;
     try{
@@ -373,7 +382,7 @@ export class ProductUpdateComponent implements OnInit {
       this.errors.set(errs);
       this.stats.set({ total: this.pendingRows().length, updated: agg.updated || 0, skipped: agg.skipped || 0, inserted: agg.inserted || 0 });
       this.ran.set(true);
-    }finally{ this.busy.set(false); }
+    }finally{ this.listBusy.set(false); }
   }
 
   // Drag & Drop handlers
@@ -406,20 +415,25 @@ export class ProductUpdateComponent implements OnInit {
   private async loadCompFile(file: File){
     const lower = (file.name||'').toLowerCase();
     if (lower.endsWith('.csv') || (file.type && file.type.includes('csv'))){
-      const text = await file.text(); await this.applyCompositionCsv(text); return;
+      this.compBusy.set(true);
+      try{ const text = await file.text(); await this.applyCompositionCsv(text); } finally { this.compBusy.set(false); }
+      return;
     }
     // Excel: parse first sheet rows and build pseudo-CSV consumption
     try{
+      this.compBusy.set(true);
       const ab = await file.arrayBuffer();
       const wb = XLSX.read(new Uint8Array(ab), { type: 'array' } as any);
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
       const csv = rows.map(r => r.map(c => String(c??'')).join(',')).join('\n');
       await this.applyCompositionCsv(csv);
+      this.compBusy.set(false);
     }catch(e:any){ alert('엑셀을 읽는 중 오류가 발생했습니다: '+(e?.message||e)); }
   }
   private async applyCompositionCsv(text: string){
     try{
+      this.compBusy.set(true);
       // Robust CSV parse via XLSX to handle quotes/commas
       const wb = XLSX.read(text, { type: 'string', raw: true } as any);
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -449,24 +463,27 @@ export class ProductUpdateComponent implements OnInit {
         const names = Array.from(new Set(list.map(x=>x.inci)));
         const { data: ing } = await this.erpData.getIngredientsByNames(names);
         const nameToId: Record<string,string> = {}; const nameToRow: Record<string, any> = {};
-        for (const r of (ing||[])){ nameToId[r.inci_name] = r.id; nameToRow[r.inci_name] = r; }
+        for (const r of (ing||[])){ nameToId[(r.inci_name||'').toLowerCase()] = r.id; nameToRow[(r.inci_name||'').toLowerCase()] = r; }
         // 3) Build UI-equivalent rows and upsert
         // Delete existing first to simplify sync
         const { data: ex } = await this.erpData.listProductCompositions(pid) as any;
         for (const row of (ex||[])){ if (row?.id) await this.erpData.deleteProductComposition(row.id); }
         for (const rec of list){
-          const iid = nameToId[rec.inci]; if (!iid) continue;
+          const iid = nameToId[(rec.inci||'').toLowerCase()]; if (!iid) continue;
           await this.erpData.addProductComposition({ product_id: pid, ingredient_id: iid, percent: rec.pct });
         }
       }
       this.compPending = byCode; this.compCount.set(Object.values(byCode).reduce((a,c)=> a + c.length, 0)); this.compFileName.set(this.compFileName() || 'composition.csv');
     }catch(e:any){ alert('CSV 처리 중 오류: ' + (e?.message || e)); }
+    finally { this.compBusy.set(false); }
   }
 
   async runComp(){
     const byCode = this.compPending || {}; const keys = Object.keys(byCode);
     if (!keys.length){ alert('적용할 파일이 없습니다.'); return; }
-    this.busy.set(true);
+    this.compBusy.set(true);
+    // compute total rows for progress
+    let total = 0; for (const k of keys) total += (byCode[k]||[]).length; this.compTotal.set(total); this.compProcessed.set(0);
     try{
       let applied = 0, skipped = 0; const errs: Array<{ product_code: string; inci?: string; message: string }> = [];
       for (const code of keys){
@@ -474,15 +491,16 @@ export class ProductUpdateComponent implements OnInit {
         const { data: prod } = await this.erpData.getProductByCode(code) as any; if (!prod || !prod.id){ errs.push({ product_code: code, message: '제품을 찾을 수 없습니다' }); continue; } const pid = prod.id as string;
         const names = Array.from(new Set(list.map(x=>x.inci)));
         const { data: ing } = await this.erpData.getIngredientsByNames(names);
-        const nameToId: Record<string,string> = {}; for (const r of (ing||[])){ nameToId[r.inci_name] = r.id; }
+        const nameToId: Record<string,string> = {}; for (const r of (ing||[])){ nameToId[(r.inci_name||'').toLowerCase()] = r.id; }
         const { data: ex } = await this.erpData.listProductCompositions(pid) as any; for (const row of (ex||[])){ if (row?.id) await this.erpData.deleteProductComposition(row.id); }
         for (const rec of list){
-          const iid = nameToId[rec.inci];
+          const iid = nameToId[(rec.inci||'').toLowerCase()];
           if (!iid){ errs.push({ product_code: code, inci: rec.inci, message: 'INCI 매칭 실패' }); skipped++; continue; }
           try{
             await this.erpData.addProductComposition({ product_id: pid, ingredient_id: iid, percent: rec.pct });
             applied++;
           }catch(e:any){ errs.push({ product_code: code, inci: rec.inci, message: e?.message || String(e) }); }
+          this.compProcessed.set(this.compProcessed()+1);
         }
         // 검증: 실제로 저장되었는지 확인하여 0행이면 경고 추가
         try{
@@ -496,9 +514,10 @@ export class ProductUpdateComponent implements OnInit {
       this.compErrors.set(errs);
       this.compRan.set(true);
       this.compPending = {}; this.compCount.set(0);
-    } finally { this.busy.set(false); }
+    } finally { this.compBusy.set(false); }
   }
   clearComp(input: HTMLInputElement){ if (input) input.value=''; this.compFileName.set(''); }
+  compProgress(){ const t = this.compTotal(); if (!t) return 0; return this.compProcessed()/t; }
 }
 
 
