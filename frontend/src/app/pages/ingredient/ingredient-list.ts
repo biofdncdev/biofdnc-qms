@@ -103,8 +103,8 @@ type IngredientRow = { [key: string]: any } & {
   </div>
   `,
   styles: [`
-  .page{ padding:12px 16px; font-size:13px; box-sizing:border-box; height:100%; overflow:hidden; }
-  .top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .page{ padding:12px 16px; font-size:13px; box-sizing:border-box; height:100dvh; overflow:hidden; display:flex; flex-direction:column; }
+  .top{ position: sticky; top: 0; z-index: 20; background:#fff; display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
   .top h2{ font-size:24px; font-weight:800; margin:0; }
   .top-sticky{ position:sticky; top:12px; z-index:100; background:#fff; padding:8px 0; }
   .actions{ display:flex; gap:8px; align-items:center; }
@@ -127,17 +127,18 @@ type IngredientRow = { [key: string]: any } & {
   .col-picker .menu-item.cdk-drag-placeholder{ opacity:0; }
 
   .filters{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; margin:14px 0 18px; }
-  .filters-sticky{ position:sticky; top:60px; z-index:10; }
+  .filters-sticky{ position:sticky; top:52px; z-index:15; background:#fff; }
   .grid{ display:grid; grid-template-columns:64px 1fr 52px 120px; gap:8px; align-items:center; }
   .grid input, select{ height:30px; padding:4px 6px; border:1px solid #e5e7eb; border-radius:8px; font-size:12px; }
   .chip{ display:inline-block; padding:4px 10px; background:#f3f4f6; border:1px solid #e5e7eb; border-radius:24px; color:#374151; text-align:center; }
 
-  /* 표 컨테이너는 최대 높이만 제한하여 브라우저 우측 스크롤바가 생기지 않도록 조정 */
-  .table-wrap{ overflow:auto; border:1px solid #eef2f7; border-radius:8px; max-height:calc(100% - 200px); position:relative; margin-top:6px; }
+  /* 테이블 영역이 남은 공간을 모두 차지하고 내부에서만 스크롤되도록 구성 */
+  .table{ flex:1; min-height:0; display:flex; flex-direction:column; }
+  .table-wrap{ flex:1; overflow:auto; border:1px solid #eef2f7; border-radius:8px; position:relative; margin-top:6px; }
   table{ width:100%; border-collapse:collapse; background:#fff; }
   table.wide{ width:max-content; table-layout:fixed; }
   table.compact th, table.compact td{ padding:6px 8px; line-height:1.2; }
-  thead th{ position:sticky; top:0; z-index:3; background:#f8fafc; }
+  thead th{ position:sticky; top:0; z-index:10; background:#f8fafc; }
   th, td{ border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9; }
   /* 반응형 고정폭(상한) + 줄바꿈 */
   .col-inci{ width:clamp(200px, 26vw, 300px); max-width:300px; }

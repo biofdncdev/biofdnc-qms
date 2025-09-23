@@ -110,10 +110,10 @@ type ProductRow = { [key:string]: any } & {
   </div>
   `,
   styles: [`
-  .page{ padding:12px 16px; font-size:13px; box-sizing:border-box; height:100%; overflow:hidden; }
-  .top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .page{ padding:12px 16px; font-size:13px; box-sizing:border-box; height:100%; overflow:hidden; display:flex; flex-direction:column; }
+  .top{ position: sticky; top: 0; z-index: 20; background: #fff; display:flex; align-items:center; justify-content:space-between; padding-top:2px; margin-bottom:8px; }
   .top h2{ font-size:24px; font-weight:800; margin:0; }
-  .top-sticky{ position:sticky; top:12px; z-index:100; background:#fff; padding:8px 0; }
+  .top-sticky{ position:relative; background:#fff; padding:8px 0; }
   .actions{ display:flex; gap:8px; align-items:center; }
   .btn{ height:30px; padding:0 12px; border-radius:8px; border:1px solid #d1d5db; background:#fff; cursor:pointer; }
   .btn.ghost{ background:#fff; color:#111827; }
@@ -132,15 +132,17 @@ type ProductRow = { [key:string]: any } & {
   .col-picker .menu-list.cdk-drop-list-dragging .menu-item{ transition: transform .18s ease; }
   .col-picker .menu-item.cdk-drag-preview{ box-shadow:0 10px 24px rgba(0,0,0,0.18); border-color:#93c5fd; background:#f8fbff; transform:rotate(1deg); pointer-events:none; }
   .col-picker .menu-item.cdk-drag-placeholder{ opacity:0; }
-  .filters-sticky{ position:sticky; top:60px; z-index:5; }
+  .filters-sticky{ position: sticky; top: 52px; z-index: 15; background: #fff; }
   .grid{ display:grid; grid-template-columns:64px 1fr 52px 120px; gap:8px; align-items:center; }
   .grid input, select{ height:30px; padding:4px 6px; border:1px solid #e5e7eb; border-radius:8px; font-size:12px; }
   .chip{ display:inline-block; padding:4px 10px; background:#f3f4f6; border:1px solid #e5e7eb; border-radius:24px; color:#374151; text-align:center; }
-  .table-wrap{ overflow:auto; border:1px solid #eef2f7; border-radius:8px; max-height:calc(100% - 200px); position:relative; margin-top:6px; }
+  /* Fill remaining space with the table area so only rows scroll */
+  .table{ flex:1; min-height:0; display:flex; flex-direction:column; }
+  .table-wrap{ flex:1; overflow:auto; border:1px solid #eef2f7; border-radius:8px; position:relative; margin-top:6px; }
   table{ width:100%; border-collapse:collapse; background:#fff; }
   table.wide{ width:max-content; table-layout:fixed; }
   table.compact th, table.compact td{ padding:6px 8px; line-height:1.2; }
-  thead th{ position:sticky; top:0; z-index:3; background:#f8fafc; }
+  thead th{ position:sticky; top:0; z-index:10; background:#f8fafc; }
   th, td{ border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9; }
   tbody tr.selected{ background:#eef6ff; }
   tbody tr:focus{ outline:2px solid #93c5fd; outline-offset:-2px; }
