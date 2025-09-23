@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, ElementRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -18,21 +18,24 @@ import { AuthService } from '../../services/auth.service';
     <!-- 탭: 조성성분/RMI -->
     <nav class="tabs">
       <button class="tab" [class.active]="activeTab==='composition'" (click)="setTab('composition')">조성성분</button>
+      <button class="tab" [class.active]="activeTab==='materials'" (click)="setTab('materials')">투입품목/자재</button>
       <button class="tab" [class.active]="activeTab==='extra'" (click)="setTab('extra')">RMI</button>
     </nav>
 
-
-    <!-- 중단: 조성성분 편집 영역 (메인) -->
-    <section *ngIf="activeTab==='composition'" class="comp-layout">
+    <!-- 본문 레이아웃: 좌측 정보는 항상 표시, 우측은 탭에 따라 내용 전환 -->
+    <section class="comp-layout">
       <!-- 좌측: 일반사항 요약 표시 -->
       <aside class="left-placeholder">
         <!-- 품목 선택 박스를 최상단으로 분리 배치 -->
         <section class="form-body pick-card">
-          <div class="product-picker">
+          <div class="product-picker" #pickerRef>
             <label class="picker-label"><b>품목 선택</b></label>
             <input class="picker-input" [(ngModel)]="productQuery" (keydown.arrowDown)="moveProductPointer(1)" (keydown.arrowUp)="moveProductPointer(-1)" (keydown.enter)="onProductEnterOrSearch($event)" (keydown.escape)="onProductEsc($event)" placeholder="품번/품명/영문명/CAS/사양/검색어 검색 (공백=AND)" />
-            <ul class="picker-list" *ngIf="productResults.length">
-              <li *ngFor="let p of productResults; let i = index" [class.selected]="i===productPointer" (click)="pickProduct(p)">{{ p.product_code }} · {{ p.name_kr }} · {{ p.spec || p.specification || '-' }}</li>
+            <ul class="picker-list" *ngIf="productResults.length" #pickerList>
+              <li *ngFor="let p of productResults; let i = index" [class.selected]="i===productPointer" (click)="pickProduct(p)" [attr.data-index]="i">
+                <span class="dot" [class.red]="p.status==='red'" [class.orange]="p.status==='orange'" [class.blue]="p.status==='blue'"></span>
+                {{ p.product_code }} · {{ p.name_kr }} · {{ p.spec || p.specification || '-' }}
+              </li>
             </ul>
           </div>
         </section>
@@ -51,94 +54,102 @@ import { AuthService } from '../../services/auth.service';
             <div class="field"><label>MOQ</label><div class="ro-display">{{ model.moq }}</div></div>
             <div class="field"><label>포장단위</label><div class="ro-display">{{ model.package_unit }}</div></div>
             <div class="field col-span-2"><label>검색어(이명)</label><div class="ro-display">{{ model.keywords_alias }}</div></div>
+            <div class="field col-span-2"><label>품목특이사항</label><div class="ro-display">{{ model.special_notes || '-' }}</div></div>
           </div>
         </section>
       </aside>
       <!-- 우측 메인 테이블 -->
-      <div class="right-main comp-wrap" [class.readonly]="!isEditable()">
-        <div class="toolbar">
-          <div class="title">조성성분</div>
-          <div class="spacer"></div>
-          <span class="status" [class.saved]="saved" [class.unsaved]="!saved">{{ saved? '저장됨' : '저장되지 않음' }}</span>
-          <button class="btn" [disabled]="!isEditable()" (click)="saveCompositions()">저장</button>
-          <button class="btn primary" [disabled]="!isEditable()" (click)="openPicker()">성분 추가</button>
-        </div>
-        <div class="table-scroll" #compTableRef>
-          <table class="grid">
-            <thead>
-              <tr>
-                <th class="col-no">No.</th>
-                <th class="col-inci">INCI Name</th>
-                <th class="col-kor">한글성분명</th>
-                <th class="col-cn">중국성분명</th>
-                <th class="col-cas">CAS No.</th>
-                <th class="col-pct">조성비(%)</th>
-                <th class="col-act"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let c of compositions; let i = index" [class.selected]="selectedComp===c" (click)="selectedComp=c">
-                <td class="col-no">{{ i+1 }}</td>
-                <td class="col-inci">{{ c.inci_name }}</td>
-                <td class="col-kor">{{ c.korean_name }}</td>
-                <td class="col-cn">{{ c.chinese_name || '' }}</td>
-                <td class="col-cas">{{ c.cas_no || '' }}</td>
-                <td class="col-pct"><input type="number" step="0.01" [(ngModel)]="c.percent" [disabled]="!isEditable()" (ngModelChange)="onPercentChange()" (keydown.enter)="navigatePercent($event, i, 1)" (keydown.arrowDown)="navigatePercent($event, i, 1)" (keydown.arrowUp)="navigatePercent($event, i, -1)" /></td>
-                <td class="col-act"><button class="btn mini" [disabled]="!isEditable()" (click)="$event.stopPropagation(); removeRow(c)">삭제</button></td>
-              </tr>
-              <tr *ngIf="compositions.length===0"><td colspan="7" class="empty">성분을 추가해 주세요.</td></tr>
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colspan="6" class="sum-label">합계</td>
-                <td class="sum" [class.ok]="percentIsHundred()" [class.bad]="!percentIsHundred()">{{ percentSum() }}%</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        <!-- 피커 모달 -->
-        <div class="modal-backdrop" *ngIf="pickerOpen" (click)="closePicker()"></div>
-        <div class="modal" *ngIf="pickerOpen" (click)="$event.stopPropagation()" [style.top.px]="modalTop" [style.left.px]="modalLeft" [style.transform]="'none'">
-          <div class="modal-head" (mousedown)="startDrag($event)">
-            <b>성분 선택</b>
+      <div class="right-main" [class.readonly]="!isEditable()">
+        <!-- 조성성분 탭 내용 -->
+        <ng-container *ngIf="activeTab==='composition'">
+          <div class="toolbar">
+            <div class="title">조성성분</div>
+          </div>
+          <!-- 확인 버튼과 우측 액션을 같은 높이로 배치 -->
+          <div class="verifier top">
+            <button class="btn verify-btn" [class.need]="!isVerified()" [class.done]="isVerified()" [disabled]="false" (click)="onVerifyClick()">조성성분 확인</button>
+            <span *ngIf="!isVerified()" class="verify-note">확인이 필요합니다</span>
             <div class="spacer"></div>
+            <span class="status" [class.saved]="saved" [class.unsaved]="!saved">{{ saved? '저장됨' : '저장되지 않음' }}</span>
+            <button class="btn" [disabled]="!isEditable()" (click)="saveCompositions()">저장</button>
+            <button class="btn primary" [disabled]="!isEditable()" (click)="openPicker()">성분 추가</button>
           </div>
-          <div class="modal-body">
-            <div class="search-bar">
-              <input [(ngModel)]="pickerQuery" (keydown.arrowDown)="movePickerPointer(1)" (keydown.arrowUp)="movePickerPointer(-1)" (keydown.enter)="onPickerSearchEnter($event)" placeholder="INCI/국문명 검색" />
-            </div>
-            <div class="table-scroll small">
-              <table class="grid">
-                <thead><tr><th>INCI Name</th><th>한글성분명</th><th>중국성분명</th><th>CAS No.</th><th class="col-act"></th></tr></thead>
-                <tbody>
-                  <tr *ngFor="let r of pickerRows; let i = index" [class.selected]="i===pickerPointer" (dblclick)="addPicked(r)">
-                    <td>{{ r.inci_name }}</td>
-                    <td>{{ r.korean_name }}</td>
-                    <td>{{ r.chinese_name || '' }}</td>
-                    <td>{{ r.cas_no || '' }}</td>
-                    <td class="col-act"><button class="btn mini filled-light" (click)="addPicked(r)">추가</button></td>
-                  </tr>
-                  <tr *ngIf="pickerRows.length===0"><td colspan="5" class="empty">검색 결과가 없습니다.</td></tr>
-                </tbody>
-              </table>
-            </div>
+          <div class="table-scroll" #compTableRef>
+            <table class="grid">
+              <thead>
+                <tr>
+                  <th class="col-no">No.</th>
+                  <th class="col-inci">INCI Name</th>
+                  <th class="col-kor">한글성분명</th>
+                  <th class="col-cn">중국성분명</th>
+                  <th class="col-cas">CAS No.</th>
+                  <th class="col-pct">조성비(%)</th>
+                  <th class="col-act"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let c of compositions; let i = index" [class.selected]="selectedComp===c" (click)="selectedComp=c">
+                  <td class="col-no">{{ i+1 }}</td>
+                  <td class="col-inci">{{ c.inci_name }}</td>
+                  <td class="col-kor">{{ c.korean_name }}</td>
+                  <td class="col-cn">{{ c.chinese_name || '' }}</td>
+                  <td class="col-cas">{{ c.cas_no || '' }}</td>
+                  <td class="col-pct"><input type="number" step="0.01" [(ngModel)]="c.percent" [disabled]="!isEditable()" (ngModelChange)="onPercentChange()" (keydown.enter)="navigatePercent($event, i, 1)" (keydown.arrowDown)="navigatePercent($event, i, 1)" (keydown.arrowUp)="navigatePercent($event, i, -1)" /></td>
+                  <td class="col-act"><button class="btn mini" [disabled]="!isEditable()" (click)="$event.stopPropagation(); removeRow(c)">삭제</button></td>
+                </tr>
+                <tr *ngIf="compositions.length===0"><td colspan="7" class="empty">성분을 추가해 주세요.</td></tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="6" class="sum-label">합계</td>
+                  <td class="sum" [class.ok]="percentIsHundred()" [class.bad]="!percentIsHundred()">{{ percentSum() }}%</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
-        </div>
-        <!-- 확인자 영역 -->
-        <div class="verifier">
-          <button class="btn verify-btn" [class.need]="!isVerified()" [class.done]="isVerified()" [disabled]="false" (click)="onVerifyClick()">조성성분 확인</button>
-          <span *ngIf="!isVerified()" class="verify-note">확인이 필요합니다</span>
-          <div class="logs">
-            <div class="log-item" *ngFor="let l of verifyLogs; let i = index">
-              {{ i+1 }}차 확인: {{ l.user }} · {{ l.time }}
-              <button class="log-x" *ngIf="isAdmin" title="확인 취소" (click)="removeVerify(i)">×</button>
-            </div>
-          </div>
-        </div>
 
-        <!-- 투입품목/자재 섹션 (요청에 따라 화면에서 숨김) -->
-        <div class="mat-wrap" *ngIf="false">
+          <!-- 피커 모달 -->
+          <div class="modal-backdrop" *ngIf="pickerOpen" (click)="closePicker()"></div>
+          <div class="modal" *ngIf="pickerOpen" (click)="$event.stopPropagation()" [style.top.px]="modalTop" [style.left.px]="modalLeft" [style.maxHeight.px]="modalMaxHeight" [style.transform]="'none'">
+            <div class="modal-head" (mousedown)="startDrag($event)">
+              <b>성분 선택</b>
+              <div class="spacer"></div>
+            </div>
+            <div class="modal-body">
+              <div class="search-bar">
+                <input [(ngModel)]="pickerQuery" (keydown.arrowDown)="movePickerPointer(1)" (keydown.arrowUp)="movePickerPointer(-1)" (keydown.enter)="onPickerSearchEnter($event)" placeholder="INCI/국문명 검색" />
+              </div>
+              <div class="table-scroll small">
+                <table class="grid">
+                  <thead><tr><th>INCI Name</th><th>한글성분명</th><th>중국성분명</th><th>CAS No.</th><th class="col-act"></th></tr></thead>
+                  <tbody>
+                    <tr *ngFor="let r of pickerRows; let i = index" [class.selected]="i===pickerPointer" (dblclick)="addPicked(r)">
+                      <td>{{ r.inci_name }}</td>
+                      <td>{{ r.korean_name }}</td>
+                      <td>{{ r.chinese_name || '' }}</td>
+                      <td>{{ r.cas_no || '' }}</td>
+                      <td class="col-act"><button class="btn mini filled-light" (click)="addPicked(r)">추가</button></td>
+                    </tr>
+                    <tr *ngIf="pickerRows.length===0"><td colspan="5" class="empty">검색 결과가 없습니다.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <!-- 확인 로그 영역 -->
+          <div class="verifier logs-wrap">
+            <div class="logs">
+              <div class="log-item" *ngFor="let l of verifyLogs; let i = index">
+                {{ i+1 }}차 확인: {{ l.user }} · {{ l.time }}
+                <button class="log-x" *ngIf="isAdmin" title="확인 취소" (click)="removeVerify(i)">×</button>
+              </div>
+            </div>
+          </div>
+        </ng-container>
+
+        <!-- 투입품목/자재 탭 내용 -->
+        <ng-container *ngIf="activeTab==='materials'">
+          <!-- 좌측 품목선택/품목정보는 왼쪽 aside 그대로 노출되므로 여기서는 테이블과 버튼만 표시 -->
           <div class="toolbar">
             <div class="title">투입품목/자재</div>
             <div class="spacer"></div>
@@ -183,7 +194,7 @@ import { AuthService } from '../../services/auth.service';
 
           <!-- 자재 피커 모달 -->
           <div class="modal-backdrop" *ngIf="matPickerOpen" (click)="closeMatPicker()"></div>
-          <div class="modal" *ngIf="matPickerOpen" (click)="$event.stopPropagation()" [style.top.px]="modalTop" [style.left.px]="modalLeft" [style.transform]="'none'">
+          <div class="modal" *ngIf="matPickerOpen" (click)="$event.stopPropagation()" [style.top.px]="modalTop" [style.left.px]="modalLeft" [style.maxHeight.px]="modalMaxHeight" [style.transform]="'none'">
             <div class="modal-head" (mousedown)="startDrag($event)">
               <b>자재 선택</b>
               <div class="spacer"></div>
@@ -222,7 +233,7 @@ import { AuthService } from '../../services/auth.service';
               </div>
             </div>
           </div>
-        </div>
+        </ng-container>
       </div>
     </section>
 
@@ -230,13 +241,13 @@ import { AuthService } from '../../services/auth.service';
   </div>
   `,
   styles: [`
+    .form-page{ padding:10px 12px; }
     .page-head{ display:flex; align-items:center; justify-content:flex-start; margin-bottom:6px; }
     .page-head h2{ margin:0; font-size:24px; font-weight:800; }
     .page-head .sub{ font-size:16px; font-weight:700; margin-left:6px; color:#6b7280; }
     .tabs{ display:flex; gap:6px; border-bottom:1px solid #e5e7eb; margin:16px 0 8px; }
     .tab{ height:30px; padding:0 12px; border:1px solid #e5e7eb; border-bottom:none; border-top-left-radius:8px; border-top-right-radius:8px; background:#f9fafb; cursor:pointer; font-size:12px; }
     .tab.active{ background:#fff; border-color:#d1d5db; font-weight:700; }
-    .form-page{ padding:10px 12px; }
     .form-header{ display:flex; align-items:center; justify-content:space-between; position:sticky; top:10px; background:#fff; z-index:5; padding:6px 0; }
     .actions{ display:flex; gap:8px; align-items:center; }
     .btn{ height:28px; padding:0 10px; border-radius:8px; border:1px solid #d1d5db; background:#fff; cursor:pointer; font-size:12px; }
@@ -261,7 +272,9 @@ import { AuthService } from '../../services/auth.service';
     .row-3{ display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap:10px; align-items:end; }
     .row-1{ display:grid; grid-template-columns:1fr; gap:12px; margin-top:10px; }
     .field{ display:flex; flex-direction:column; gap:6px; }
-    input, textarea{ width:100%; box-sizing:border-box; border:1px solid #e5e7eb; border-radius:8px; padding:6px 8px; font-size:13px; }
+    input, textarea{ width:100%; box-sizing:border-box; border:1px solid #e5e7eb; border-radius:8px; padding:6px 8px; font-size:13px; display:flex; align-items:center; }
+    input{ height:32px; line-height:32px; }
+    textarea{ min-height:32px; padding-top:6px; padding-bottom:6px; display:flex; align-items:center; }
     .meta{ margin-top:8px; padding:6px 8px; border-top:1px dashed #e5e7eb; color:#6b7280; font-size:11px; }
     .notice{ margin:8px 0 0; padding:8px 10px; border:1px solid #bbf7d0; background:#ecfdf5; color:#065f46; border-radius:10px; font-size:12px; }
     /* 중단 조성성분 영역을 메인으로 보이도록 간격 조정 */
@@ -280,9 +293,9 @@ import { AuthService } from '../../services/auth.service';
     .left-card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.06); flex:1; }
     .pick-card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.06); padding:8px; margin-bottom:10px; }
     .right-main{ min-height:420px; min-width:0; }
-    .comp-wrap .toolbar{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+    .comp-wrap .toolbar, .right-main .toolbar{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
     .comp-wrap .toolbar .title{ font-weight:700; }
-    .comp-wrap .toolbar .spacer{ flex:1; }
+    .comp-wrap .toolbar .spacer, .right-main .toolbar .spacer{ flex:1; }
     .status{ font-size:12px; }
     .status.saved{ color:#2563eb; }
     .status.unsaved{ color:#f97316; }
@@ -303,18 +316,26 @@ import { AuthService } from '../../services/auth.service';
     tr.selected{ background:#f0f9ff; }
     .empty{ text-align:center; color:#9ca3af; }
     .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.25); z-index:1000; }
-    .modal{ position:fixed; top:20vh; left:50%; transform:translateX(-50%); width:min(920px, 92vw); background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.18); z-index:1001; }
+    .modal{ position:fixed; top:20vh; left:50%; transform:translateX(-50%); width:min(1000px, 90vw); background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.18); z-index:1001; max-height:72vh; display:flex; flex-direction:column; }
     .modal-head{ display:flex; align-items:center; gap:8px; padding:10px; border-bottom:1px solid #e5e7eb; }
-    .modal-body{ padding:10px; }
+    .modal-body{ padding:10px; overflow:hidden; }
     .modal .search-bar{ display:flex; gap:8px; margin-bottom:8px; }
-    .modal .grid td:first-child{ white-space:normal; word-break:break-word; }
-    .product-picker{ margin-top:10px; }
+    .modal .table-scroll.small{ max-height: calc(50vh - 70px); overflow:auto; }
+    /* Material picker column sizing: narrow code/spec, widen name */
+    .modal .grid thead th:nth-child(1), .modal .grid tbody td:nth-child(1){ width:120px; }
+    .modal .grid thead th:nth-child(3), .modal .grid tbody td:nth-child(3){ width:120px; }
+    .modal .grid td:nth-child(2){ white-space:normal; word-break:break-word; }
+    .product-picker{ margin-top:10px; position:relative; }
     .product-picker .picker-label{ display:block; font-size:11px; color:#6b7280; margin-bottom:4px; }
     .product-picker .picker-input{ width:100%; box-sizing:border-box; border:1px solid #e5e7eb; border-radius:8px; padding:6px 8px; font-size:12px; }
-    .product-picker .picker-list{ list-style:none; margin:6px 0 0; padding:0; max-height:180px; overflow:auto; border:1px solid #eef2f7; border-radius:8px; }
-    .product-picker .picker-list li{ padding:6px 8px; cursor:pointer; }
+    .product-picker .picker-list{ list-style:none; margin:6px 0 0; padding:0; max-height:180px; overflow:auto; border:1px solid #eef2f7; border-radius:8px; position:absolute; left:0; right:0; top:56px; background:#fff; z-index:20; box-shadow:0 8px 20px rgba(0,0,0,0.08); }
+    .product-picker .picker-list li{ padding:6px 8px; cursor:pointer; font-size:12px; }
     .product-picker .picker-list li.selected{ background:#eef6ff; }
     .product-picker .picker-list li:hover{ background:#f3f4f6; }
+    .product-picker .picker-list .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; position:relative; top:-1px; }
+    .product-picker .picker-list .dot.red{ background:#ef4444; }
+    .product-picker .picker-list .dot.orange{ background:#f59e0b; }
+    .product-picker .picker-list .dot.blue{ background:#3b82f6; }
     /* Responsive tweaks */
     @media (max-width: 1024px){
       .comp-layout{ grid-template-columns: 320px 1fr; gap:20px; }
@@ -325,6 +346,7 @@ import { AuthService } from '../../services/auth.service';
       .form-body.ro .grid-ro{ grid-template-columns: 1fr; }
     }
     .verifier{ margin-top:10px; display:flex; align-items:center; gap:12px; }
+    .verifier.top{ margin:0 0 8px; }
     .verifier .logs{ color:#6b7280; font-size:11px; }
     .verifier .log-item{ position:relative; padding-right:14px; }
     .verifier .log-x{ margin-left:6px; border:none; background:transparent; color:#9ca3af; cursor:pointer; font-size:12px; line-height:1; padding:0 2px; }
@@ -344,7 +366,7 @@ export class ProductFormComponent implements OnInit {
   // Per-user persistence keying
   private uid: string | null = null;
   // Tabs
-  activeTab: 'general' | 'extra' | 'impurity' | 'composition' | 'files' = 'composition';
+  activeTab: 'general' | 'extra' | 'impurity' | 'composition' | 'files' | 'materials' = 'composition';
   compositions: Array<{ id?: string; product_id?: string; ingredient_id: string; percent?: number | null; note?: string | null; inci_name?: string; korean_name?: string; chinese_name?: string; cas_no?: string }> = [];
   notice = signal<string | null>(null);
   private saveTimer: any = null;
@@ -368,10 +390,13 @@ export class ProductFormComponent implements OnInit {
   private pickerPointerMoved = false;
   // Product picker
   productQuery = '';
-  productResults: Array<{ id: string; product_code: string; name_kr?: string; spec?: string; specification?: string }> = [];
+  productResults: Array<{ id: string; product_code: string; name_kr?: string; spec?: string; specification?: string; status?: 'red'|'orange'|'blue' }> = [];
   productPointer = 0;
+  @ViewChild('pickerRef') pickerRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('pickerList') pickerList!: ElementRef<HTMLUListElement>;
   modalTop = 0;
-  modalLeft = Math.round(window.innerWidth/2 - 460); // 920px 모달 가정, 중앙 정렬 좌표로 시작
+  modalLeft = Math.round(window.innerWidth/2 - 460); // 초기 중앙 정렬 좌표
+  modalMaxHeight = Math.round(window.innerHeight * 0.5); // 기본은 화면 중간(50vh)
   dragging = false; private dragOffsetX = 0; private dragOffsetY = 0;
 
   // Materials state
@@ -413,7 +438,7 @@ export class ProductFormComponent implements OnInit {
     }
     // Restore last visited tab
     const savedTab = localStorage.getItem('product.form.activeTab');
-    if (savedTab === 'composition' || savedTab === 'extra') this.activeTab = savedTab as any;
+    if (savedTab === 'composition' || savedTab === 'extra' || savedTab === 'materials') this.activeTab = savedTab as any;
     // If no saved tab, attempt to read from current open tab title (keeps continuity from app-shell)
     // Restore unsaved UI state (remarks/compositions) snapshot for continuity
     const stateKey = this.stateKey();
@@ -439,7 +464,7 @@ export class ProductFormComponent implements OnInit {
       this.saved = Array.isArray(this.compositions) && this.compositions.length>0;
     }catch{}
   }
-  setTab(tab: 'composition' | 'extra'){ this.activeTab = tab; localStorage.setItem('product.form.activeTab', tab); }
+  setTab(tab: 'composition' | 'materials' | 'extra'){ this.activeTab = tab; localStorage.setItem('product.form.activeTab', tab); }
   addComposition(){ this.compositions.push({ ingredient_id: '', percent: null, note: '' }); }
   addCompositionAndFocus(){ this.addComposition(); setTimeout(()=>{ const last = document.querySelector('input[type="number"]') as HTMLInputElement|null; last?.focus(); }, 0); }
   async removeComposition(row: any){ if (row?.id){ await this.erpData.deleteProductComposition(row.id); } this.compositions = this.compositions.filter(r => r !== row); this.saveStateSnapshot(); }
@@ -484,15 +509,19 @@ export class ProductFormComponent implements OnInit {
   // Percent sum helpers
   private percentTotalRaw(){ return this.compositions.reduce((a,c)=> a + (Number(c.percent)||0), 0); }
   percentSum(){
-    // Backward-compat function (kept for other uses). Returns truncated to 6 decimals
+    // Round to 6 decimals and snap to 100 when within epsilon to avoid FP artifacts
     const raw = this.percentTotalRaw();
-    return Math.trunc(raw * 1_000_000) / 1_000_000;
+    const rounded = Math.round(raw * 1_000_000) / 1_000_000;
+    return Math.abs(rounded - 100) < 1e-6 ? 100 : rounded;
   }
   percentSumStr(){
     const v = this.percentSum();
     return String(v);
   }
-  percentIsHundred(){ return Math.round(this.percentTotalRaw() * 1_000_000) / 1_000_000 === 100; }
+  percentIsHundred(){
+    const rounded = Math.round(this.percentTotalRaw() * 1_000_000) / 1_000_000;
+    return Math.abs(rounded - 100) < 1e-6;
+  }
 
   // Ingredient search panel logic
   private ingDebounce: any = null;
@@ -546,15 +575,21 @@ export class ProductFormComponent implements OnInit {
   }
   private updateModalTop(){
     try{
-      const table = (document.querySelector('.table-scroll') as HTMLElement);
-      if (table){
-        const rect = table.getBoundingClientRect();
-        const desired = rect.bottom + 50; // 50px 아래
-        // Clamp to viewport bottom with small margin
-        const maxTop = Math.max(10, window.innerHeight - 100);
-        this.modalTop = Math.min(desired, maxTop);
-      } else { this.modalTop = 200; }
-    }catch{ this.modalTop = 200; }
+      // Product 제목(페이지 상단 헤더)과 같은 y에서 시작하도록 페이지 헤더의 top 기준으로 설정
+      const head = document.querySelector('.page-head') as HTMLElement | null;
+      if (head){
+        const rect = head.getBoundingClientRect();
+        // viewport 기준 top 위치 + 약간의 여백
+        this.modalTop = Math.max(0, Math.round(rect.top + window.scrollY + rect.height + 10));
+      } else {
+        this.modalTop = Math.round(window.scrollY + 80);
+      }
+      // 높이는 화면 중간까지(50vh)
+      this.modalMaxHeight = Math.round(window.innerHeight * 0.5);
+    }catch{
+      this.modalTop = Math.round(window.scrollY + 80);
+      this.modalMaxHeight = Math.round(window.innerHeight * 0.5);
+    }
   }
 
   // Drag handlers for modal
@@ -689,7 +724,19 @@ export class ProductFormComponent implements OnInit {
     const q = (this.productQuery||'').trim();
     if (!q){ this.productResults = []; this.productPointer = 0; return; }
     const { data } = await this.erpData.quickSearchProducts(q);
-    this.productResults = data || [];
+    const base: any[] = data || [];
+    const computeStatus = async (row: any): Promise<'red'|'orange'|'blue'> => {
+      try{
+        const pid = row.id;
+        const { data: comps } = await this.erpData.listProductCompositions(pid) as any;
+        const hasComps = Array.isArray(comps) && comps.length > 0;
+        if (!hasComps) return 'red';
+        const logs = await this.erpData.getProductVerifyLogs(pid);
+        return (Array.isArray(logs) && logs.length>0) ? 'blue' : 'orange';
+      }catch{ return 'red'; }
+    };
+    const tasks = base.map(async (r)=> ({ ...r, status: await computeStatus(r) }));
+    this.productResults = await Promise.all(tasks);
     this.productPointer = 0;
   }
   async pickProduct(p: any){
@@ -701,7 +748,20 @@ export class ProductFormComponent implements OnInit {
   }
 
   // Keyboard helpers for product picker
-  moveProductPointer(delta:number){ const max = this.productResults.length; if (!max) return; this.productPointer = Math.max(0, Math.min(max-1, this.productPointer + delta)); }
+  moveProductPointer(delta:number){
+    const max = this.productResults.length; if (!max) return;
+    this.productPointer = Math.max(0, Math.min(max-1, this.productPointer + delta));
+    // Ensure focused item is visible inside the scroll container
+    try{
+      const list = this.pickerList?.nativeElement; if (!list) return;
+      const item = list.querySelector(`li[data-index='${this.productPointer}']`) as HTMLElement | null;
+      if (!item) return;
+      const itemTop = item.offsetTop; const itemBottom = itemTop + item.offsetHeight;
+      const viewTop = list.scrollTop; const viewBottom = viewTop + list.clientHeight;
+      if (itemTop < viewTop){ list.scrollTop = itemTop - 4; }
+      else if (itemBottom > viewBottom){ list.scrollTop = itemBottom - list.clientHeight + 4; }
+    }catch{}
+  }
   onProductEnter(ev:any){ if (ev?.preventDefault) ev.preventDefault(); const row = this.productResults[this.productPointer]; if (row) this.pickProduct(row); }
   onProductSearchEnter(ev:any){ if (ev?.preventDefault) ev.preventDefault(); this.runProductSearch(); }
   onProductEnterOrSearch(ev:any){
@@ -710,6 +770,21 @@ export class ProductFormComponent implements OnInit {
     this.runProductSearch();
   }
   onProductEsc(ev:any){ if (ev?.preventDefault) ev.preventDefault(); this.productQuery = ''; this.productResults = []; this.productPointer = 0; }
+
+  // Close/clear picker when clicking outside
+  @HostListener('document:click', ['$event'])
+  onDocClick(ev: MouseEvent){
+    try{
+      const host = this.pickerRef?.nativeElement;
+      if (!host) return;
+      const target = ev.target as Node;
+      if (!host.contains(target)){
+        this.productQuery = '';
+        this.productResults = [];
+        this.productPointer = 0;
+      }
+    }catch{}
+  }
 
   async saveCompositions(){
     if (!this.isEditable()) return;
