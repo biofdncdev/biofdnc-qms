@@ -37,6 +37,7 @@ export class ErpDataService {
       return this.client
         .from('products')
         .select('*', { count: 'exact' })
+        .in('item_status', ['사용', '임시'])
         .order('name_kr', { ascending: true })
         .range(from, to) as any;
     }
@@ -61,6 +62,7 @@ export class ErpDataService {
       .from('products')
       .select('*')
       .or(logic)
+      .in('item_status', ['사용', '임시'])
       .order('name_kr', { ascending: true })
       .limit(supersetLimit) as any;
 
@@ -105,6 +107,7 @@ export class ErpDataService {
       .from('products')
       .select('id, product_code, name_kr, name_en, cas_no, spec, specification, keywords_alias, special_notes')
       .or(andLogic)
+      .in('item_status', ['사용', '임시'])
       .limit(500) as any;
     
     const rows = Array.isArray(data) ? data : [];
