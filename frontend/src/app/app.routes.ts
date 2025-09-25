@@ -121,6 +121,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/ingredient/ingredient-form').then(m => m.IngredientFormComponent),
       },
       {
+        path: 'partner',
+        loadComponent: () => import('./pages/partner/partner').then(m => m.PartnerComponent),
+      },
+      {
         path: 'product',
         loadComponent: () => import('./pages/product/product-list').then(m => m.ProductListComponent),
       },

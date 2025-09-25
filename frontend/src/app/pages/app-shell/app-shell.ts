@@ -1,4 +1,4 @@
-import { Component, signal, OnDestroy } from '@angular/core';
+import { Component, signal, OnDestroy, AfterViewInit, ViewChild, ElementRef, HostListener } from '@angular/core';
 // Avoid animations dependency for Netlify build; simple JS/CSS transitions are used
 import { CommonModule } from '@angular/common';
 import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
@@ -31,7 +31,7 @@ import { TabService } from '../../services/tab.service';
   styleUrls: ['./app-shell.scss'],
   animations: []
 })
-export class AppShellComponent implements OnDestroy {
+export class AppShellComponent implements OnDestroy, AfterViewInit {
   selected = signal<string>('home');
   leftOpen = false;
   drawerCompact = false;
@@ -55,8 +55,11 @@ export class AppShellComponent implements OnDestroy {
   isGivaudanAudit = false;
   isAudit = false;
   unread = signal<number>(0);
+  scrollUpEnabled = signal<boolean>(false);
+  scrollDownEnabled = signal<boolean>(false);
   private notifSubscription: any;
   private menuAreaTimer: any = null;
+  @ViewChild('railList') railListRef?: ElementRef<HTMLDivElement>;
 
   constructor(private router: Router, private auth: AuthService, private tabBus: TabService) {
     // Determine admin on boot
@@ -102,6 +105,11 @@ export class AppShellComponent implements OnDestroy {
       this.menus.push(
         // Hide these sections for Audit role
         ...(!this.isGivaudanAudit ? [
+          { key: 'partner', icon: 'supervisor_account', label: 'Partner', submenu: [
+            { label: '거래처 현황', path: '/app/partner' },
+            { label: '거래처 등록', path: '/app/partner?tab=create' },
+            { label: '거래처 평가', path: '/app/partner?tab=evaluation' }
+          ] },
           { key: 'ingredient', icon: 'category', label: 'Ingredient', submenu: [ { label: '성분조회', path: '/app/ingredient' }, { label: '성분등록', path: '/app/ingredient/form' } ] },
           { key: 'product', icon: 'inventory', label: 'Product', submenu: [ { label: '품목정보 일괄 등록', path: '/app/product/update' }, { label: '품목조회', path: '/app/product' }, { label: '품목등록', path: '/app/product/form' }, { label: 'BOM TREE', path: '/app/product/bom-tree' }, { label: '기본서류', path: '/app/product/docs' }, { label: '서류양식', path: '/app/product/doc-templates' } ] },
           { key: 'material', icon: 'eco', label: 'Material', submenu: [
@@ -147,6 +155,7 @@ export class AppShellComponent implements OnDestroy {
     if (this.isAdmin && !this.isViewer) {
       this.menus.push({ key: 'user', icon: 'group', label: 'User', submenu: [ { label: '사용자 관리', path: '/app/admin/roles' } ] });
     }
+    this.scheduleRailUpdate();
   }
 
   private buildRecordSubmenu(){
@@ -409,5 +418,39 @@ export class AppShellComponent implements OnDestroy {
       clearTimeout(this.menuAreaTimer);
       this.menuAreaTimer = null;
     }
+  }
+
+  ngAfterViewInit() {
+    this.scheduleRailUpdate();
+  }
+
+  @HostListener('window:resize')
+  onWindowResize() {
+    this.scheduleRailUpdate();
+  }
+
+  scrollRail(direction: number) {
+    const list = this.railListRef?.nativeElement;
+    if (!list) return;
+    const step = 72; // approx button height + gap
+    list.scrollBy({ top: direction * step, behavior: 'smooth' });
+  }
+
+  onRailScroll() {
+    this.updateRailScrollState();
+  }
+
+  private scheduleRailUpdate() {
+    if (typeof window === 'undefined') return;
+    requestAnimationFrame(() => this.updateRailScrollState());
+  }
+
+  private updateRailScrollState() {
+    const list = this.railListRef?.nativeElement;
+    if (!list) return;
+    const maxScroll = list.scrollHeight - list.clientHeight;
+    const tolerance = 2;
+    this.scrollUpEnabled.set(list.scrollTop > tolerance);
+    this.scrollDownEnabled.set(list.scrollTop < maxScroll - tolerance);
   }
 }
