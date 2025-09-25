@@ -125,6 +125,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/partner/partner').then(m => m.PartnerComponent),
       },
       {
+        path: 'partner/upload',
+        loadComponent: () => import('./pages/partner/partner-upload').then(m => m.PartnerUploadComponent),
+      },
+      {
         path: 'product',
         loadComponent: () => import('./pages/product/product-list').then(m => m.ProductListComponent),
       },

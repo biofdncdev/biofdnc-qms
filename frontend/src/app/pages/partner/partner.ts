@@ -9,7 +9,7 @@ import { CommonModule } from '@angular/common';
   <div class="page">
     <header class="page-header">
       <h2>Partner</h2>
-      <p>구매 · 판매 · 유통 · 브랜드사 등 모든 거래처를 한 곳에서 관리합니다.</p>
+        <p>구매 · 판매 · 유통 · 브랜드사 등 모든 거래처를 한 곳에서 관리합니다.</p>
     </header>
 
     <section class="card-grid">
@@ -20,8 +20,8 @@ import { CommonModule } from '@angular/common';
       <article class="card">
         <h3>업무 바로가기</h3>
         <ul>
-          <li>거래처 등록 및 수정</li>
-          <li>거래처 계약 · 서류 관리</li>
+          <li>거래처 일괄 등록</li>
+          <li>CSV 템플릿 다운로드</li>
           <li>협력사 평가 및 등급 관리</li>
         </ul>
       </article>
