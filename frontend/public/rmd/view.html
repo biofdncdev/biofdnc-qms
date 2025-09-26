@@ -84,13 +84,35 @@
         }catch{ return html; }
       }
 
+      function fixHistoryTables(){
+        try{
+          const tables = content.querySelectorAll('table');
+          tables.forEach(t => {
+            try{
+              const ths = t.querySelectorAll('thead th');
+              if(!ths || !ths.length) return;
+              const headerText = Array.from(ths).map(x => (x.textContent||'').trim()).join('|');
+              if(headerText.includes('제·개정번호') || headerText.includes('제-개정번호') || headerText.includes('제개정번호')){
+                t.classList.add('history');
+                if(!t.querySelector('colgroup')){
+                  const cg = document.createElement('colgroup');
+                  const cols = ths.length;
+                  for(let i=0;i<cols;i++){ const col = document.createElement('col'); col.style.width = (100/cols)+'%'; cg.appendChild(col); }
+                  t.insertBefore(cg, t.firstChild);
+                }
+              }
+            }catch{}
+          });
+        }catch{}
+      }
+
       fetch(path)
         .then(r => { if(!r.ok) throw new Error('notfound'); return r.text(); })
         .then(html => {
           // no fallbacks; rely on primary path only
           return html;
         })
-        .then(html => { html = normalizeDocNumbers(html, id); content.innerHTML = html; loaded = true; host.postMessage({type:'ready'}, '*'); if(initialQ){ highlight(initialQ); } else if(term){ highlight(term); } })
+        .then(html => { html = normalizeDocNumbers(html, id); content.innerHTML = html; loaded = true; fixHistoryTables(); host.postMessage({type:'ready'}, '*'); if(initialQ){ highlight(initialQ); } else if(term){ highlight(term); } })
         .catch(() => {
           content.innerHTML = `<p style=\"color:#c00\">문서를 불러올 수 없습니다. (${id})</p>`; loaded = true; host.postMessage({type:'ready'}, '*');
         });
