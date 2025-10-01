@@ -20,13 +20,17 @@ interface V2Node {
   template: `
   <div class="org-v2" (click)="selected = null">
     <aside class="left">
-      <h3>사용자</h3>
+      <h3>임직원</h3>
+      <div class="user-input">
+        <input [(ngModel)]="newChipName" (keyup.enter)="addChip()" placeholder="이름 입력" />
+        <button class="add-chip-btn" (click)="addChip()">추가</button>
+      </div>
       <div class="user-list">
         <div class="user-chip" *ngFor="let u of users()" 
-             [class.assigned]="u.assigned" 
              draggable="true" 
              (dragstart)="onDragUser($event,u)">
-          {{u.name}}
+          <span class="chip-label">{{u.name}}{{u.assignedDept ? (' : ' + u.assignedDept) : ''}}</span>
+          <button class="chip-remove" (click)="removeChip(u, $event)">×</button>
         </div>
       </div>
     </aside>
@@ -35,8 +39,8 @@ interface V2Node {
           (drop)="dropOutside($event)">
       <!-- 선 연결 버튼 -->
       <div class="toolbar">
-        <button class="line-btn" (click)="drawLines()" [class.active]="showLines()">
-          선 연결
+        <button class="line-btn" (click)="onSave()">
+          저장
         </button>
       </div>
       <div class="chart-container" #chartContainer>
@@ -54,7 +58,7 @@ interface V2Node {
         <!-- CEO 노드 -->
         <div class="ceo-level">
           <div class="node ceo" 
-               data-node-id="ceo"
+               [attr.data-node-id]="ceo.id"
                [class.selected]="selected?.id === 'ceo'"
                (click)="select(ceo, $event)" 
                (dragover)="allow($event)" 
@@ -224,23 +228,14 @@ interface V2Node {
       color: #475569;
     }
     
-    .user-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
+    .user-input { display:flex; gap:8px; margin-bottom: 8px; align-items:center; }
+    .user-input input { width: 0; flex: 1 1 auto; min-width: 0; height:32px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px; }
+    .user-input .add-chip-btn { height:32px; padding:0 12px; border:1px solid #cbd5e1; background:#f8fafc; border-radius:8px; cursor:pointer; white-space:nowrap; }
+    .user-list { display: flex; flex-direction: column; gap: 6px; }
     
-    .user-chip {
-      display: block;
-      padding: 6px 12px;
-      border-radius: 8px;
-      background: #e2e8f0;
-      color: #475569;
-      cursor: move;
-      transition: all 0.2s;
-      font-size: 12px;
-      text-align: center;
-    }
+    .user-chip { display:flex; align-items:center; justify-content:space-between; padding: 4px 6px; border-radius: 8px; background: #e2e8f0; color: #475569; cursor: move; transition: all 0.2s; font-size: 12px; }
+    .user-chip .chip-label { pointer-events:none; }
+    .user-chip .chip-remove { border:none; background:transparent; cursor:pointer; font-size:14px; padding:0 4px; }
     
     .user-chip:hover {
       background: #cbd5e1;
@@ -271,7 +266,7 @@ interface V2Node {
     .ceo-level {
       display: flex;
       justify-content: center;
-      margin-bottom: 55px;
+      margin-bottom: 50px;
       margin-top: 50px;
     }
     
@@ -650,6 +645,9 @@ interface V2Node {
     }
 
     .line-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       padding: 10px 20px;
       background: #fff;
       border: 2px solid #e2e8f0;
@@ -702,13 +700,12 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
   connectionLines = signal<Array<{path: string}>>([]);
   svgWidth = 2000;
   svgHeight = 2000;
+  newChipName = '';
 
   constructor(private orgService: OrganizationService,
     private auth: AuthService) {}
   
-  ngAfterViewInit() {
-    // Initial setup if needed
-  }
+  
 
   get ceo(): V2Node { return this.nodes()[0]; }
   specials(): V2Node[] { return this.nodes().filter(n => n.kind==='special'); }
@@ -716,9 +713,60 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
   childrenOf(parent: V2Node): V2Node[] { return this.nodes().filter(n => n.kind==='dept' && n.parentId===parent.id); }
 
   async ngOnInit(){
-    const res:any = await this.auth.listUsers();
-    const list:any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-    this.users.set((list||[]).map(u=>({ id:u.id, name:u.name||u.email, assigned:false })));
+    // 1) 로컬 스냅샷 즉시 반영 (있다면)
+    try{
+      const snap = localStorage.getItem('orgChartV2');
+      if(snap){
+        const s = JSON.parse(snap);
+        if(Array.isArray(s.nodes) && s.nodes.length){
+          this.nodes.set(s.nodes.map((n:any)=>({ id:n.id, name:n.name, kind:n.kind, parentId:n.parent_id||undefined, level:n.level, members:[] })));
+        }
+        if(Array.isArray(s.members)){
+          this.users.set(s.members.map((m:any)=>({ id:m.id, name:m.name, assignedDept:this.getNodeNameById(m.assigned_node_id) })));
+        }
+        setTimeout(()=> this.drawLines(), 0);
+      }
+    } catch {}
+
+    // 2) DB에서 최신 상태 로드
+    await this.loadFromDb();
+  }
+
+  async ngAfterViewInit(){
+    // View 초기화 후 한 번 더 라인 계산
+    setTimeout(()=> this.drawLines(), 0);
+  }
+
+  private async loadFromDb(){
+    try{
+      const res:any = await this.orgService.loadOrgChart();
+      const nodes:any[] = Array.isArray(res?.nodes) ? res.nodes : [];
+      const members:any[] = Array.isArray(res?.members) ? res.members : [];
+      if(nodes.length){
+        this.nodes.set(nodes.map(n=>({ id:n.id, name:n.name, kind:n.kind, parentId:n.parent_id||undefined, level:n.level, members:[] })));
+        // 멤버를 노드에 주입
+        const byId: Record<string, any> = {};
+        this.nodes().forEach(n=> byId[n.id] = n);
+        members.forEach(m=>{
+          const node = byId[m.assigned_node_id];
+          if(node){
+            if(!Array.isArray(node.members)) node.members = [];
+            if(!node.members.includes(m.name)) node.members.push(m.name);
+          }
+        });
+      } else {
+        this.nodes.set([{ id:'ceo', name:'대표이사', kind:'ceo', level:0, members:[] } as any]);
+      }
+      this.users.set(members.map(m=>({ id:m.id, name:m.name, assignedDept:this.getNodeNameById(m.assigned_node_id) })));
+
+      // 로컬 스냅샷도 최신으로 갱신
+      try{ localStorage.setItem('orgChartV2', JSON.stringify({ nodes, members })); }catch{}
+
+      setTimeout(()=> this.drawLines(), 0);
+    } catch {
+      // 실패 시에도 기본 라인 그리기 시도
+      setTimeout(()=> this.drawLines(), 0);
+    }
   }
 
   select(n:V2Node, e?: Event){ 
@@ -733,6 +781,24 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
   onDragUser(e:DragEvent,u:any){ 
     this.dragUser=u; 
     this.dragFrom=null; 
+  }
+
+  addChip(){
+    const name = (this.newChipName||'').trim();
+    if(!name) return;
+    const newItem = { id: this.generateId(), name };
+    this.users.update(arr => [...arr, newItem]);
+    this.newChipName = '';
+  }
+
+  removeChip(u:any, e:Event){
+    e.stopPropagation();
+    this.users.update(arr => arr.filter(x => x !== u));
+    // 사용자가 리스트에서 제거되면 끌어놓기 진행 중 상태도 초기화
+    if(this.dragUser && this.dragUser === u){
+      this.dragUser = null;
+      this.dragFrom = null;
+    }
   }
   
   onDragMember(e:DragEvent,m:string,from:V2Node){ 
@@ -749,6 +815,9 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     if(!target.members.includes(this.dragUser.name)) {
       target.members.push(this.dragUser.name);
     }
+    // 칩의 부서 표시 업데이트
+    const deptLabel = target.name || '';
+    this.users.update(list => list.map(u => u === this.dragUser ? { ...u, assignedDept: deptLabel } : u));
     this.dragUser=null; 
     this.dragFrom=null;
     // 드래그 후 선 숨김 및 초기화
@@ -964,10 +1033,8 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
       const containerRect = container.getBoundingClientRect();
 
       // helper: get node center (by id)
-      const getCenter = (id: string) => {
-        const el = id === 'ceo' 
-          ? container.querySelector(`[data-node-id="ceo"]`)
-          : container.querySelector(`[data-node-id="${id}"]`);
+    const getCenter = (id: string) => {
+      const el = container.querySelector(`[data-node-id="${id}"]`);
         if (!el) return null;
         const r = (el as HTMLElement).getBoundingClientRect();
         return { x: r.left - containerRect.left + r.width/2, top: r.top - containerRect.top, bottom: r.bottom - containerRect.top };
@@ -1006,17 +1073,67 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
       };
 
       // start from CEO
-      const ceoC = getCenter('ceo');
+      const ceoC = getCenter(this.ceo.id);
       if (ceoC) {
         // small stem under CEO
         const stemY = ceoC.bottom + 10;
         lines.push({ path: `M ${ceoC.x} ${ceoC.bottom} L ${ceoC.x} ${stemY}` });
       }
-      drawToChildren('ceo');
+      drawToChildren(this.ceo.id);
 
       this.connectionLines.set(lines);
       this.showLines.set(true);
     }, 100);
+  }
+
+  async onSave(){
+    // 1) collect nodes
+    const isUuid = (s:string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+    const idMapDb: Record<string,string> = {};
+    const uiNodes = this.nodes();
+    // Generate DB ids for all UI nodes
+    uiNodes.forEach(n => { idMapDb[n.id] = isUuid(n.id) ? n.id : this.generateId(); });
+    const nodesPayload = uiNodes.map((n, idx) => ({
+      id: idMapDb[n.id],
+      name: n.name,
+      kind: n.kind,
+      parent_id: n.parentId ? (idMapDb[n.parentId] || null) : null,
+      level: n.level,
+      order_index: idx,
+    }));
+
+    // 2) collect members from UI chips and their assigned departments
+    const membersPayload = this.users().map(u => ({
+      id: (u.id && isUuid(u.id)) ? u.id : this.generateId(),
+      name: u.name,
+      assigned_node_id: (()=>{ const uiId = this.findNodeIdByName(u.assignedDept); return uiId ? idMapDb[uiId] : null; })()
+    }));
+
+    await this.orgService.saveOrgChart({ nodes: nodesPayload, members: membersPayload });
+    // 로컬 스냅샷 저장
+    try{ localStorage.setItem('orgChartV2', JSON.stringify({ nodes: nodesPayload, members: membersPayload })); }catch{}
+    // 저장 후 즉시 DB에서 재로드
+    await this.loadFromDb();
+
+    // 3) save current connector rendering (implicit via nodes). Re-draw for visual feedback
+    this.drawLines();
+  }
+
+  private findNodeIdByName(name?: string | null): string | undefined {
+    if(!name) return undefined;
+    const found = this.nodes().find(n => n.name === name);
+    return found?.id;
+  }
+
+  private getNodeNameById(id?: string | null): string | undefined {
+    if(!id) return undefined;
+    const found = this.nodes().find(n => n.id === id);
+    return found?.name;
+  }
+
+  private generateId(): string {
+    try { return (crypto as any).randomUUID(); } catch { /* no-op */ }
+    return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
   }
 }
 

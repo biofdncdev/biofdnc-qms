@@ -125,4 +125,37 @@ export class OrganizationService {
       return { data: payload } as any;
     }
   }
+
+  // ===== Org Chart (V2) =====
+  async loadOrgChart() {
+    const { data: nodes } = await this.client
+      .from('org_chart_nodes')
+      .select('id,name,kind,parent_id,level,order_index')
+      .order('level', { ascending: true })
+      .order('order_index', { ascending: true });
+
+    const { data: members } = await this.client
+      .from('org_chart_members')
+      .select('id,name,assigned_node_id');
+
+    return {
+      nodes: Array.isArray(nodes) ? nodes : [],
+      members: Array.isArray(members) ? members : [],
+    } as any;
+  }
+
+  async saveOrgChart(payload: {
+    nodes: Array<{ id: string; name: string; kind: string; parent_id?: string | null; level: number; order_index: number }>;
+    members: Array<{ id: string; name: string; assigned_node_id?: string | null }>;
+  }) {
+    // Replace-all strategy to avoid stale rows
+    // Replace data with upsert to preserve ids across saves
+    if (payload.nodes && payload.nodes.length) {
+      await this.client.from('org_chart_nodes').upsert(payload.nodes, { onConflict: 'id' });
+    }
+    if (payload.members && payload.members.length) {
+      await this.client.from('org_chart_members').upsert(payload.members, { onConflict: 'id' });
+    }
+    return { data: true } as any;
+  }
 }
