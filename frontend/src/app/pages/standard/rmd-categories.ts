@@ -40,7 +40,7 @@ interface Cat { id: string; name: string; doc_prefix: string; department_code?: 
         <div>{{ c.company_code || '-' }}</div>
         <div>{{ c.doc_prefix }}</div>
         <div>{{ c.name }}</div>
-        <div><button class="btn" (click)="openEdit(c)" [disabled]="busy()">수정</button></div>
+        <div><button class="btn secondary" (click)="openEdit(c)" [disabled]="busy()">수정</button></div>
         <div><button class="btn danger" (click)="remove(c)" [disabled]="busy()">삭제</button></div>
       </div>
       <div *ngIf="!cats().length" style="padding:12px; color:#94a3b8;">등록된 카테고리가 없습니다.</div>
@@ -76,8 +76,43 @@ interface Cat { id: string; name: string; doc_prefix: string; department_code?: 
   </div>
   `,
   styles: [`
-    .btn{ background:#2563eb; color:#fff; border:0; border-radius:8px; cursor:pointer; }
-    .btn.danger{ background:#ef4444; }
+    .btn{ 
+      background:#3b82f6; 
+      color:#fff; 
+      border:2px solid #3b82f6; 
+      border-radius:8px; 
+      cursor:pointer;
+      font-weight:500;
+      transition: all 0.2s;
+      padding: 6px 12px;
+      height: 32px;
+    }
+    .btn:hover:not(:disabled){ 
+      background:#2563eb; 
+      border-color:#2563eb;
+    }
+    .btn:disabled{ 
+      opacity:0.5; 
+      cursor:not-allowed;
+    }
+    .btn.secondary{ 
+      background:#fff; 
+      color:#475569; 
+      border:2px solid #cbd5e1;
+    }
+    .btn.secondary:hover:not(:disabled){ 
+      background:#f8fafc; 
+      border-color:#94a3b8;
+    }
+    .btn.danger{ 
+      background:#fff; 
+      color:#dc2626; 
+      border:2px solid #fca5a5;
+    }
+    .btn.danger:hover:not(:disabled){ 
+      background:#fef2f2; 
+      border-color:#f87171;
+    }
     label{ font-size:12px; color:#475569; margin-bottom:4px; }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
