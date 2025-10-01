@@ -148,8 +148,26 @@ export class OrganizationService {
     nodes: Array<{ id: string; name: string; kind: string; parent_id?: string | null; level: number; order_index: number }>;
     members: Array<{ id: string; name: string; assigned_node_id?: string | null }>;
   }) {
-    // Replace-all strategy to avoid stale rows
     // Replace data with upsert to preserve ids across saves
+    // Clean up rows that are no longer present in the payload
+    try {
+      const { data: existingMembers } = await this.client.from('org_chart_members').select('id');
+      const incomingMemberIds = new Set((payload.members || []).map(m => m.id));
+      const toDeleteMembers = (existingMembers || []).filter((m: any) => !incomingMemberIds.has(m.id)).map((m: any) => m.id);
+      if (toDeleteMembers.length) {
+        await this.client.from('org_chart_members').delete().in('id', toDeleteMembers);
+      }
+    } catch {}
+
+    try {
+      const { data: existingNodes } = await this.client.from('org_chart_nodes').select('id');
+      const incomingNodeIds = new Set((payload.nodes || []).map(n => n.id));
+      const toDeleteNodes = (existingNodes || []).filter((n: any) => !incomingNodeIds.has(n.id)).map((n: any) => n.id);
+      if (toDeleteNodes.length) {
+        await this.client.from('org_chart_nodes').delete().in('id', toDeleteNodes);
+      }
+    } catch {}
+
     if (payload.nodes && payload.nodes.length) {
       await this.client.from('org_chart_nodes').upsert(payload.nodes, { onConflict: 'id' });
     }

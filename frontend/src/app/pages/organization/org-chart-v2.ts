@@ -477,6 +477,7 @@ interface V2Node {
       font-size: 20px;
       transition: all 0.2s;
       box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+      z-index: 10;
     }
     
     .add-btn:hover {
@@ -484,9 +485,9 @@ interface V2Node {
       transform: translateY(-50%) scale(1.1);
     }
 
-    .add-btn.small { width: 28px; height: 28px; font-size: 18px; }
+    .add-btn.small { width: 28px; height: 28px; font-size: 18px; z-index: 10; }
 
-    .mini-btn { width:24px; height:24px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(0,0,0,.15); background:#fff; position:absolute; right:-28px; }
+    .mini-btn { width:24px; height:24px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(0,0,0,.15); background:#fff; position:absolute; right:-28px; z-index: 11; }
     .mini-btn.up { color:#2563eb; }
     .mini-btn.down { color:#dc2626; }
     .action-edit { top: calc(50% - 36px); transform: translateY(-50%); }
