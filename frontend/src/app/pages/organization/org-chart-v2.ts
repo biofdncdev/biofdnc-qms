@@ -20,10 +20,12 @@ interface V2Node {
   template: `
   <div class="org-v2" (click)="selected = null">
     <aside class="left">
-      <h3>임직원</h3>
-      <div class="user-input">
+      <div class="sticky-header">
+        <h3>임직원</h3>
+        <div class="user-input">
         <input [(ngModel)]="newChipName" (keyup.enter)="addChip()" placeholder="이름 입력" />
         <button class="add-chip-btn" (click)="addChip()">추가</button>
+        </div>
       </div>
       <div class="user-list">
         <div class="user-chip" *ngFor="let u of users()" 
@@ -31,8 +33,15 @@ interface V2Node {
              (dragstart)="onDragUser($event,u)"
              (dragover)="onDragOverUserChip($event)"
              (drop)="onDropUserChip($event,u)">
-          <span class="chip-label">{{u.name}}{{u.assignedDept ? (' : ' + u.assignedDept) : ''}}</span>
-          <button class="chip-remove" (click)="removeChip(u, $event)">×</button>
+          <span class="chip-label">{{u.name}}{{getAssignedDeptsLabel(u)}}</span>
+          <span class="chip-actions">
+            <button class="chip-edit" title="이름 수정" (click)="editChip(u, $event)" aria-label="이름 수정">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <path d="M3 17.25V21h3.75L19.81 7.94l-3.75-3.75L3 17.25zM21.41 6.34c.39-.39.39-1.02 0-1.41L19.07 2.59a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+              </svg>
+            </button>
+            <button class="chip-remove" title="삭제" (click)="removeChip(u, $event)">×</button>
+          </span>
         </div>
       </div>
     </aside>
@@ -57,25 +66,49 @@ interface V2Node {
                 stroke="#cbd5e1" 
                 stroke-width="2"/>
         </svg>
-        <!-- CEO 노드 -->
-        <div class="ceo-level">
-          <div class="node ceo" 
-               [attr.data-node-id]="ceo.id"
-               [class.selected]="selected?.id === 'ceo'"
-               (click)="select(ceo, $event)" 
+        <!-- 대표이사 노드 -->
+        <div class="chairman-level">
+          <div class="node chairman" 
+               [attr.data-node-id]="chairman.id"
+               [class.selected]="selected?.id === chairman.id"
+               (click)="select(chairman, $event)" 
                (dragover)="allow($event)" 
-               (drop)="drop($event, ceo)">
-            <div class="title">대표이사</div>
+               (drop)="drop($event, chairman)">
+            <div class="title">{{chairman.name}}</div>
             <div class="members" 
                  (dragover)="allow($event)" 
-                 (drop)="drop($event, ceo)">
-              <span class="chip" *ngFor="let m of ceo.members" 
+                 (drop)="drop($event, chairman)">
+              <span class="chip" *ngFor="let m of chairman.members" 
                     draggable="true" 
-                    (dragstart)="onDragMember($event, m, ceo)">
+                    (dragstart)="onDragMember($event, m, chairman)">
                 {{m}}
               </span>
             </div>
-            <button class="add-btn" *ngIf="selected?.id === ceo.id" (click)="openAddModal($event)">
+            <button class="add-btn" *ngIf="selected?.id === chairman.id" (click)="openAddModal($event)">
+              <span>+</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 부사장 노드 -->
+        <div class="vice-chairman-level">
+          <div class="node vice-chairman" 
+               [attr.data-node-id]="viceChairman.id"
+               [class.selected]="selected?.id === viceChairman.id"
+               (click)="select(viceChairman, $event)" 
+               (dragover)="allow($event)" 
+               (drop)="drop($event, viceChairman)">
+            <div class="title">{{viceChairman.name}}</div>
+            <div class="members" 
+                 (dragover)="allow($event)" 
+                 (drop)="drop($event, viceChairman)">
+              <span class="chip" *ngFor="let m of viceChairman.members" 
+                    draggable="true" 
+                    (dragstart)="onDragMember($event, m, viceChairman)">
+                {{m}}
+              </span>
+            </div>
+            <button class="add-btn" *ngIf="selected?.id === viceChairman.id" (click)="openAddModal($event)">
               <span>+</span>
             </button>
           </div>
@@ -108,7 +141,7 @@ interface V2Node {
 
         <!-- 일반 부서 레벨별 -->
         <div class="dept-levels">
-          <div class="level" *ngFor="let lv of [1]" [attr.data-level]="lv">
+          <div class="level" *ngFor="let lv of [2]" [attr.data-level]="lv">
             <div class="level-container" *ngIf="depts(lv).length > 0">
               <!-- connectors removed -->
               <div class="level-wrapper">
@@ -173,10 +206,9 @@ interface V2Node {
                             </span>
                             <div class="member-drop-end" (dragover)="onDragOverMember($event)" (drop)="onDropMemberEnd($event, c)"></div>
                           </div>
-                          <button class="add-btn" *ngIf="selected?.id === c.id" (click)="openAddModal($event)">
-                            <span>+</span>
-                          </button>
-                          <button class="delete-btn" (click)="deleteNode(c, $event)">🗑</button>
+                          <button class="mini-btn up action-edit" *ngIf="selected?.id === c.id" title="수정" (click)="openRename(c, $event)">✎</button>
+                          <button class="add-btn small action-add" *ngIf="selected?.id === c.id" title="하위 부서 추가" (click)="openAddModal($event)"><span>+</span></button>
+                          <button class="mini-btn down action-del" *ngIf="selected?.id === c.id" title="삭제" (click)="deleteNode(c, $event)">🗑</button>
                         </div>
                       </div>
                     </div>
@@ -215,28 +247,42 @@ interface V2Node {
     
     /* 좌측 사용자 목록 */
     .left {
-      width: 200px;
-      padding: 16px;
+      width: 260px;
       background: #fff;
       border-right: 1px solid #e2e8f0;
-      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
     
-    .left h3 {
-      margin: 0 0 12px;
-      font-size: 14px;
-      font-weight: 600;
-      color: #475569;
+    .left h3 { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #475569; }
+    .sticky-header { 
+      position: sticky; 
+      top: 0; 
+      background: #fff; 
+      z-index: 30; 
+      padding: 16px 16px 12px 16px; 
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      flex-shrink: 0;
     }
     
-    .user-input { display:flex; gap:8px; margin-bottom: 8px; align-items:center; }
+    .user-input { display:flex; gap:8px; margin-top: 12px; align-items:center; }
     .user-input input { width: 0; flex: 1 1 auto; min-width: 0; height:32px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px; }
     .user-input .add-chip-btn { height:32px; padding:0 12px; border:1px solid #cbd5e1; background:#f8fafc; border-radius:8px; cursor:pointer; white-space:nowrap; }
-    .user-list { display: flex; flex-direction: column; gap: 6px; }
+    .user-list { 
+      display: flex; 
+      flex-direction: column; 
+      gap: 6px; 
+      padding: 0 16px 16px 16px;
+      overflow-y: auto;
+      flex: 1;
+    }
     
-    .user-chip { display:flex; align-items:center; justify-content:space-between; padding: 4px 6px; border-radius: 8px; background: #e2e8f0; color: #475569; cursor: move; transition: all 0.2s; font-size: 12px; }
+    .user-chip { display:flex; align-items:center; justify-content:space-between; padding: 4px 8px; border-radius: 8px; background: #e2e8f0; color: #475569; cursor: move; transition: all 0.2s; font-size: 12px; white-space: nowrap; }
     .user-chip .chip-label { pointer-events:none; }
-    .user-chip .chip-remove { border:none; background:transparent; cursor:pointer; font-size:14px; padding:0 4px; }
+    .user-chip .chip-actions { display:flex; gap:4px; }
+    .user-chip .chip-remove, .user-chip .chip-edit { border:none; background:transparent; cursor:pointer; font-size:14px; padding:0 4px; }
+    .user-chip .chip-edit { color:#000; transform: none; padding:0 2px; }
     
     .user-chip:hover {
       background: #cbd5e1;
@@ -261,9 +307,27 @@ interface V2Node {
       min-height: 600px;
       position: relative;
       padding: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
     
-    /* CEO 레벨 */
+    /* 대표이사 레벨 */
+    .chairman-level {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 40px;
+    }
+    
+    /* 부사장 레벨 */
+    .vice-chairman-level {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 50px;
+    }
+    
+    /* CEO 레벨 (하위 호환) */
     .ceo-level {
       display: flex;
       justify-content: center;
@@ -378,6 +442,7 @@ interface V2Node {
     
     .node.selected {
       box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+      z-index: 50;
     }
     
     .node .title {
@@ -420,7 +485,47 @@ interface V2Node {
       margin: 0 auto;
     }
     
-    /* CEO 노드 */
+    /* 대표이사 노드 */
+    .chairman {
+      background: linear-gradient(135deg, #93c5fd, #60a5fa);
+      color: #1e3a8a;
+      min-width: 140px;
+      border: 2px solid #dbeafe;
+    }
+    
+    .chairman .title {
+      border-color: #bfdbfe;
+      color: #1e3a8a;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    
+    .chairman .chip {
+      background: rgba(191, 219, 254, 0.6);
+      color: #1e40af;
+    }
+    
+    /* 부사장 노드 */
+    .vice-chairman {
+      background: linear-gradient(135deg, #a5b4fc, #818cf8);
+      color: #312e81;
+      min-width: 140px;
+      border: 2px solid #e0e7ff;
+    }
+    
+    .vice-chairman .title {
+      border-color: #c7d2fe;
+      color: #312e81;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    
+    .vice-chairman .chip {
+      background: rgba(199, 210, 254, 0.6);
+      color: #3730a3;
+    }
+    
+    /* CEO 노드 (하위 호환) */
     .ceo {
       background: linear-gradient(135deg, #3b82f6, #2563eb);
       color: #fff;
@@ -485,13 +590,15 @@ interface V2Node {
       transform: translateY(-50%) scale(1.1);
     }
 
-    .add-btn.small { width: 28px; height: 28px; font-size: 18px; z-index: 10; }
+    .add-btn.small { width: 28px; height: 28px; font-size: 18px; z-index: 100; }
 
-    .mini-btn { width:24px; height:24px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(0,0,0,.15); background:#fff; position:absolute; right:-28px; z-index: 11; }
+    .node-actions { position: relative; z-index: 100; }
+    
+    .mini-btn { width:24px; height:24px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(0,0,0,.15); background:#fff; position:absolute; right:-28px; z-index: 100; }
     .mini-btn.up { color:#2563eb; }
     .mini-btn.down { color:#dc2626; }
     .action-edit { top: calc(50% - 36px); transform: translateY(-50%); }
-    .action-add  { top: 50%; transform: translateY(-50%); right:-32px; }
+    .action-add  { top: 50%; transform: translateY(-50%); right:-32px; z-index: 100; }
     .action-del  { top: calc(50% + 36px); transform: translateY(-50%); }
     
     /* 삭제 버튼 */
@@ -701,7 +808,10 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
   @ViewChild('chartContainer') chartContainer!: ElementRef;
   
   users = signal<any[]>([]);
-  nodes = signal<V2Node[]>([{ id:'ceo', name:'대표이사', kind:'ceo', level:0, members:[] }]);
+  nodes = signal<V2Node[]>([
+    { id:'chairman', name:'대표이사', kind:'ceo', level:0, members:[] },
+    { id:'vice-chairman', name:'부사장', kind:'ceo', parentId:'chairman', level:1, members:[] }
+  ]);
   selected: V2Node | null = null;
   newDept = '';
   showAddModal = false;
@@ -718,10 +828,18 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
   
   
 
-  get ceo(): V2Node { return this.nodes()[0]; }
+  get chairman(): V2Node { return this.nodes().find(n => n.id === 'chairman') || this.nodes()[0]; }
+  get viceChairman(): V2Node { return this.nodes().find(n => n.id === 'vice-chairman') || this.nodes()[1]; }
+  get ceo(): V2Node { return this.chairman; }
   specials(): V2Node[] { return this.nodes().filter(n => n.kind==='special'); }
   depts(level:number): V2Node[] { return this.nodes().filter(n => n.kind==='dept' && n.level===level); }
   childrenOf(parent: V2Node): V2Node[] { return this.nodes().filter(n => n.kind==='dept' && n.parentId===parent.id); }
+
+  getAssignedDeptsLabel(user: any): string {
+    const depts = user.assignedDepts || [];
+    if (depts.length === 0) return '';
+    return ' : ' + depts.join(', ');
+  }
 
   async ngOnInit(){
     // 1) 로컬 스냅샷 즉시 반영 (있다면)
@@ -733,7 +851,24 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
           this.nodes.set(s.nodes.map((n:any)=>({ id:n.id, name:n.name, kind:n.kind, parentId:n.parent_id||undefined, level:n.level, members:[] })));
         }
         if(Array.isArray(s.members)){
-          this.users.set(s.members.map((m:any)=>({ id:m.id, name:m.name, assignedDept:this.getNodeNameById(m.assigned_node_id) })));
+          // localStorage에서도 겸직 정보 수집
+          const memberDepts: Record<string, string[]> = {};
+          s.members.forEach((m:any)=>{
+            if(!memberDepts[m.name]) memberDepts[m.name] = [];
+            const nodeName = this.getNodeNameById(m.assigned_node_id);
+            if(nodeName && !memberDepts[m.name].includes(nodeName)) {
+              memberDepts[m.name].push(nodeName);
+            }
+          });
+          const uniqueMembers = Array.from(new Set(s.members.map((m:any) => m.name)) as Set<string>).map((name: string) => {
+            const firstMember = s.members.find((m:any) => m.name === name);
+            return {
+              id: firstMember?.id || this.generateId(),
+              name: name,
+              assignedDepts: memberDepts[name] || []
+            };
+          });
+          this.users.set(uniqueMembers);
         }
         setTimeout(()=> this.drawLines(), 0);
       }
@@ -754,21 +889,53 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
       const nodes:any[] = Array.isArray(res?.nodes) ? res.nodes : [];
       const members:any[] = Array.isArray(res?.members) ? res.members : [];
       if(nodes.length){
-        this.nodes.set(nodes.map(n=>({ id:n.id, name:n.name, kind:n.kind, parentId:n.parent_id||undefined, level:n.level, members:[] })));
-        // 멤버를 노드에 주입
+        this.nodes.set(nodes.map(n=>{
+          // vice-chairman 노드는 항상 '부사장'으로 표시
+          if(n.id === 'vice-chairman') {
+            return { id:n.id, name:'부사장', kind:n.kind, parentId:n.parent_id||undefined, level:n.level, members:[] };
+          }
+          return { id:n.id, name:n.name, kind:n.kind, parentId:n.parent_id||undefined, level:n.level, members:[] };
+        }));
+        // 멤버를 노드에 주입 및 겸직 정보 수집
         const byId: Record<string, any> = {};
         this.nodes().forEach(n=> byId[n.id] = n);
+        
+        // 각 멤버별로 할당된 모든 부서를 추적
+        const memberDepts: Record<string, string[]> = {};
+        
         members.forEach(m=>{
           const node = byId[m.assigned_node_id];
           if(node){
             if(!Array.isArray(node.members)) node.members = [];
             if(!node.members.includes(m.name)) node.members.push(m.name);
+            
+            // 겸직 정보 수집
+            if(!memberDepts[m.name]) memberDepts[m.name] = [];
+            const nodeName = this.getNodeNameById(m.assigned_node_id);
+            if(nodeName && !memberDepts[m.name].includes(nodeName)) {
+              memberDepts[m.name].push(nodeName);
+            }
           }
         });
+        
+        // 중복 제거: 동일한 이름을 가진 멤버들을 하나로 통합
+        const uniqueMembers = Array.from(new Set(members.map(m => m.name))).map(name => {
+          const firstMember = members.find(m => m.name === name);
+          return {
+            id: firstMember?.id || this.generateId(),
+            name: name,
+            assignedDepts: memberDepts[name] || []
+          };
+        });
+        
+        this.users.set(uniqueMembers);
       } else {
-        this.nodes.set([{ id:'ceo', name:'대표이사', kind:'ceo', level:0, members:[] } as any]);
+        this.nodes.set([
+          { id:'chairman', name:'대표이사', kind:'ceo', level:0, members:[] } as any,
+          { id:'vice-chairman', name:'부사장', kind:'ceo', parentId:'chairman', level:1, members:[] } as any
+        ]);
+        this.users.set([]);
       }
-      this.users.set(members.map(m=>({ id:m.id, name:m.name, assignedDept:this.getNodeNameById(m.assigned_node_id) })));
 
       // 로컬 스냅샷도 최신으로 갱신
       try{ localStorage.setItem('orgChartV2', JSON.stringify({ nodes, members })); }catch{}
@@ -816,7 +983,7 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
   addChip(){
     const name = (this.newChipName||'').trim();
     if(!name) return;
-    const newItem = { id: this.generateId(), name };
+    const newItem = { id: this.generateId(), name, assignedDepts: [] };
     this.users.update(arr => [...arr, newItem]);
     this.newChipName = '';
   }
@@ -837,6 +1004,21 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
       this.hideLines();
     }
   }
+
+  editChip(u:any, e:Event){
+    e.stopPropagation();
+    const name = prompt('임직원 이름 수정', u?.name || '');
+    if(name && name.trim()){
+      const newName = name.trim();
+      // 좌측 칩 이름 변경
+      this.users.update(list => list.map(x => x===u ? { ...x, name: newName } : x));
+      // 조직도 내 칩 텍스트도 변경
+      this.nodes.update(arr => arr.map(n => ({
+        ...n,
+        members: (n.members||[]).map(m => m === u.name ? newName : m)
+      })));
+    }
+  }
   
   onDragMember(e:DragEvent,m:string,from:V2Node){ 
     this.dragUser={ name:m }; 
@@ -852,9 +1034,17 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     if(!target.members.includes(this.dragUser.name)) {
       target.members.push(this.dragUser.name);
     }
-    // 칩의 부서 표시 업데이트
+    // 칩의 부서 표시 업데이트 (겸직 지원: 기존 부서에 새 부서 추가)
     const deptLabel = target.name || '';
-    this.users.update(list => list.map(u => u === this.dragUser ? { ...u, assignedDept: deptLabel } : u));
+    this.users.update(list => list.map(u => {
+      if (u.name === this.dragUser.name) {
+        const depts = u.assignedDepts || [];
+        if (!depts.includes(deptLabel)) {
+          return { ...u, assignedDepts: [...depts, deptLabel] };
+        }
+      }
+      return u;
+    }));
     this.dragUser=null; 
     this.dragFrom=null;
     // 드래그 후 선 숨김 및 초기화
@@ -1043,6 +1233,14 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     }
   }
 
+  openEditNodeName(node: V2Node, event: Event){
+    event.stopPropagation();
+    const name = prompt('부서명 수정', node.name);
+    if(name && name.trim()){
+      node.name = name.trim();
+    }
+  }
+
   openRename(node: V2Node, event: Event){
     event.stopPropagation();
     const name = prompt('부서명 수정', node.name);
@@ -1117,14 +1315,14 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
         });
       };
 
-      // start from CEO
-      const ceoC = getCenter(this.ceo.id);
-      if (ceoC) {
-        // small stem under CEO
-        const stemY = ceoC.bottom + 10;
-        lines.push({ path: `M ${ceoC.x} ${ceoC.bottom} L ${ceoC.x} ${stemY}` });
+      // start from Chairman
+      const chairmanC = getCenter(this.chairman.id);
+      if (chairmanC) {
+        // small stem under Chairman
+        const stemY = chairmanC.bottom + 10;
+        lines.push({ path: `M ${chairmanC.x} ${chairmanC.bottom} L ${chairmanC.x} ${stemY}` });
       }
-      drawToChildren(this.ceo.id);
+      drawToChildren(this.chairman.id);
 
       this.connectionLines.set(lines);
       this.showLines.set(true);
@@ -1147,12 +1345,29 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
       order_index: idx,
     }));
 
-    // 2) collect members from UI chips and their assigned departments
-    const membersPayload = this.users().map(u => ({
-      id: (u.id && isUuid(u.id)) ? u.id : this.generateId(),
-      name: u.name,
-      assigned_node_id: (()=>{ const uiId = this.findNodeIdByName(u.assignedDept); return uiId ? idMapDb[uiId] : null; })()
-    }));
+    // 2) collect members from UI chips and their assigned departments (겸직 지원: 여러 레코드 생성)
+    const membersPayload: any[] = [];
+    this.users().forEach(u => {
+      const depts = u.assignedDepts || [];
+      if (depts.length === 0) {
+        // 부서 미배정인 경우에도 레코드 생성
+        membersPayload.push({
+          id: (u.id && isUuid(u.id)) ? u.id : this.generateId(),
+          name: u.name,
+          assigned_node_id: null
+        });
+      } else {
+        // 각 부서마다 별도의 레코드 생성 (겸직)
+        depts.forEach((deptName: string) => {
+          const uiId = this.findNodeIdByName(deptName);
+          membersPayload.push({
+            id: this.generateId(), // 겸직이므로 각 레코드마다 새 ID
+            name: u.name,
+            assigned_node_id: uiId ? idMapDb[uiId] : null
+          });
+        });
+      }
+    });
 
     await this.orgService.saveOrgChart({ nodes: nodesPayload, members: membersPayload });
     // 로컬 스냅샷 저장
