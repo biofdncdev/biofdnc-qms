@@ -69,6 +69,9 @@ export class SignupComponent {
   signupForm: FormGroup;
   errorMessage: string | null = null;
   immediateMatcher = new ImmediateErrorStateMatcher();
+  submitting = false;
+  cooldownRemainingSec = 0;
+  private cooldownTimer?: any;
 
   constructor(
     private fb: FormBuilder,
@@ -112,8 +115,10 @@ export class SignupComponent {
 
   async onSubmit() {
     if (this.signupForm.invalid) return;
+    if (this.submitting || this.cooldownRemainingSec > 0) return;
 
     this.errorMessage = null;
+    this.submitting = true;
     const name: string = this.signupForm.value.name;
     const email: string = String(this.signupForm.value.email || '').trim().toLowerCase();
     const password: string = this.signupForm.value.password;
@@ -175,8 +180,35 @@ export class SignupComponent {
       alert('회원가입이 완료되었습니다. 이메일로 전송된 인증 메일의 링크를 클릭해 인증을 완료해 주세요. 이제 로그인 페이지로 이동합니다.');
       this.router.navigate(['/login']);
     } catch (error: any) {
-      this.errorMessage = `회원가입 중 오류가 발생했습니다: ${error.message}`;
+      const message = String(error?.message || '');
+      this.errorMessage = `회원가입 중 오류가 발생했습니다: ${message}`;
       console.error('Signup error:', error);
+      // 429 레이트리밋 처리: 메시지 내 남은 시간 파싱(대략 59초) 후 쿨다운 시작
+      const isRateLimited = (error?.status === 429) || /after\s+(\d+)\s*seconds?/i.test(message);
+      let seconds = 0;
+      const m = message.match(/after\s+(\d+)\s*seconds?/i);
+      if (m && m[1]) seconds = parseInt(m[1], 10);
+      if (!Number.isFinite(seconds) || seconds <= 0) seconds = 60;
+      if (isRateLimited) {
+        this.startCooldown(seconds);
+      }
     }
+    finally {
+      // 약간의 딜레이 후 더블클릭 방지 해제
+      setTimeout(() => { this.submitting = false; }, 800);
+    }
+  }
+
+  private startCooldown(seconds: number) {
+    try { if (this.cooldownTimer) clearInterval(this.cooldownTimer); } catch {}
+    this.cooldownRemainingSec = Math.max(1, Math.min(120, Math.floor(seconds)));
+    this.cooldownTimer = setInterval(() => {
+      this.cooldownRemainingSec -= 1;
+      if (this.cooldownRemainingSec <= 0) {
+        try { clearInterval(this.cooldownTimer); } catch {}
+        this.cooldownTimer = undefined;
+        this.cooldownRemainingSec = 0;
+      }
+    }, 1000);
   }
 }

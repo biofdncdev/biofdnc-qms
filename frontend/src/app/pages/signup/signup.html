@@ -44,8 +44,19 @@
             </mat-error>
           </mat-form-field>
 
-          <button mat-flat-button color="primary" class="signup-button" type="submit" [disabled]="signupForm.invalid">
-            가입하기
+          <button 
+            mat-flat-button 
+            color="primary" 
+            class="signup-button" 
+            type="submit" 
+            [disabled]="signupForm.invalid || submitting || cooldownRemainingSec > 0">
+            <ng-container *ngIf="cooldownRemainingSec > 0; else normalLabel">
+              {{ cooldownRemainingSec }}초 후 다시 시도
+            </ng-container>
+            <ng-template #normalLabel>
+              <ng-container *ngIf="!submitting; else submittingTpl">가입하기</ng-container>
+            </ng-template>
+            <ng-template #submittingTpl>처리 중…</ng-template>
           </button>
         </form>
       </mat-card-content>
