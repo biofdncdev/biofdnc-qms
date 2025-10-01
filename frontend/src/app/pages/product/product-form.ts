@@ -29,8 +29,14 @@ import { AuthService } from '../../services/auth.service';
         <!-- 품목 선택 박스를 최상단으로 분리 배치 -->
         <section class="form-body pick-card">
           <div class="product-picker" #pickerRef>
-            <label class="picker-label"><b>품목 선택</b></label>
-            <input class="picker-input" [(ngModel)]="productQuery" (keydown.arrowDown)="moveProductPointer(1)" (keydown.arrowUp)="moveProductPointer(-1)" (keydown.enter)="onProductEnterOrSearch($event)" (keydown.escape)="onProductEsc($event)" placeholder="품번/품명/영문명/CAS/사양/검색어 검색 (공백=AND)" />
+            <label class="picker-label">품목 검색</label>
+            <div class="search-input-wrapper">
+              <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+              </svg>
+              <input class="picker-input" [(ngModel)]="productQuery" (input)="debouncedProductSearch()" (keydown.arrowDown)="moveProductPointer(1)" (keydown.arrowUp)="moveProductPointer(-1)" (keydown.enter)="onProductEnterOrSearch($event)" (keydown.escape)="onProductEsc($event)" placeholder="품번, 품명, 영문명, CAS, 사양 등으로 검색..." />
+            </div>
             <ul class="picker-list" *ngIf="productResults.length" #pickerList>
               <li *ngFor="let p of productResults; let i = index" [class.selected]="i===productPointer" (click)="pickProduct(p)" [attr.data-index]="i">
                 <span class="dot" [class.red]="p.status==='red'" [class.orange]="p.status==='orange'" [class.blue]="p.status==='blue'"></span>
@@ -64,11 +70,6 @@ import { AuthService } from '../../services/auth.service';
         <ng-container *ngIf="activeTab==='composition'">
           <div class="toolbar">
             <div class="title">조성성분</div>
-          </div>
-          <!-- 확인 버튼과 우측 액션을 같은 높이로 배치 -->
-          <div class="verifier top">
-            <button class="btn verify-btn" [class.need]="!isVerified()" [class.done]="isVerified()" [disabled]="false" (click)="onVerifyClick()">조성성분 확인</button>
-            <span *ngIf="!isVerified()" class="verify-note">확인이 필요합니다</span>
             <div class="spacer"></div>
             <span class="status" [class.saved]="saved" [class.unsaved]="!saved">{{ saved? '저장됨' : '저장되지 않음' }}</span>
             <button class="btn" [disabled]="!isEditable()" (click)="saveCompositions()">저장</button>
@@ -137,7 +138,9 @@ import { AuthService } from '../../services/auth.service';
             </div>
           </div>
           <!-- 확인 로그 영역 -->
-          <div class="verifier logs-wrap">
+          <div class="verifier">
+            <button class="btn verify-btn" [class.need]="!isVerified()" [class.done]="isVerified()" [disabled]="false" (click)="onVerifyClick()">조성성분 확인</button>
+            <span *ngIf="!isVerified()" class="verify-note">확인이 필요합니다</span>
             <div class="logs">
               <div class="log-item" *ngFor="let l of verifyLogs; let i = index">
                 {{ i+1 }}차 확인: {{ l.user }} · {{ l.time }}
@@ -326,13 +329,19 @@ import { AuthService } from '../../services/auth.service';
     .modal .grid thead th:nth-child(3), .modal .grid tbody td:nth-child(3){ width:120px; }
     .modal .grid td:nth-child(2){ white-space:normal; word-break:break-word; }
     .product-picker{ margin-top:10px; position:relative; }
-    .product-picker .picker-label{ display:block; font-size:11px; color:#6b7280; margin-bottom:4px; }
-    .product-picker .picker-input{ width:100%; box-sizing:border-box; border:1px solid #e5e7eb; border-radius:8px; padding:6px 8px; font-size:12px; }
-    .product-picker .picker-list{ list-style:none; margin:6px 0 0; padding:0; max-height:180px; overflow:auto; border:1px solid #eef2f7; border-radius:8px; position:absolute; left:0; right:0; top:56px; background:#fff; z-index:20; box-shadow:0 8px 20px rgba(0,0,0,0.08); }
-    .product-picker .picker-list li{ padding:6px 8px; cursor:pointer; font-size:12px; }
-    .product-picker .picker-list li.selected{ background:#eef6ff; }
-    .product-picker .picker-list li:hover{ background:#f3f4f6; }
-    .product-picker .picker-list .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; position:relative; top:-1px; }
+    .product-picker .picker-label{ display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:8px; }
+    .product-picker .search-input-wrapper{ position:relative; display:flex; align-items:center; }
+    .product-picker .search-icon{ position:absolute; left:12px; color:#9ca3af; pointer-events:none; z-index:1; }
+    .product-picker .picker-input{ width:100%; box-sizing:border-box; border:2px solid #d1d5db; border-radius:10px; padding:10px 12px 10px 40px; font-size:13px; background:#fff; transition: all 0.2s; }
+    .product-picker .picker-input:hover{ border-color:#9ca3af; }
+    .product-picker .picker-input:focus{ outline:none; border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,0.1); }
+    .product-picker .picker-input::placeholder{ color:#9ca3af; }
+    .product-picker .picker-list{ list-style:none; margin:8px 0 0; padding:0; max-height:240px; overflow:auto; border:1px solid #e5e7eb; border-radius:10px; position:absolute; left:0; right:0; top:68px; background:#fff; z-index:20; box-shadow:0 10px 25px rgba(0,0,0,0.12); }
+    .product-picker .picker-list li{ padding:10px 12px; cursor:pointer; font-size:13px; transition: background 0.15s; border-bottom:1px solid #f3f4f6; }
+    .product-picker .picker-list li:last-child{ border-bottom:none; }
+    .product-picker .picker-list li.selected{ background:#eff6ff; border-color:#dbeafe; }
+    .product-picker .picker-list li:hover{ background:#f9fafb; }
+    .product-picker .picker-list .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:8px; position:relative; top:-1px; }
     .product-picker .picker-list .dot.red{ background:#ef4444; }
     .product-picker .picker-list .dot.orange{ background:#f59e0b; }
     .product-picker .picker-list .dot.blue{ background:#3b82f6; }
