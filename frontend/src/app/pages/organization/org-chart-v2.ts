@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { OrganizationService } from '../../services/organization.service';
@@ -33,10 +33,28 @@ interface V2Node {
     <main class="main" 
           (dragover)="allowOutside($event)"
           (drop)="dropOutside($event)">
-      <div class="chart-container">
+      <!-- 선 연결 버튼 -->
+      <div class="toolbar">
+        <button class="line-btn" (click)="drawLines()" [class.active]="showLines()">
+          선 연결
+        </button>
+      </div>
+      <div class="chart-container" #chartContainer>
+        <!-- SVG for connections -->
+        <svg class="connections-svg" *ngIf="showLines()" 
+             [attr.width]="svgWidth" 
+             [attr.height]="svgHeight"
+             style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0;">
+          <path *ngFor="let line of connectionLines()" 
+                [attr.d]="line.path" 
+                fill="none" 
+                stroke="#cbd5e1" 
+                stroke-width="2"/>
+        </svg>
         <!-- CEO 노드 -->
         <div class="ceo-level">
           <div class="node ceo" 
+               data-node-id="ceo"
                [class.selected]="selected?.id === 'ceo'"
                (click)="select(ceo, $event)" 
                (dragover)="allow($event)" 
@@ -93,7 +111,8 @@ interface V2Node {
                      [class.first-node]="first"
                      [class.last-node]="last">
                   <!-- connectors removed -->
-                  <div class="node dept" 
+                <div class="node dept" 
+                       [attr.data-node-id]="d.id"
                        [class.selected]="selected?.id === d.id"
                        (click)="select(d, $event)" 
                        (dragover)="allow($event)" 
@@ -121,15 +140,13 @@ interface V2Node {
                     <button class="delete-btn" (click)="deleteNode(d, $event)">🗑</button>
                   </div>
                   <div class="child-container" *ngIf="childrenOf(d).length > 0">
-                    <!-- 부모에서 내려오는 세로선 -->
-                    <div class="down-from-parent"></div>
-                    <!-- child connectors removed -->
                     <div class="child-wrapper">
                       <div class="child-group" *ngFor="let c of childrenOf(d); let cfirst = first; let clast = last"
                            [class.first-child]="cfirst"
                            [class.last-child]="clast">
                         <!-- connectors removed -->
                         <div class="node dept"
+                             [attr.data-node-id]="c.id"
                              [class.selected]="selected?.id === c.id"
                              (click)="select(c, $event)"
                              (dragover)="allow($event)"
@@ -254,7 +271,7 @@ interface V2Node {
     .ceo-level {
       display: flex;
       justify-content: center;
-      margin-bottom: 60px;
+      margin-bottom: 55px;
       margin-top: 50px;
     }
     
@@ -293,7 +310,7 @@ interface V2Node {
     }
 
     .child-container { 
-      margin-top: 20px; 
+      margin-top: 50px; 
       width: 100%; 
       position: relative; 
       display: flex; 
@@ -355,6 +372,7 @@ interface V2Node {
       position: relative;
       transition: all 0.3s;
       cursor: pointer;
+      z-index: 1;
     }
     
     .node:hover {
@@ -622,9 +640,57 @@ interface V2Node {
     .modal-actions button:hover {
       transform: translateY(-1px);
     }
+
+    /* 툴바 */
+    .toolbar {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 10;
+    }
+
+    .line-btn {
+      padding: 10px 20px;
+      background: #fff;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      color: #475569;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .line-btn:hover {
+      border-color: #cbd5e1;
+      background: #f8fafc;
+    }
+
+    .line-btn.active {
+      background: #3b82f6;
+      border-color: #3b82f6;
+      color: #fff;
+    }
+
+    .line-btn.active:hover {
+      background: #2563eb;
+      border-color: #2563eb;
+    }
+
+    /* SVG 연결선 */
+    .connections-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
   `]
 })
-export class OrgChartV2Component implements OnInit {
+export class OrgChartV2Component implements OnInit, AfterViewInit {
+  @ViewChild('chartContainer') chartContainer!: ElementRef;
+  
   users = signal<any[]>([]);
   nodes = signal<V2Node[]>([{ id:'ceo', name:'대표이사', kind:'ceo', level:0, members:[] }]);
   selected: V2Node | null = null;
@@ -632,9 +698,17 @@ export class OrgChartV2Component implements OnInit {
   showAddModal = false;
   dragUser: any = null;
   dragFrom: V2Node | null = null;
+  showLines = signal<boolean>(false);
+  connectionLines = signal<Array<{path: string}>>([]);
+  svgWidth = 2000;
+  svgHeight = 2000;
 
   constructor(private orgService: OrganizationService,
     private auth: AuthService) {}
+  
+  ngAfterViewInit() {
+    // Initial setup if needed
+  }
 
   get ceo(): V2Node { return this.nodes()[0]; }
   specials(): V2Node[] { return this.nodes().filter(n => n.kind==='special'); }
@@ -677,6 +751,8 @@ export class OrgChartV2Component implements OnInit {
     }
     this.dragUser=null; 
     this.dragFrom=null;
+    // 드래그 후 선 숨김 및 초기화
+    this.hideLines();
   }
 
   // 칩 순서 변경 (동일 부서 내)
@@ -734,6 +810,7 @@ export class OrgChartV2Component implements OnInit {
       return orderIds.indexOf(a.id)-orderIds.indexOf(b.id);
     });
     this.nodes.set(reordered);
+    this.hideLines();
   }
 
   removeMember(node: V2Node, member: string, event: Event) {
@@ -843,6 +920,7 @@ export class OrgChartV2Component implements OnInit {
     };
     this.nodes.update(arr=>[...arr,node]);
     this.closeModal();
+    this.hideLines();
   }
 
   deleteNode(node: V2Node, event: Event) {
@@ -855,6 +933,7 @@ export class OrgChartV2Component implements OnInit {
       if(this.selected?.id === node.id) {
         this.selected = null;
       }
+      this.hideLines();
     }
   }
 
@@ -869,6 +948,75 @@ export class OrgChartV2Component implements OnInit {
     };
     addChildren(parentId);
     return ids;
+  }
+
+  hideLines() {
+    this.showLines.set(false);
+    this.connectionLines.set([]);
+  }
+
+  drawLines() {
+    setTimeout(() => {
+      const lines: Array<{path: string}> = [];
+      const container = this.chartContainer?.nativeElement as HTMLElement;
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
+
+      // helper: get node center (by id)
+      const getCenter = (id: string) => {
+        const el = id === 'ceo' 
+          ? container.querySelector(`[data-node-id="ceo"]`)
+          : container.querySelector(`[data-node-id="${id}"]`);
+        if (!el) return null;
+        const r = (el as HTMLElement).getBoundingClientRect();
+        return { x: r.left - containerRect.left + r.width/2, top: r.top - containerRect.top, bottom: r.bottom - containerRect.top };
+      };
+
+      // recursive draw for a parent to its children
+      const drawToChildren = (parentId: string) => {
+        const parent = this.nodes().find(n => n.id === parentId);
+        const children = this.nodes().filter(n => n.parentId === parentId);
+        if (!children.length) return;
+
+        const pc = getCenter(parentId);
+        if (!pc) return;
+
+        // vertical down a bit from parent
+        const midY = pc.bottom + 20;
+        lines.push({ path: `M ${pc.x} ${pc.bottom} L ${pc.x} ${midY}` });
+
+        // gather child centers
+        const childCenters = children
+          .map(c => ({ id: c.id, c: getCenter(c.id) }))
+          .filter(e => !!e.c) as Array<{id:string,c:{x:number,top:number,bottom:number}}>;
+        if (!childCenters.length) return;
+
+        // horizontal from first to last at midY
+        const minX = Math.min(...childCenters.map(cc => cc.c.x));
+        const maxX = Math.max(...childCenters.map(cc => cc.c.x));
+        lines.push({ path: `M ${minX} ${midY} L ${maxX} ${midY}` });
+
+        // vertical down to each child top
+        childCenters.forEach(cc => {
+          lines.push({ path: `M ${cc.c.x} ${midY} L ${cc.c.x} ${cc.c.top}` });
+          // recurse
+          drawToChildren(cc.id);
+        });
+      };
+
+      // start from CEO
+      const ceoC = getCenter('ceo');
+      if (ceoC) {
+        // small stem under CEO
+        const stemY = ceoC.bottom + 10;
+        lines.push({ path: `M ${ceoC.x} ${ceoC.bottom} L ${ceoC.x} ${stemY}` });
+      }
+      drawToChildren('ceo');
+
+      this.connectionLines.set(lines);
+      this.showLines.set(true);
+    }, 100);
   }
 }
 
