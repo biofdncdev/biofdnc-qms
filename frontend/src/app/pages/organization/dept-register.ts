@@ -35,7 +35,7 @@ interface Dept { id: string; name: string; code: string; company_code?: string }
       <div *ngFor="let c of companies()" style="display:grid; grid-template-columns: 120px 1fr 90px 80px; gap:0; padding:8px 10px; border-bottom:1px solid #f1f5f9; align-items:center;">
         <div>{{ c.code }}</div>
         <div>{{ c.name }}</div>
-        <div><button class="btn" (click)="openCompanyEdit(c)" [disabled]="busyCompany()">수정</button></div>
+        <div><button class="btn secondary" (click)="openCompanyEdit(c)" [disabled]="busyCompany()">수정</button></div>
         <div><button class="btn danger" (click)="removeCompany(c)" [disabled]="busyCompany()">삭제</button></div>
       </div>
       <div *ngIf="!companies().length" style="padding:12px; color:#94a3b8;">등록된 회사가 없습니다.</div>
@@ -63,7 +63,7 @@ interface Dept { id: string; name: string; code: string; company_code?: string }
       <div *ngFor="let d of depts()" style="display:grid; grid-template-columns: 120px 1fr 90px 80px; gap:0; padding:8px 10px; border-bottom:1px solid #f1f5f9; align-items:center;">
         <div>{{ d.code }}</div>
         <div>{{ d.name }}</div>
-        <div><button class="btn" (click)="edit(d)" [disabled]="busyDept()">수정</button></div>
+        <div><button class="btn secondary" (click)="edit(d)" [disabled]="busyDept()">수정</button></div>
         <div><button class="btn danger" (click)="remove(d)" [disabled]="busyDept()">삭제</button></div>
       </div>
       <div *ngIf="!depts().length" style="padding:12px; color:#94a3b8;">등록된 부서가 없습니다.</div>
@@ -92,9 +92,41 @@ interface Dept { id: string; name: string; code: string; company_code?: string }
   </div>
   `,
   styles: [`
-    .btn{ background:#2563eb; color:#fff; border:0; border-radius:8px; cursor:pointer; }
-    .btn.secondary{ background:#111827; }
-    .btn.danger{ background:#ef4444; }
+    .btn{ 
+      background:#3b82f6; 
+      color:#fff; 
+      border:2px solid #3b82f6; 
+      border-radius:8px; 
+      cursor:pointer;
+      font-weight:500;
+      transition: all 0.2s;
+    }
+    .btn:hover:not(:disabled){ 
+      background:#2563eb; 
+      border-color:#2563eb;
+    }
+    .btn:disabled{ 
+      opacity:0.5; 
+      cursor:not-allowed;
+    }
+    .btn.secondary{ 
+      background:#fff; 
+      color:#475569; 
+      border:2px solid #cbd5e1;
+    }
+    .btn.secondary:hover:not(:disabled){ 
+      background:#f8fafc; 
+      border-color:#94a3b8;
+    }
+    .btn.danger{ 
+      background:#fff; 
+      color:#dc2626; 
+      border:2px solid #fca5a5;
+    }
+    .btn.danger:hover:not(:disabled){ 
+      background:#fef2f2; 
+      border-color:#f87171;
+    }
     label{ font-size:12px; color:#475569; margin-bottom:4px; }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
