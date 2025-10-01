@@ -1,8 +1,11 @@
-import { Component, OnInit, signal, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, OnInit, signal, AfterViewInit, ViewChild, ElementRef, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { OrganizationService } from '../../services/organization.service';
 import { AuthService } from '../../services/auth.service';
+
+// LeaderLine은 window 객체를 통해 접근
+declare const LeaderLine: any;
 
 interface V2Node {
   id: string;
@@ -55,17 +58,6 @@ interface V2Node {
         </button>
       </div>
       <div class="chart-container" #chartContainer>
-        <!-- SVG for connections -->
-        <svg class="connections-svg" *ngIf="showLines()" 
-             [attr.width]="svgWidth" 
-             [attr.height]="svgHeight"
-             style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; width: 100%; height: 100%; transform: scale(0.92); transform-origin: center top;">
-          <path *ngFor="let line of connectionLines()" 
-                [attr.d]="line.path" 
-                fill="none" 
-                stroke="#cbd5e1" 
-                stroke-width="2"/>
-        </svg>
         <!-- 대표이사 노드 -->
         <div class="chairman-level">
           <div class="node chairman" 
@@ -243,6 +235,7 @@ interface V2Node {
       height: calc(100vh - 64px);
       background: #f8fafc;
       font-family: 'Noto Sans KR', sans-serif;
+      overflow: hidden;
     }
     
     /* 좌측 사용자 목록 */
@@ -298,7 +291,7 @@ interface V2Node {
     .main {
       flex: 1;
       padding: 20px;
-      overflow: auto;
+      overflow: hidden;
       position: relative;
     }
     
@@ -314,7 +307,7 @@ interface V2Node {
       padding-top: 50px;
       transform: scale(0.92);
       transform-origin: center top;
-      overflow: visible;
+      overflow: hidden;
     }
     
     /* 대표이사 레벨 */
@@ -322,6 +315,7 @@ interface V2Node {
       display: flex;
       justify-content: center;
       margin-bottom: 40px;
+      position: relative;
     }
     
     /* 부사장 레벨 */
@@ -329,6 +323,7 @@ interface V2Node {
       display: flex;
       justify-content: center;
       margin-bottom: 50px;
+      position: relative;
     }
     
     /* CEO 레벨 (하위 호환) */
@@ -378,8 +373,8 @@ interface V2Node {
       width: 100%; 
       position: relative; 
       display: flex; 
-      flex-direction: column; 
-      align-items: center; 
+      flex-direction: column;
+      align-items: center;
     }
     
     /* 부모에서 중간 높이까지 내려오는 세로선 */
@@ -637,7 +632,7 @@ interface V2Node {
     .level-wrapper {
       display: flex;
       justify-content: center;
-      gap: 24px;
+      gap: 12px;
       position: relative;
     }
     
@@ -808,8 +803,7 @@ interface V2Node {
     }
   `]
 })
-export class OrgChartV2Component implements OnInit, AfterViewInit {
-  @ViewChild('chartContainer') chartContainer!: ElementRef;
+export class OrgChartV2Component implements OnInit, AfterViewInit, OnDestroy {
   
   users = signal<any[]>([]);
   nodes = signal<V2Node[]>([
@@ -821,11 +815,10 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
   showAddModal = false;
   dragUser: any = null;
   dragFrom: V2Node | null = null;
-  showLines = signal<boolean>(false);
-  connectionLines = signal<Array<{path: string}>>([]);
-  svgWidth = 2000;
-  svgHeight = 2000;
   newChipName = '';
+  private leaderLines: any[] = []; // LeaderLine 인스턴스들을 저장
+
+  @ViewChild('chartContainer') chartContainer!: ElementRef;
 
   constructor(private orgService: OrganizationService,
     private auth: AuthService) {}
@@ -874,7 +867,6 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
           });
           this.users.set(uniqueMembers);
         }
-        setTimeout(()=> this.drawLines(), 0);
       }
     } catch {}
 
@@ -883,8 +875,15 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
   }
 
   async ngAfterViewInit(){
-    // View 초기화 후 한 번 더 라인 계산
-    setTimeout(()=> this.drawLines(), 0);
+    // View 초기화 후 충분한 시간을 두고 선 그리기
+    setTimeout(() => {
+      // LeaderLine이 로드되었는지 확인
+      if (typeof LeaderLine !== 'undefined') {
+        this.drawLeaderLines();
+      } else {
+        console.warn('LeaderLine not loaded yet');
+      }
+    }, 500);
   }
 
   private async loadFromDb(){
@@ -907,7 +906,10 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
         // 각 멤버별로 할당된 모든 부서를 추적
         const memberDepts: Record<string, string[]> = {};
         
-        members.forEach(m=>{
+        // order_index로 정렬
+        const sortedMembers = members.slice().sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+        
+        sortedMembers.forEach(m=>{
           const node = byId[m.assigned_node_id];
           if(node){
             if(!Array.isArray(node.members)) node.members = [];
@@ -944,10 +946,8 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
       // 로컬 스냅샷도 최신으로 갱신
       try{ localStorage.setItem('orgChartV2', JSON.stringify({ nodes, members })); }catch{}
 
-      setTimeout(()=> this.drawLines(), 0);
     } catch {
-      // 실패 시에도 기본 라인 그리기 시도
-      setTimeout(()=> this.drawLines(), 0);
+      // 로드 실패
     }
   }
 
@@ -1005,7 +1005,6 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     if(name){
       const updated = this.nodes().map(n => ({...n, members: (n.members||[]).filter(m => m !== name)}));
       this.nodes.set(updated);
-      this.hideLines();
     }
   }
 
@@ -1051,8 +1050,6 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     }));
     this.dragUser=null; 
     this.dragFrom=null;
-    // 드래그 후 선 숨김 및 초기화
-    this.hideLines();
   }
 
   // 칩 순서 변경 (동일 부서 내)
@@ -1110,7 +1107,6 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
       return orderIds.indexOf(a.id)-orderIds.indexOf(b.id);
     });
     this.nodes.set(reordered);
-    this.hideLines();
   }
 
   removeMember(node: V2Node, member: string, event: Event) {
@@ -1220,7 +1216,6 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     };
     this.nodes.update(arr=>[...arr,node]);
     this.closeModal();
-    this.hideLines();
   }
 
   deleteNode(node: V2Node, event: Event) {
@@ -1233,7 +1228,6 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
       if(this.selected?.id === node.id) {
         this.selected = null;
       }
-      this.hideLines();
     }
   }
 
@@ -1266,108 +1260,6 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     return ids;
   }
 
-  hideLines() {
-    this.showLines.set(false);
-    this.connectionLines.set([]);
-  }
-
-  drawLines() {
-    setTimeout(() => {
-      const lines: Array<{path: string}> = [];
-      const container = this.chartContainer?.nativeElement as HTMLElement;
-      if (!container) {
-        console.log('No container found');
-        return;
-      }
-
-      const containerRect = container.getBoundingClientRect();
-
-      // helper: get node center and bounds (by id)
-      const getNodeInfo = (id: string) => {
-        const el = container.querySelector(`[data-node-id="${id}"]`) as HTMLElement;
-        if (!el) return null;
-        const r = el.getBoundingClientRect();
-        return { 
-          x: r.left - containerRect.left + r.width/2, 
-          top: r.top - containerRect.top, 
-          bottom: r.bottom - containerRect.top,
-          width: r.width,
-          height: r.height
-        };
-      };
-
-      // 1. Draw Chairman to Vice-Chairman
-      const chairmanInfo = getNodeInfo(this.chairman.id);
-      const viceChairmanInfo = getNodeInfo(this.viceChairman.id);
-      
-      if (chairmanInfo && viceChairmanInfo) {
-        // Vertical line from chairman bottom center to vice-chairman top center
-        lines.push({ path: `M ${chairmanInfo.x} ${chairmanInfo.bottom} L ${chairmanInfo.x} ${viceChairmanInfo.top}` });
-      }
-
-      // 2. Draw Vice-Chairman to Level 2 departments (5개 부문)
-      const level2Depts = this.depts(2);
-      
-      if (viceChairmanInfo && level2Depts.length > 0) {
-        const deptInfos = level2Depts
-          .map(d => ({ id: d.id, info: getNodeInfo(d.id), node: d }))
-          .filter(d => d.info !== null)
-          .sort((a, b) => a.info!.x - b.info!.x);
-
-        if (deptInfos.length > 0) {
-          // Calculate mid Y between vice-chairman and departments
-          const firstDeptTop = deptInfos[0].info!.top;
-          const midY = viceChairmanInfo.bottom + (firstDeptTop - viceChairmanInfo.bottom) / 2;
-
-          // Vertical line down from vice-chairman
-          lines.push({ path: `M ${viceChairmanInfo.x} ${viceChairmanInfo.bottom} L ${viceChairmanInfo.x} ${midY}` });
-
-          // Horizontal line across all departments
-          if (deptInfos.length > 1) {
-            const minX = deptInfos[0].info!.x;
-            const maxX = deptInfos[deptInfos.length - 1].info!.x;
-            lines.push({ path: `M ${minX} ${midY} L ${maxX} ${midY}` });
-          }
-
-          // Vertical lines down to each department
-          deptInfos.forEach((deptInfo) => {
-            lines.push({ path: `M ${deptInfo.info!.x} ${midY} L ${deptInfo.info!.x} ${deptInfo.info!.top}` });
-
-            // 3. Draw each department to its teams (Level 3)
-            const teams = this.childrenOf(deptInfo.node);
-            if (teams.length > 0) {
-              const teamInfos = teams
-                .map(t => ({ id: t.id, info: getNodeInfo(t.id), node: t }))
-                .filter(t => t.info !== null)
-                .sort((a, b) => a.info!.x - b.info!.x);
-
-              if (teamInfos.length > 0) {
-                const firstTeamTop = teamInfos[0].info!.top;
-                const teamMidY = deptInfo.info!.bottom + (firstTeamTop - deptInfo.info!.bottom) / 2;
-
-                // Vertical line down from department
-                lines.push({ path: `M ${deptInfo.info!.x} ${deptInfo.info!.bottom} L ${deptInfo.info!.x} ${teamMidY}` });
-
-                // Horizontal line across all teams
-                if (teamInfos.length > 1) {
-                  const minTeamX = teamInfos[0].info!.x;
-                  const maxTeamX = teamInfos[teamInfos.length - 1].info!.x;
-                  lines.push({ path: `M ${minTeamX} ${teamMidY} L ${maxTeamX} ${teamMidY}` });
-                }
-
-                // Vertical lines down to each team
-                teamInfos.forEach((teamInfo) => {
-                  lines.push({ path: `M ${teamInfo.info!.x} ${teamMidY} L ${teamInfo.info!.x} ${teamInfo.info!.top}` });
-                });
-              }
-            }
-          });
-        }
-      }
-      this.connectionLines.set(lines);
-      this.showLines.set(true);
-    }, 500);
-  }
 
   async onSave(){
     // 1) collect nodes
@@ -1387,23 +1279,25 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
 
     // 2) collect members from UI chips and their assigned departments (겸직 지원: 여러 레코드 생성)
     const membersPayload: any[] = [];
-    this.users().forEach(u => {
+    this.users().forEach((u, userIndex) => {
       const depts = u.assignedDepts || [];
       if (depts.length === 0) {
         // 부서 미배정인 경우에도 레코드 생성
         membersPayload.push({
           id: (u.id && isUuid(u.id)) ? u.id : this.generateId(),
           name: u.name,
-          assigned_node_id: null
+          assigned_node_id: null,
+          order_index: userIndex
         });
       } else {
         // 각 부서마다 별도의 레코드 생성 (겸직)
-        depts.forEach((deptName: string) => {
+        depts.forEach((deptName: string, deptIndex: number) => {
           const uiId = this.findNodeIdByName(deptName);
           membersPayload.push({
             id: this.generateId(), // 겸직이므로 각 레코드마다 새 ID
             name: u.name,
-            assigned_node_id: uiId ? idMapDb[uiId] : null
+            assigned_node_id: uiId ? idMapDb[uiId] : null,
+            order_index: userIndex * 1000 + deptIndex // 유저 순서 유지하면서 겸직 순서도 보존
           });
         });
       }
@@ -1415,8 +1309,12 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     // 저장 후 즉시 DB에서 재로드
     await this.loadFromDb();
 
-    // 3) save current connector rendering (implicit via nodes). Re-draw for visual feedback
-    this.drawLines();
+    // 저장 완료 후 연결선 다시 그리기
+    setTimeout(() => {
+      if (typeof LeaderLine !== 'undefined') {
+        this.drawLeaderLines();
+      }
+    }, 500);
   }
 
   private findNodeIdByName(name?: string | null): string | undefined {
@@ -1434,6 +1332,116 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
   private generateId(): string {
     try { return (crypto as any).randomUUID(); } catch { /* no-op */ }
     return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  }
+
+  /**
+   * LeaderLine 라이브러리를 사용하여 부모-자식 박스를 연결
+   */
+  drawLeaderLines() {
+    // 기존 라인들 모두 제거
+    this.clearLeaderLines();
+
+    const container = this.chartContainer?.nativeElement as HTMLElement;
+    if (!container) {
+      console.warn('Chart container not found');
+      return;
+    }
+
+    // Helper: 노드 엘리먼트 가져오기 (DOM에 연결되어 있고 화면에 보이는지 확인)
+    const getNodeElement = (nodeId: string): HTMLElement | null => {
+      const el = container.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement;
+      // DOM에 연결되어 있고, 보이는 요소인지 확인
+      if (el && document.body.contains(el) && el.offsetParent !== null) {
+        return el;
+      }
+      return null;
+    };
+
+    // 1. 대표이사 -> 부사장
+    const chairmanEl = getNodeElement(this.chairman.id);
+    const viceEl = getNodeElement(this.viceChairman.id);
+    if (chairmanEl && viceEl) {
+      try {
+        const line = new LeaderLine(chairmanEl, viceEl, {
+          color: '#ef4444',
+          size: 2,
+          path: 'straight',
+          startSocket: 'bottom',
+          endSocket: 'top',
+          startPlug: 'behind',
+          endPlug: 'behind'
+        });
+        this.leaderLines.push(line);
+      } catch (e) {
+        console.error('Failed to create leader line:', e);
+      }
+    }
+
+    // 2. 부사장 -> 각 Level 2 부문
+    const level2Depts = this.depts(2);
+    level2Depts.forEach(dept => {
+      const deptEl = getNodeElement(dept.id);
+      if (viceEl && deptEl) {
+        try {
+          const line = new LeaderLine(viceEl, deptEl, {
+            color: '#22c55e',
+            size: 2,
+            path: 'straight',
+            startSocket: 'bottom',
+            endSocket: 'top',
+            startPlug: 'behind',
+            endPlug: 'behind'
+          });
+          this.leaderLines.push(line);
+        } catch (e) {
+          console.error('Failed to create leader line:', e);
+        }
+      }
+    });
+
+    // 3. 각 Level 2 부문 -> 하위 팀들
+    level2Depts.forEach(dept => {
+      const parentEl = getNodeElement(dept.id);
+      const children = this.childrenOf(dept);
+      children.forEach(child => {
+        const childEl = getNodeElement(child.id);
+        if (parentEl && childEl) {
+          try {
+            const line = new LeaderLine(parentEl, childEl, {
+              color: '#22c55e',
+              size: 2,
+              path: 'straight',
+              startSocket: 'bottom',
+              endSocket: 'top',
+              startPlug: 'behind',
+              endPlug: 'behind'
+            });
+            this.leaderLines.push(line);
+          } catch (e) {
+            console.error('Failed to create leader line:', e);
+          }
+        }
+      });
+    });
+  }
+
+  /**
+   * 모든 LeaderLine 인스턴스 제거
+   */
+  clearLeaderLines() {
+    this.leaderLines.forEach(line => {
+      try {
+        line.remove();
+      } catch (e) {
+        // 이미 제거된 경우 무시
+      }
+    });
+    this.leaderLines = [];
+  }
+
+  ngOnDestroy() {
+    // 컴포넌트 파괴 시 모든 라인 제거
+    this.clearLeaderLines();
   }
 }
 
