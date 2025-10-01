@@ -59,12 +59,9 @@ export const routes: Routes = [
         path: 'profile',
         loadComponent: () => import('./pages/profile/profile').then(m => m.ProfileComponent),
       },
+      // Removed old embedded chart route
       {
         path: 'organization/chart',
-        loadComponent: () => import('./pages/organization').then(m => m.OrgChartComponent),
-      },
-      {
-        path: 'organization/chart2',
         loadComponent: () => import('./pages/organization').then(m => m.OrgChartV2Component),
       },
       {

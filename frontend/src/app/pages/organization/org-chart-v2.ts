@@ -28,7 +28,9 @@ interface V2Node {
       <div class="user-list">
         <div class="user-chip" *ngFor="let u of users()" 
              draggable="true" 
-             (dragstart)="onDragUser($event,u)">
+             (dragstart)="onDragUser($event,u)"
+             (dragover)="onDragOverUserChip($event)"
+             (drop)="onDropUserChip($event,u)">
           <span class="chip-label">{{u.name}}{{u.assignedDept ? (' : ' + u.assignedDept) : ''}}</span>
           <button class="chip-remove" (click)="removeChip(u, $event)">×</button>
         </div>
@@ -73,7 +75,7 @@ interface V2Node {
                 {{m}}
               </span>
             </div>
-            <button class="add-btn" *ngIf="selected?.id === 'ceo'" (click)="openAddModal($event)">
+            <button class="add-btn" *ngIf="selected?.id === ceo.id" (click)="openAddModal($event)">
               <span>+</span>
             </button>
           </div>
@@ -291,7 +293,10 @@ interface V2Node {
     .level-wrapper {
       display: flex;
       justify-content: center;
-      gap: 24px;
+      gap: 16px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 10px;
     }
     
     .node-group {
@@ -363,7 +368,8 @@ interface V2Node {
       background: #fff;
       border-radius: 12px;
       box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-      min-width: 120px;
+      min-width: 100px;
+      max-width: 120px;
       position: relative;
       transition: all 0.3s;
       cursor: pointer;
@@ -380,10 +386,10 @@ interface V2Node {
     }
     
     .node .title {
-      padding: 10px 12px;
+      padding: 8px 10px;
       border-bottom: 1px solid #e2e8f0;
       font-weight: 700;
-      font-size: 15px; /* CEO(16px)보다 1 작게 */
+      font-size: 14px; /* CEO(16px)보다 2 작게 */
       color: #1e293b;
       text-align: center;
       cursor: move;
@@ -394,11 +400,11 @@ interface V2Node {
     }
     
     .members {
-      padding: 8px;
-      min-height: 36px;
+      padding: 6px;
+      min-height: 30px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
       align-items: center;
     }
     
@@ -783,6 +789,25 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     this.dragFrom=null; 
   }
 
+  onDragOverUserChip(e: DragEvent){
+    e.preventDefault();
+  }
+
+  onDropUserChip(e: DragEvent, targetUser: any){
+    e.preventDefault();
+    // 현재 드래그 중인 사용자가 없으면 무시
+    if(!this.dragUser || this.dragFrom) return; // dragFrom이 있으면 부서 칩 드래그 중
+    const list = this.users();
+    const fromIdx = list.indexOf(this.dragUser);
+    const toIdx = list.indexOf(targetUser);
+    if(fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) { this.dragUser = null; return; }
+    const newList = list.slice();
+    const [item] = newList.splice(fromIdx,1);
+    newList.splice(toIdx,0,item);
+    this.users.set(newList);
+    this.dragUser = null;
+  }
+
   addChip(){
     const name = (this.newChipName||'').trim();
     if(!name) return;
@@ -798,6 +823,13 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     if(this.dragUser && this.dragUser === u){
       this.dragUser = null;
       this.dragFrom = null;
+    }
+    // 조직도 내 모든 부서에서 동일 이름의 칩 제거
+    const name = u?.name;
+    if(name){
+      const updated = this.nodes().map(n => ({...n, members: (n.members||[]).filter(m => m !== name)}));
+      this.nodes.set(updated);
+      this.hideLines();
     }
   }
   
