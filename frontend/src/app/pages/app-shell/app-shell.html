@@ -56,8 +56,12 @@
       <div class="side-title">{{ selected() | titlecase }}</div>
       <a class="side-link" *ngFor="let item of sectionMenu"
          [class.selected]="item.selected"
+         [class.admin-only]="item.adminOnly"
          (mousemove)="onHover($event)"
-         (click)="onSubClick(item)">{{ item.label }}</a>
+         (click)="onSubClick(item)">
+         <span class="side-link-text">{{ item.label }}</span>
+         <mat-icon *ngIf="item.adminOnly" class="admin-icon" fontIcon="lock" [matTooltip]="'관리자 전용'"></mat-icon>
+      </a>
     </div>
   </aside>
 

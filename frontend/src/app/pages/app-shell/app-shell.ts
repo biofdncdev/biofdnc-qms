@@ -38,7 +38,7 @@ export class AppShellComponent implements OnDestroy, AfterViewInit {
   // Motion tokens derived from M3 motion guidance
   readonly drawerDurationMs = 320;
   readonly drawerEasing = 'cubic-bezier(0.2, 0, 0, 1)';
-  sectionMenu: Array<{ label: string; path?: string; onClick?: () => void; selected?: boolean }> = [];
+  sectionMenu: Array<{ label: string; path?: string; onClick?: () => void; selected?: boolean; adminOnly?: boolean }> = [];
   // Simple in-app tab bar for quick nav
   tabs: Array<{ title: string; path: string; lastUrl?: string }> = [];
   activeTabIndex = 0;
@@ -47,7 +47,7 @@ export class AppShellComponent implements OnDestroy, AfterViewInit {
   overflowOpen = false;
   dragIndex: number | null = null;
   dragOverIndex: number | null = null;
-  menus: Array<{ key: string; icon: string; label: string; path?: string; badge?: number; submenu?: Array<{ label: string; path?: string }> }> = [];
+  menus: Array<{ key: string; icon: string; label: string; path?: string; badge?: number; submenu?: Array<{ label: string; path?: string; adminOnly?: boolean }> }> = [];
   isAdmin = false;
   isManager = false;
   isStaff = false;
@@ -120,7 +120,7 @@ export class AppShellComponent implements OnDestroy, AfterViewInit {
         {
           key: 'organization', icon: 'groups', label: 'Organization',
           submenu: [
-            ...(this.isAdmin ? [{ label: '회사ㆍ부서 코드 등록', path: '/app/organization/departments' }] : []),
+            ...(this.isAdmin ? [{ label: '회사ㆍ부서 코드 등록', path: '/app/organization/departments', adminOnly: true }] : []),
             { label: '조직도', path: '/app/organization/chart' },
             { label: '업무분장 · 원료제조', path: '/app/organization/roles?dept=rm' },
             { label: '업무분장 · 품질보증', path: '/app/organization/roles?dept=qa' }
@@ -130,7 +130,7 @@ export class AppShellComponent implements OnDestroy, AfterViewInit {
         {
           key: 'standard', icon: 'gavel', label: 'Standard',
           submenu: [
-            ...(this.isGivaudanAudit ? [] : [{ label: '규정 카테고리 등록', path: '/app/standard/rmd-categories' }]),
+            ...(this.isAdmin && !this.isGivaudanAudit ? [{ label: '규정 카테고리 등록', path: '/app/standard/rmd-categories', adminOnly: true }] : []),
             { label: '원료제조팀 규정', path: '/app/standard/rmd' }
           ]
         },
@@ -139,8 +139,8 @@ export class AppShellComponent implements OnDestroy, AfterViewInit {
         },
         {
           key: 'audit', icon: 'rule', label: 'Audit', submenu: [
-            ...(this.isGivaudanAudit ? [] : [{ label: 'Audit 업체 등록', path: '/app/audit/companies' }]),
-            ...(this.isAdmin ? [{ label: 'Audit 평가 항목 관리', path: '/app/audit/items-management' }] : []),
+            ...(this.isAdmin && !this.isGivaudanAudit ? [{ label: 'Audit 업체 등록', path: '/app/audit/companies', adminOnly: true }] : []),
+            ...(this.isAdmin ? [{ label: 'Audit 평가 항목 관리', path: '/app/audit/items-management', adminOnly: true }] : []),
             { label: 'Audit 평가 기록', path: '/app/audit' }
           ]
         },
@@ -152,7 +152,7 @@ export class AppShellComponent implements OnDestroy, AfterViewInit {
     }
     // User management: admin only
     if (this.isAdmin && !this.isViewer) {
-      this.menus.push({ key: 'user', icon: 'group', label: 'User', submenu: [ { label: '사용자 관리', path: '/app/admin/roles' } ] });
+      this.menus.push({ key: 'user', icon: 'group', label: 'User', submenu: [ { label: '사용자 관리', path: '/app/admin/roles', adminOnly: true } ] });
     }
     this.scheduleRailUpdate();
   }
