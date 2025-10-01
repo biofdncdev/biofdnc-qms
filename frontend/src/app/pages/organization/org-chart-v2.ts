@@ -322,7 +322,7 @@ interface V2Node {
     .vice-chairman-level {
       display: flex;
       justify-content: center;
-      margin-bottom: 100px;
+      margin-bottom: 90px;
       position: relative;
     }
     
@@ -369,7 +369,7 @@ interface V2Node {
     }
 
     .child-container { 
-      margin-top: 100px; 
+      margin-top: 90px; 
       width: 100%; 
       position: relative; 
       display: flex; 
