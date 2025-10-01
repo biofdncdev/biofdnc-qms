@@ -117,7 +117,7 @@ interface V2Node {
                      [class.first-node]="first"
                      [class.last-node]="last">
                   <!-- connectors removed -->
-                <div class="node dept" 
+                  <div class="node dept" 
                        [attr.data-node-id]="d.id"
                        [class.selected]="selected?.id === d.id"
                        (click)="select(d, $event)" 
@@ -140,10 +140,9 @@ interface V2Node {
                       </span>
                       <div class="member-drop-end" (dragover)="onDragOverMember($event)" (drop)="onDropMemberEnd($event, d)"></div>
                     </div>
-                    <button class="add-btn" *ngIf="selected?.id === d.id" (click)="openAddModal($event)">
-                      <span>+</span>
-                    </button>
-                    <button class="delete-btn" (click)="deleteNode(d, $event)">🗑</button>
+                    <button class="mini-btn up action-edit" *ngIf="selected?.id === d.id" title="수정" (click)="openRename(d, $event)">✎</button>
+                    <button class="add-btn small action-add" *ngIf="selected?.id === d.id" title="하위 부서 추가" (click)="openAddModal($event)"><span>+</span></button>
+                    <button class="mini-btn down action-del" *ngIf="selected?.id === d.id" title="삭제" (click)="deleteNode(d, $event)">🗑</button>
                   </div>
                   <div class="child-container" *ngIf="childrenOf(d).length > 0">
                     <div class="child-wrapper">
@@ -293,10 +292,7 @@ interface V2Node {
     .level-wrapper {
       display: flex;
       justify-content: center;
-      gap: 16px;
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      padding-bottom: 10px;
+      gap: 24px;
     }
     
     .node-group {
@@ -368,8 +364,7 @@ interface V2Node {
       background: #fff;
       border-radius: 12px;
       box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-      min-width: 100px;
-      max-width: 120px;
+      min-width: 120px;
       position: relative;
       transition: all 0.3s;
       cursor: pointer;
@@ -386,10 +381,10 @@ interface V2Node {
     }
     
     .node .title {
-      padding: 8px 10px;
+      padding: 10px 12px;
       border-bottom: 1px solid #e2e8f0;
       font-weight: 700;
-      font-size: 14px; /* CEO(16px)보다 2 작게 */
+      font-size: 15px; /* CEO(16px)보다 1 작게 */
       color: #1e293b;
       text-align: center;
       cursor: move;
@@ -400,11 +395,11 @@ interface V2Node {
     }
     
     .members {
-      padding: 6px;
-      min-height: 30px;
+      padding: 8px;
+      min-height: 36px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 6px;
       align-items: center;
     }
     
@@ -488,6 +483,15 @@ interface V2Node {
       background: #2563eb;
       transform: translateY(-50%) scale(1.1);
     }
+
+    .add-btn.small { width: 28px; height: 28px; font-size: 18px; }
+
+    .mini-btn { width:24px; height:24px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(0,0,0,.15); background:#fff; position:absolute; right:-28px; }
+    .mini-btn.up { color:#2563eb; }
+    .mini-btn.down { color:#dc2626; }
+    .action-edit { top: calc(50% - 36px); transform: translateY(-50%); }
+    .action-add  { top: 50%; transform: translateY(-50%); right:-32px; }
+    .action-del  { top: calc(50% + 36px); transform: translateY(-50%); }
     
     /* 삭제 버튼 */
     .delete-btn {
@@ -1035,6 +1039,14 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
         this.selected = null;
       }
       this.hideLines();
+    }
+  }
+
+  openRename(node: V2Node, event: Event){
+    event.stopPropagation();
+    const name = prompt('부서명 수정', node.name);
+    if(name && name.trim()){
+      node.name = name.trim();
     }
   }
 
