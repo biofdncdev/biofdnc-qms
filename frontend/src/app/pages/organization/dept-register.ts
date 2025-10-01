@@ -60,13 +60,15 @@ interface Dept { id: string; name: string; code: string; company_code?: string }
       <div style="display:grid; grid-template-columns: 120px 1fr 90px 80px; gap:0; background:#f8fafc; border-bottom:1px solid #e5e7eb; padding:8px 10px; font-weight:700;">
         <div>부서코드</div><div>부서명</div><div>수정</div><div>삭제</div>
       </div>
-      <div *ngFor="let d of depts()" style="display:grid; grid-template-columns: 120px 1fr 90px 80px; gap:0; padding:8px 10px; border-bottom:1px solid #f1f5f9; align-items:center;">
-        <div>{{ d.code }}</div>
-        <div>{{ d.name }}</div>
-        <div><button class="btn secondary" (click)="edit(d)" [disabled]="busyDept()">수정</button></div>
-        <div><button class="btn danger" (click)="remove(d)" [disabled]="busyDept()">삭제</button></div>
+      <div style="max-height:250px; overflow-y:auto;">
+        <div *ngFor="let d of depts()" style="display:grid; grid-template-columns: 120px 1fr 90px 80px; gap:0; padding:8px 10px; border-bottom:1px solid #f1f5f9; align-items:center;">
+          <div>{{ d.code }}</div>
+          <div>{{ d.name }}</div>
+          <div><button class="btn secondary" (click)="edit(d)" [disabled]="busyDept()">수정</button></div>
+          <div><button class="btn danger" (click)="remove(d)" [disabled]="busyDept()">삭제</button></div>
+        </div>
+        <div *ngIf="!depts().length" style="padding:12px; color:#94a3b8;">등록된 부서가 없습니다.</div>
       </div>
-      <div *ngIf="!depts().length" style="padding:12px; color:#94a3b8;">등록된 부서가 없습니다.</div>
     </div>
     
     <!-- Company edit modal -->

@@ -40,8 +40,8 @@ interface Cat { id: string; name: string; doc_prefix: string; department_code?: 
         <div>{{ c.company_code || '-' }}</div>
         <div>{{ c.doc_prefix }}</div>
         <div>{{ c.name }}</div>
-        <div><button class="btn secondary" (click)="openEdit(c)" [disabled]="busy()">수정</button></div>
-        <div><button class="btn danger" (click)="remove(c)" [disabled]="busy()">삭제</button></div>
+        <div style="display:flex; align-items:center; justify-content:center;"><button class="btn secondary" (click)="openEdit(c)" [disabled]="busy()">수정</button></div>
+        <div style="display:flex; align-items:center; justify-content:center;"><button class="btn danger" (click)="remove(c)" [disabled]="busy()">삭제</button></div>
       </div>
       <div *ngIf="!cats().length" style="padding:12px; color:#94a3b8;">등록된 카테고리가 없습니다.</div>
     </div>
@@ -77,6 +77,9 @@ interface Cat { id: string; name: string; doc_prefix: string; department_code?: 
   `,
   styles: [`
     .btn{ 
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       background:#3b82f6; 
       color:#fff; 
       border:2px solid #3b82f6; 
