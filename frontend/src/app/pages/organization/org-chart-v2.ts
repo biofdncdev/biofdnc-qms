@@ -322,7 +322,7 @@ interface V2Node {
     .vice-chairman-level {
       display: flex;
       justify-content: center;
-      margin-bottom: 50px;
+      margin-bottom: 100px;
       position: relative;
     }
     
@@ -369,7 +369,7 @@ interface V2Node {
     }
 
     .child-container { 
-      margin-top: 40px; 
+      margin-top: 100px; 
       width: 100%; 
       position: relative; 
       display: flex; 
@@ -1363,9 +1363,9 @@ export class OrgChartV2Component implements OnInit, AfterViewInit, OnDestroy {
     if (chairmanEl && viceEl) {
       try {
         const line = new LeaderLine(chairmanEl, viceEl, {
-          color: '#ef4444',
+          color: '#cbd5e1',
           size: 2,
-          path: 'straight',
+          path: 'fluid',
           startSocket: 'bottom',
           endSocket: 'top',
           startPlug: 'behind',
@@ -1384,9 +1384,9 @@ export class OrgChartV2Component implements OnInit, AfterViewInit, OnDestroy {
       if (viceEl && deptEl) {
         try {
           const line = new LeaderLine(viceEl, deptEl, {
-            color: '#22c55e',
+            color: '#cbd5e1',
             size: 2,
-            path: 'straight',
+            path: 'fluid',
             startSocket: 'bottom',
             endSocket: 'top',
             startPlug: 'behind',
@@ -1408,9 +1408,9 @@ export class OrgChartV2Component implements OnInit, AfterViewInit, OnDestroy {
         if (parentEl && childEl) {
           try {
             const line = new LeaderLine(parentEl, childEl, {
-              color: '#22c55e',
+              color: '#cbd5e1',
               size: 2,
-              path: 'straight',
+              path: 'fluid',
               startSocket: 'bottom',
               endSocket: 'top',
               startPlug: 'behind',
