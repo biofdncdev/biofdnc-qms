@@ -12,6 +12,9 @@ interface Dept { id: string; name: string; code: string; company_code?: string }
   template: `
   <div class="page" style="padding:16px;">
     <h2 style="margin:0 0 12px 0;">회사ㆍ부서 코드 등록</h2>
+    
+    <!-- 회사 등록 -->
+    <h3 style="margin:24px 0 12px 0; font-size:16px; font-weight:600;">회사 등록</h3>
     <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px;">
       <div style="display:flex; flex-direction:column;">
         <label>회사코드</label>
@@ -24,19 +27,8 @@ interface Dept { id: string; name: string; code: string; company_code?: string }
       <button class="btn" (click)="saveCompany()" [disabled]="busyCompany()" style="height:32px; padding:0 12px;">{{ busyCompany() ? '저장중…' : '저장' }}</button>
     </div>
 
-    <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px;">
-      <div style="display:flex; flex-direction:column;">
-        <label>부서코드</label>
-        <input type="text" [(ngModel)]="code" placeholder="예: RM" style="height:32px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px; width:120px;" />
-      </div>
-      <div style="display:flex; flex-direction:column; min-width:260px;">
-        <label>부서명</label>
-        <input type="text" [(ngModel)]="name" placeholder="예: 원료제조팀" style="height:32px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px;" />
-      </div>
-      <button class="btn" (click)="save()" [disabled]="busyDept()" style="height:32px; padding:0 12px;">{{ busyDept() ? '저장중…' : '저장' }}</button>
-    </div>
-
-    <div class="list" style="border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; max-width:880px;">
+    <!-- 회사 코드 테이블 -->
+    <div class="list" style="border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; max-width:880px; margin-bottom:32px;">
       <div style="display:grid; grid-template-columns: 120px 1fr 90px 80px; gap:0; background:#f8fafc; border-bottom:1px solid #e5e7eb; padding:8px 10px; font-weight:700;">
         <div>회사코드</div><div>회사명</div><div>수정</div><div>삭제</div>
       </div>
@@ -49,7 +41,22 @@ interface Dept { id: string; name: string; code: string; company_code?: string }
       <div *ngIf="!companies().length" style="padding:12px; color:#94a3b8;">등록된 회사가 없습니다.</div>
     </div>
 
-    <div class="list" style="border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; max-width:880px; margin-top:16px;">
+    <!-- 부서 등록 -->
+    <h3 style="margin:24px 0 12px 0; font-size:16px; font-weight:600;">부서 등록</h3>
+    <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px;">
+      <div style="display:flex; flex-direction:column;">
+        <label>부서코드</label>
+        <input type="text" [(ngModel)]="code" placeholder="예: RM" style="height:32px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px; width:120px;" />
+      </div>
+      <div style="display:flex; flex-direction:column; min-width:260px;">
+        <label>부서명</label>
+        <input type="text" [(ngModel)]="name" placeholder="예: 원료제조팀" style="height:32px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px;" />
+      </div>
+      <button class="btn" (click)="save()" [disabled]="busyDept()" style="height:32px; padding:0 12px;">{{ busyDept() ? '저장중…' : '저장' }}</button>
+    </div>
+
+    <!-- 부서 코드 테이블 -->
+    <div class="list" style="border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; max-width:880px;">
       <div style="display:grid; grid-template-columns: 120px 1fr 90px 80px; gap:0; background:#f8fafc; border-bottom:1px solid #e5e7eb; padding:8px 10px; font-weight:700;">
         <div>부서코드</div><div>부서명</div><div>수정</div><div>삭제</div>
       </div>
