@@ -335,6 +335,36 @@ export class AuthService {
       });
   }
 
+  // ===== User Departments Management =====
+  async getUserDepartments(userId: string) {
+    return this.client
+      .from('user_departments')
+      .select('*')
+      .eq('user_id', userId)
+      .order('department_code');
+  }
+
+  async setUserDepartments(userId: string, departments: Array<{ department_code: string; has_approval_authority: boolean }>) {
+    // Delete existing departments for this user
+    await this.client
+      .from('user_departments')
+      .delete()
+      .eq('user_id', userId);
+
+    // Insert new departments if any
+    if (departments.length > 0) {
+      return this.client
+        .from('user_departments')
+        .insert(departments.map(d => ({
+          user_id: userId,
+          department_code: d.department_code,
+          has_approval_authority: d.has_approval_authority
+        })));
+    }
+
+    return { data: null, error: null };
+  }
+
   // ===== Helper Methods =====
   private getPublicAppUrl(): string {
     // Use explicit deployment URL to avoid localhost links

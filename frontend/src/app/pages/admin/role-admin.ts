@@ -1,21 +1,24 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
+import { OrganizationService } from '../../services/organization.service';
 import { MatTableModule } from '@angular/material/table';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialogModule } from '@angular/material/dialog';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 
 @Component({
   selector: 'app-role-admin',
   standalone: true,
-  imports: [CommonModule, MatTableModule, MatSelectModule, MatButtonModule, MatIconModule, MatDialogModule],
+  imports: [CommonModule, FormsModule, MatTableModule, MatSelectModule, MatButtonModule, MatIconModule, MatDialogModule, MatCheckboxModule],
   templateUrl: './role-admin.html',
   styleUrls: ['./role-admin.scss']
 })
 export class RoleAdminComponent implements OnInit {
-  displayedColumns = ['name','email','created_at','updated_at','last_sign_in_at','status','role','actions'];
+  displayedColumns = ['name','email','created_at','updated_at','last_sign_in_at','status','role','departments','actions'];
   rows: any[] = [];
   roles = ['admin','manager','staff','audit','viewer'];
   statuses: Array<'active' | 'inactive'> = ['active','inactive'];
@@ -24,7 +27,12 @@ export class RoleAdminComponent implements OnInit {
   nameEdits: Record<string, string> = {};
   statusFilter: 'all' | 'active' | 'inactive' = 'all';
 
-  constructor(private auth: AuthService) {}
+  // 부서 관리
+  departments: Array<{ code: string; name: string; company?: string }> = [];
+  editingDepartments: { userId: string; departments: Array<{ department_code: string; has_approval_authority: boolean }> } | null = null;
+  userDepartmentsCache: Record<string, Array<{ department_code: string; has_approval_authority: boolean }>> = {};
+
+  constructor(private auth: AuthService, private org: OrganizationService) {}
 
   async ngOnInit() {
     await this.load();
@@ -32,6 +40,11 @@ export class RoleAdminComponent implements OnInit {
 
   async load() {
     this.loading = true;
+    
+    // Load departments
+    this.departments = await this.org.listDepartments();
+    
+    // Load users
     const { data, error } = await this.auth.listUsers();
     if (!error && data) {
       const rowsRaw = (data as any[]);
@@ -42,6 +55,14 @@ export class RoleAdminComponent implements OnInit {
       }));
       if (this.statusFilter !== 'all') rows = rows.filter(r => r.status === this.statusFilter);
       this.rows = rows;
+      
+      // Load department info for each user
+      for (const row of this.rows) {
+        if (row.id) {
+          const { data: userDepts } = await this.auth.getUserDepartments(row.id);
+          this.userDepartmentsCache[row.id] = userDepts || [];
+        }
+      }
     }
     this.loading = false;
   }
@@ -209,6 +230,88 @@ export class RoleAdminComponent implements OnInit {
       alert('가입 요청 삭제 실패: ' + (e?.message || e));
       // Only reload on error
       await this.load();
+    }
+  }
+
+  // ===== Department Management =====
+  getUserDepartmentsDisplay(userId: string): string {
+    const userDepts = this.userDepartmentsCache[userId] || [];
+    if (userDepts.length === 0) return '-';
+    
+    return userDepts.map(ud => {
+      const dept = this.departments.find(d => d.code === ud.department_code);
+      const deptName = dept ? `${dept.code}(${dept.name})` : ud.department_code;
+      return ud.has_approval_authority ? `${deptName}★` : deptName;
+    }).join(', ');
+  }
+
+  openDepartmentEdit(row: any) {
+    const existing = this.userDepartmentsCache[row.id] || [];
+    this.editingDepartments = {
+      userId: row.id,
+      departments: JSON.parse(JSON.stringify(existing)) // deep copy
+    };
+  }
+
+  closeDepartmentEdit() {
+    this.editingDepartments = null;
+  }
+
+  toggleDepartment(deptCode: string, checked: boolean) {
+    if (!this.editingDepartments) return;
+    
+    if (checked) {
+      // Add department if not exists
+      if (!this.editingDepartments.departments.find(d => d.department_code === deptCode)) {
+        this.editingDepartments.departments.push({
+          department_code: deptCode,
+          has_approval_authority: false
+        });
+      }
+    } else {
+      // Remove department
+      this.editingDepartments.departments = this.editingDepartments.departments.filter(
+        d => d.department_code !== deptCode
+      );
+    }
+  }
+
+  toggleApprovalAuthority(deptCode: string, hasAuthority: boolean) {
+    if (!this.editingDepartments) return;
+    
+    const dept = this.editingDepartments.departments.find(d => d.department_code === deptCode);
+    if (dept) {
+      dept.has_approval_authority = hasAuthority;
+    }
+  }
+
+  isDepartmentSelected(deptCode: string): boolean {
+    if (!this.editingDepartments) return false;
+    return !!this.editingDepartments.departments.find(d => d.department_code === deptCode);
+  }
+
+  hasApprovalAuthority(deptCode: string): boolean {
+    if (!this.editingDepartments) return false;
+    const dept = this.editingDepartments.departments.find(d => d.department_code === deptCode);
+    return dept?.has_approval_authority || false;
+  }
+
+  async saveDepartmentEdit() {
+    if (!this.editingDepartments) return;
+    
+    try {
+      await this.auth.setUserDepartments(
+        this.editingDepartments.userId,
+        this.editingDepartments.departments
+      );
+      
+      // Update cache
+      this.userDepartmentsCache[this.editingDepartments.userId] = this.editingDepartments.departments;
+      
+      this.closeDepartmentEdit();
+      alert('부서 정보가 저장되었습니다.');
+    } catch (e: any) {
+      alert('부서 정보 저장 실패: ' + (e?.message || e));
     }
   }
 }
