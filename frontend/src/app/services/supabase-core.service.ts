@@ -52,7 +52,11 @@ export class SupabaseCoreService {
             // 일부 브라우저/확장프로그램의 Web Locks 충돌을 피하기 위해 자동 리프레시 비활성화
             // (세션 만료 시 재로그인 필요)
             autoRefreshToken: false,
-            detectSessionInUrl: true,
+            // URL에서 세션 자동 감지 비활성화 (회원가입 페이지에서 레이트리밋 중복 요청 방지)
+            detectSessionInUrl: false,
+            // 페이지 로드 시 자동 세션 새로고침 비활성화 (rate limit 방지)
+            storageKey: 'qms-auth',
+            flowType: 'pkce',
           },
         }
       );

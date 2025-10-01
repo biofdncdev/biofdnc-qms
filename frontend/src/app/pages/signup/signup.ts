@@ -72,17 +72,22 @@ export class SignupComponent {
   submitting = false;
   cooldownRemainingSec = 0;
   private cooldownTimer?: any;
+  private lastSubmitTime = 0;
+  private readonly MIN_SUBMIT_INTERVAL_MS = 2000; // 2초 디바운스
 
   constructor(
     private fb: FormBuilder,
     private supabaseService: AuthService,
     private router: Router
   ) {
+    // 회원가입 페이지 진입 시 기존 세션 제거 (rate limit 방지)
+    this.clearAnyExistingSession();
+    
     this.signupForm = this.fb.group(
       {
         name: new FormControl('', { validators: [Validators.required], updateOn: 'change' }),
         email: new FormControl('', { validators: [Validators.required, Validators.email], updateOn: 'change' }),
-        password: new FormControl('', { validators: [Validators.required, Validators.minLength(6)], updateOn: 'change' }),
+        password: new FormControl('', { validators: [Validators.required, Validators.minLength(8)], updateOn: 'change' }),
         confirmPassword: new FormControl('', { validators: [Validators.required], updateOn: 'change' }),
       },
       { validators: passwordMatchValidator, updateOn: 'change' }
@@ -117,6 +122,14 @@ export class SignupComponent {
     if (this.signupForm.invalid) return;
     if (this.submitting || this.cooldownRemainingSec > 0) return;
 
+    // 디바운스: 마지막 제출로부터 최소 2초 경과 필요
+    const now = Date.now();
+    if (now - this.lastSubmitTime < this.MIN_SUBMIT_INTERVAL_MS) {
+      console.warn('Too many signup requests. Please wait.');
+      return;
+    }
+    this.lastSubmitTime = now;
+
     this.errorMessage = null;
     this.submitting = true;
     const name: string = this.signupForm.value.name;
@@ -145,52 +158,53 @@ export class SignupComponent {
           desc.includes('user already exists');
 
         if (looksDuplicate) {
-          // 이미 auth에 존재하지만 users 테이블에 없을 수 있는 케이스를 위해
-          // 비밀번호 재설정 메일을 발송하여 계정 복구를 유도
-          try {
-            await this.supabaseService.getClient().auth.resetPasswordForEmail(email, {
-              redirectTo: 'https://biofdnc-qms.vercel.app/forgot-credentials'
-            });
-            alert('이미 가입된 이메일입니다. 비밀번호 재설정 링크를 이메일로 발송했습니다. 메일함을 확인해주세요.');
-            return;
-          } catch (e) {
-            const emailCtrl = this.signupForm.get('email');
-            const nextErrors = { ...(emailCtrl?.errors || {}), duplicate: true };
-            emailCtrl?.setErrors(nextErrors);
-            return;
-          }
+          // 이미 auth에 존재하는 이메일: 레이트리밋 방지를 위해 resetPasswordForEmail 호출 제거
+          const emailCtrl = this.signupForm.get('email');
+          const nextErrors = { ...(emailCtrl?.errors || {}), duplicate: true };
+          emailCtrl?.setErrors(nextErrors);
+          this.errorMessage = '이미 가입된 이메일입니다. 로그인 페이지에서 "비밀번호를 잊으셨나요?"를 이용해 주세요.';
+          return;
         }
 
         throw error;
       }
 
       if (!data?.user) {
-        alert('회원가입이 완료되었습니다. 이메일로 전송된 인증 메일의 링크를 클릭해 인증을 완료해 주세요. 인증 완료 후 로그인하실 수 있습니다.');
+        alert('회원가입이 완료되었습니다. 관리자에게 권한 요청을 해주세요. 승인 후 로그인하실 수 있습니다.');
         // 관리자 알림 등록
         try {
           await this.supabaseService.addSignupNotification({ email, name });
         } catch {}
+        this.router.navigate(['/login']);
         return;
       }
 
-      // 이메일 인증이 필요한 워크플로라면 여기서도 알림을 남겨 관리자 검토를 유도
+      // 관리자 알림 등록
       try {
         await this.supabaseService.addSignupNotification({ email, name });
       } catch {}
-      alert('회원가입이 완료되었습니다. 이메일로 전송된 인증 메일의 링크를 클릭해 인증을 완료해 주세요. 이제 로그인 페이지로 이동합니다.');
+      alert('회원가입이 완료되었습니다. 관리자에게 권한 요청을 해주세요. 승인 후 로그인하실 수 있습니다.');
       this.router.navigate(['/login']);
     } catch (error: any) {
       const message = String(error?.message || '');
-      this.errorMessage = `회원가입 중 오류가 발생했습니다: ${message}`;
       console.error('Signup error:', error);
+      
       // 429 레이트리밋 처리: 메시지 내 남은 시간 파싱(대략 59초) 후 쿨다운 시작
       const isRateLimited = (error?.status === 429) || /after\s+(\d+)\s*seconds?/i.test(message);
       let seconds = 0;
       const m = message.match(/after\s+(\d+)\s*seconds?/i);
       if (m && m[1]) seconds = parseInt(m[1], 10);
       if (!Number.isFinite(seconds) || seconds <= 0) seconds = 60;
+      
       if (isRateLimited) {
+        this.errorMessage = `보안상의 이유로 ${seconds}초 후에 다시 시도할 수 있습니다.\n\n` +
+          `💡 즉시 가입하려면 다음 방법을 시도해보세요:\n` +
+          `• 모바일 핫스팟으로 연결\n` +
+          `• VPN 사용\n` +
+          `• 다른 네트워크 환경에서 시도`;
         this.startCooldown(seconds);
+      } else {
+        this.errorMessage = `회원가입 중 오류가 발생했습니다: ${message}`;
       }
     }
     finally {
@@ -210,5 +224,35 @@ export class SignupComponent {
         this.cooldownRemainingSec = 0;
       }
     }, 1000);
+  }
+
+  private clearAnyExistingSession() {
+    try {
+      // API 호출 없이 로컬 저장소만 정리 (rate limit 방지)
+      const storageKey = 'qms-auth';
+      
+      // SessionStorage에서 Supabase 세션 제거
+      if (typeof sessionStorage !== 'undefined') {
+        const keys = Object.keys(sessionStorage);
+        keys.forEach(key => {
+          if (key.startsWith(storageKey) || key.includes('supabase')) {
+            sessionStorage.removeItem(key);
+          }
+        });
+      }
+      
+      // LocalStorage에서도 제거 (혹시 남아있을 수 있음)
+      if (typeof localStorage !== 'undefined') {
+        const keys = Object.keys(localStorage);
+        keys.forEach(key => {
+          if (key.startsWith(storageKey) || key.includes('supabase')) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+    } catch (err) {
+      // 저장소 정리 실패는 무시 (회원가입에 영향 없음)
+      console.debug('Storage cleanup on signup page:', err);
+    }
   }
 }
