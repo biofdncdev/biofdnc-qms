@@ -59,7 +59,7 @@ interface V2Node {
         <svg class="connections-svg" *ngIf="showLines()" 
              [attr.width]="svgWidth" 
              [attr.height]="svgHeight"
-             style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0;">
+             style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; width: 100%; height: 100%; transform: scale(0.92); transform-origin: center top;">
           <path *ngFor="let line of connectionLines()" 
                 [attr.d]="line.path" 
                 fill="none" 
@@ -297,20 +297,24 @@ interface V2Node {
     /* 메인 차트 영역 */
     .main {
       flex: 1;
-      padding: 32px;
+      padding: 20px;
       overflow: auto;
       position: relative;
     }
     
     .chart-container {
-      min-width: 800px;
-      min-height: 600px;
+      width: 100%;
+      height: 100%;
       position: relative;
-      padding: 40px;
+      padding: 20px 20px 40px 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
+      padding-top: 50px;
+      transform: scale(0.92);
+      transform-origin: center top;
+      overflow: visible;
     }
     
     /* 대표이사 레벨 */
@@ -356,7 +360,7 @@ interface V2Node {
     .level-wrapper {
       display: flex;
       justify-content: center;
-      gap: 24px;
+      gap: 12px;
     }
     
     .node-group {
@@ -366,11 +370,11 @@ interface V2Node {
     }
     
     .node-group.has-children {
-      margin: 0 20px;
+      margin: 0 8px;
     }
 
     .child-container { 
-      margin-top: 50px; 
+      margin-top: 40px; 
       width: 100%; 
       position: relative; 
       display: flex; 
@@ -400,7 +404,7 @@ interface V2Node {
       width: 100%; 
       display: flex; 
       justify-content: center; 
-      gap: 24px;
+      gap: 12px;
       margin-top: 0;
     }
     
@@ -426,9 +430,9 @@ interface V2Node {
     /* 노드 공통 스타일 */
     .node {
       background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-      min-width: 120px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      min-width: 95px;
       position: relative;
       transition: all 0.3s;
       cursor: pointer;
@@ -436,20 +440,20 @@ interface V2Node {
     }
     
     .node:hover {
-      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-      transform: translateY(-2px);
+      box-shadow: 0 3px 12px rgba(0,0,0,0.1);
+      transform: translateY(-1px);
     }
     
     .node.selected {
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
       z-index: 50;
     }
     
     .node .title {
-      padding: 10px 12px;
+      padding: 8px 10px;
       border-bottom: 1px solid #e2e8f0;
-      font-weight: 700;
-      font-size: 15px; /* CEO(16px)보다 1 작게 */
+      font-weight: 600;
+      font-size: 13px;
       color: #1e293b;
       text-align: center;
       cursor: move;
@@ -460,19 +464,19 @@ interface V2Node {
     }
     
     .members {
-      padding: 8px;
-      min-height: 36px;
+      padding: 6px;
+      min-height: 28px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
       align-items: center;
     }
     
     .chip {
       display: inline-flex;
       align-items: center;
-      padding: 4px 8px;
-      border-radius: 14px;
+      padding: 3px 8px;
+      border-radius: 12px;
       background: #f1f5f9;
       font-size: 12px;
       color: #475569;
@@ -489,14 +493,14 @@ interface V2Node {
     .chairman {
       background: linear-gradient(135deg, #93c5fd, #60a5fa);
       color: #1e3a8a;
-      min-width: 140px;
+      min-width: 125px;
       border: 2px solid #dbeafe;
     }
     
     .chairman .title {
       border-color: #bfdbfe;
       color: #1e3a8a;
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 700;
     }
     
@@ -509,14 +513,14 @@ interface V2Node {
     .vice-chairman {
       background: linear-gradient(135deg, #a5b4fc, #818cf8);
       color: #312e81;
-      min-width: 140px;
+      min-width: 125px;
       border: 2px solid #e0e7ff;
     }
     
     .vice-chairman .title {
       border-color: #c7d2fe;
       color: #312e81;
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 700;
     }
     
@@ -529,13 +533,13 @@ interface V2Node {
     .ceo {
       background: linear-gradient(135deg, #3b82f6, #2563eb);
       color: #fff;
-      min-width: 140px;
+      min-width: 110px;
     }
     
     .ceo .title {
       border-color: rgba(255,255,255,0.2);
       color: #fff;
-      font-size: 16px; /* 기준 폰트 */
+      font-size: 14px; /* 기준 폰트 */
     }
     
     .ceo .chip {
@@ -1119,11 +1123,11 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
   }
 
   getLevel1LineLeft(): number {
-    const nodes = this.depts(1);
+    const nodes = this.depts(2); // level 2로 변경 (현재 레벨1은 실제로 레벨2)
     if (nodes.length <= 1) return 0;
     // 첫 번째 노드의 중심 위치 계산
-    const nodeWidth = 120;
-    const gap = 24;
+    const nodeWidth = 95; // CSS min-width와 일치
+    const gap = 12; // CSS gap과 일치
     const totalWidth = nodes.length * nodeWidth + (nodes.length - 1) * gap;
     const containerWidth = 800; // 대략적인 컨테이너 너비
     const startOffset = (containerWidth - totalWidth) / 2;
@@ -1131,11 +1135,11 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
   }
   
   getLevel1LineWidth(): number {
-    const nodes = this.depts(1);
+    const nodes = this.depts(2); // level 2로 변경
     if (nodes.length <= 1) return 0;
     // 첫 번째와 마지막 노드 중심 사이의 거리
-    const nodeWidth = 120;
-    const gap = 24;
+    const nodeWidth = 95; // CSS min-width와 일치
+    const gap = 12; // CSS gap과 일치
     return (nodes.length - 1) * (nodeWidth + gap);
   }
   
@@ -1143,8 +1147,8 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     const children = this.childrenOf(parent);
     if (children.length <= 1) return 0;
     // 첫 번째 자식 노드의 중심 위치 (부모 컨테이너 기준)
-    const nodeWidth = 120;
-    const gap = 24;
+    const nodeWidth = 95; // CSS min-width와 일치
+    const gap = 12; // CSS gap과 일치
     const totalWidth = children.length * nodeWidth + (children.length - 1) * gap;
     const containerWidth = totalWidth + 100; // 자식 컨테이너 너비
     const startOffset = (containerWidth - totalWidth) / 2;
@@ -1155,8 +1159,8 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     const children = this.childrenOf(parent);
     if (children.length <= 1) return 0;
     // 첫 번째와 마지막 자식 노드 중심 사이의 거리
-    const nodeWidth = 120;
-    const gap = 24;
+    const nodeWidth = 95; // CSS min-width와 일치
+    const gap = 12; // CSS gap과 일치
     return (children.length - 1) * (nodeWidth + gap);
   }
 
@@ -1271,62 +1275,98 @@ export class OrgChartV2Component implements OnInit, AfterViewInit {
     setTimeout(() => {
       const lines: Array<{path: string}> = [];
       const container = this.chartContainer?.nativeElement as HTMLElement;
-      if (!container) return;
+      if (!container) {
+        console.log('No container found');
+        return;
+      }
 
       const containerRect = container.getBoundingClientRect();
 
-      // helper: get node center (by id)
-    const getCenter = (id: string) => {
-      const el = container.querySelector(`[data-node-id="${id}"]`);
+      // helper: get node center and bounds (by id)
+      const getNodeInfo = (id: string) => {
+        const el = container.querySelector(`[data-node-id="${id}"]`) as HTMLElement;
         if (!el) return null;
-        const r = (el as HTMLElement).getBoundingClientRect();
-        return { x: r.left - containerRect.left + r.width/2, top: r.top - containerRect.top, bottom: r.bottom - containerRect.top };
+        const r = el.getBoundingClientRect();
+        return { 
+          x: r.left - containerRect.left + r.width/2, 
+          top: r.top - containerRect.top, 
+          bottom: r.bottom - containerRect.top,
+          width: r.width,
+          height: r.height
+        };
       };
 
-      // recursive draw for a parent to its children
-      const drawToChildren = (parentId: string) => {
-        const parent = this.nodes().find(n => n.id === parentId);
-        const children = this.nodes().filter(n => n.parentId === parentId);
-        if (!children.length) return;
-
-        const pc = getCenter(parentId);
-        if (!pc) return;
-
-        // vertical down a bit from parent
-        const midY = pc.bottom + 20;
-        lines.push({ path: `M ${pc.x} ${pc.bottom} L ${pc.x} ${midY}` });
-
-        // gather child centers
-        const childCenters = children
-          .map(c => ({ id: c.id, c: getCenter(c.id) }))
-          .filter(e => !!e.c) as Array<{id:string,c:{x:number,top:number,bottom:number}}>;
-        if (!childCenters.length) return;
-
-        // horizontal from first to last at midY
-        const minX = Math.min(...childCenters.map(cc => cc.c.x));
-        const maxX = Math.max(...childCenters.map(cc => cc.c.x));
-        lines.push({ path: `M ${minX} ${midY} L ${maxX} ${midY}` });
-
-        // vertical down to each child top
-        childCenters.forEach(cc => {
-          lines.push({ path: `M ${cc.c.x} ${midY} L ${cc.c.x} ${cc.c.top}` });
-          // recurse
-          drawToChildren(cc.id);
-        });
-      };
-
-      // start from Chairman
-      const chairmanC = getCenter(this.chairman.id);
-      if (chairmanC) {
-        // small stem under Chairman
-        const stemY = chairmanC.bottom + 10;
-        lines.push({ path: `M ${chairmanC.x} ${chairmanC.bottom} L ${chairmanC.x} ${stemY}` });
+      // 1. Draw Chairman to Vice-Chairman
+      const chairmanInfo = getNodeInfo(this.chairman.id);
+      const viceChairmanInfo = getNodeInfo(this.viceChairman.id);
+      
+      if (chairmanInfo && viceChairmanInfo) {
+        // Vertical line from chairman bottom center to vice-chairman top center
+        lines.push({ path: `M ${chairmanInfo.x} ${chairmanInfo.bottom} L ${chairmanInfo.x} ${viceChairmanInfo.top}` });
       }
-      drawToChildren(this.chairman.id);
 
+      // 2. Draw Vice-Chairman to Level 2 departments (5개 부문)
+      const level2Depts = this.depts(2);
+      
+      if (viceChairmanInfo && level2Depts.length > 0) {
+        const deptInfos = level2Depts
+          .map(d => ({ id: d.id, info: getNodeInfo(d.id), node: d }))
+          .filter(d => d.info !== null)
+          .sort((a, b) => a.info!.x - b.info!.x);
+
+        if (deptInfos.length > 0) {
+          // Calculate mid Y between vice-chairman and departments
+          const firstDeptTop = deptInfos[0].info!.top;
+          const midY = viceChairmanInfo.bottom + (firstDeptTop - viceChairmanInfo.bottom) / 2;
+
+          // Vertical line down from vice-chairman
+          lines.push({ path: `M ${viceChairmanInfo.x} ${viceChairmanInfo.bottom} L ${viceChairmanInfo.x} ${midY}` });
+
+          // Horizontal line across all departments
+          if (deptInfos.length > 1) {
+            const minX = deptInfos[0].info!.x;
+            const maxX = deptInfos[deptInfos.length - 1].info!.x;
+            lines.push({ path: `M ${minX} ${midY} L ${maxX} ${midY}` });
+          }
+
+          // Vertical lines down to each department
+          deptInfos.forEach((deptInfo) => {
+            lines.push({ path: `M ${deptInfo.info!.x} ${midY} L ${deptInfo.info!.x} ${deptInfo.info!.top}` });
+
+            // 3. Draw each department to its teams (Level 3)
+            const teams = this.childrenOf(deptInfo.node);
+            if (teams.length > 0) {
+              const teamInfos = teams
+                .map(t => ({ id: t.id, info: getNodeInfo(t.id), node: t }))
+                .filter(t => t.info !== null)
+                .sort((a, b) => a.info!.x - b.info!.x);
+
+              if (teamInfos.length > 0) {
+                const firstTeamTop = teamInfos[0].info!.top;
+                const teamMidY = deptInfo.info!.bottom + (firstTeamTop - deptInfo.info!.bottom) / 2;
+
+                // Vertical line down from department
+                lines.push({ path: `M ${deptInfo.info!.x} ${deptInfo.info!.bottom} L ${deptInfo.info!.x} ${teamMidY}` });
+
+                // Horizontal line across all teams
+                if (teamInfos.length > 1) {
+                  const minTeamX = teamInfos[0].info!.x;
+                  const maxTeamX = teamInfos[teamInfos.length - 1].info!.x;
+                  lines.push({ path: `M ${minTeamX} ${teamMidY} L ${maxTeamX} ${teamMidY}` });
+                }
+
+                // Vertical lines down to each team
+                teamInfos.forEach((teamInfo) => {
+                  lines.push({ path: `M ${teamInfo.info!.x} ${teamMidY} L ${teamInfo.info!.x} ${teamInfo.info!.top}` });
+                });
+              }
+            }
+          });
+        }
+      }
       this.connectionLines.set(lines);
       this.showLines.set(true);
-    }, 100);
+    }, 500);
   }
 
   async onSave(){
