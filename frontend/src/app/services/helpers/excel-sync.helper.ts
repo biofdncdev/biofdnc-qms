@@ -41,10 +41,36 @@ export class ExcelSyncHelper {
       return { ok: true, total: rows.length, updated: 0, skipped: skipCount, inserted: 0, deleted: 0, errors } as any;
     }
 
-    // Fetch existing data
+    // Fetch existing data - fetch ALL products by filtering with uploaded codes
     const uploadedCodes = normalized.map(n => n.product_code);
-    const selectCols = Array.from(new Set<string>([...Array.from(colsInUpload), 'attrs'])).join(',');
-    const { data: allExisting } = await client.from('products').select('product_code, ' + selectCols) as any;
+    
+    // CRITICAL: Always fetch ALL columns from DB, not just columns present in CSV
+    // This is necessary to detect and clear fields that are empty/removed in CSV
+    // Fetch in batches to avoid query size limits
+    let allExisting: any[] = [];
+    const BATCH_SIZE = 1000;
+    
+    for (let i = 0; i < uploadedCodes.length; i += BATCH_SIZE) {
+      const codeBatch = uploadedCodes.slice(i, i + BATCH_SIZE);
+      const { data: batchData, error: fetchError } = await client
+        .from('products')
+        .select('*')  // Fetch all columns to detect clearing of fields
+        .in('product_code', codeBatch) as any;
+      
+      if (fetchError) {
+        console.error('[ExcelSync] Failed to fetch existing products:', fetchError);
+        errors.push({ product_code: '-', message: `DB 조회 실패: ${fetchError.message}` });
+        return { ok: false, total: rows.length, updated: 0, skipped: 0, inserted: 0, deleted: 0, errors } as any;
+      }
+      
+      if (batchData) {
+        allExisting = allExisting.concat(batchData);
+      }
+    }
+    
+    console.log(`[ExcelSync] Fetched ${allExisting.length} existing products from DB (out of ${uploadedCodes.length} uploaded)`);
+    console.log(`[ExcelSync] Processing ${normalized.length} rows from CSV`);
+    console.log(`[ExcelSync] Columns in upload:`, Array.from(colsInUpload).sort());
     
     // Process updates and inserts
     const { toUpsert, updated, skipped, inserted, allExistingCodes } = this.processProductDiff(
@@ -53,12 +79,57 @@ export class ExcelSyncHelper {
       uploadedCodes, 
       colsInUpload
     );
+    
+    console.log(`[ExcelSync] Diff result: updated=${updated}, inserted=${inserted}, skipped=${skipped}`);
+    if (updated === 0 && inserted === 0 && skipped > 0) {
+      console.warn('[ExcelSync] WARNING: All rows skipped! Checking first row...');
+      if (normalized.length > 0 && allExisting.length > 0) {
+        const firstUpload = normalized[0];
+        const firstExisting = allExisting.find((e: any) => e.product_code === firstUpload.product_code);
+        if (firstExisting) {
+          console.log('[ExcelSync] Sample comparison:', {
+            code: firstUpload.product_code,
+            uploadCasNo: firstUpload.row.cas_no,
+            dbCasNo: firstExisting.cas_no,
+            uploadHalal: firstUpload.row.cert_halal,
+            dbHalal: firstExisting.cert_halal
+          });
+        }
+      }
+    }
 
-    // Handle deletions
-    const { toDelete } = this.findProductsToDelete(deleteMode, uploadedCodes, allExistingCodes);
+    // Handle deletions - need to fetch ALL product codes from DB for comparison
+    let allExistingCodesForDelete = new Set<string>();
+    if (deleteMode === 'missing') {
+      // Fetch all product codes from DB in batches (not just uploaded ones)
+      let offset = 0;
+      const FETCH_BATCH = 1000;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data: batch } = await client
+          .from('products')
+          .select('product_code')
+          .range(offset, offset + FETCH_BATCH - 1);
+        
+        if (batch && batch.length > 0) {
+          batch.forEach((p: any) => allExistingCodesForDelete.add(p.product_code));
+          offset += FETCH_BATCH;
+          hasMore = batch.length === FETCH_BATCH; // If less than batch size, we're done
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[ExcelSync] Total products in DB: ${allExistingCodesForDelete.size}, CSV has: ${uploadedCodes.length}`);
+    }
+    
+    const { toDelete } = this.findProductsToDelete(deleteMode, uploadedCodes, allExistingCodesForDelete);
 
     // Execute database operations
     let deleted = 0;
+    
+    console.log(`[ExcelSync] Will upsert ${toUpsert.length} products, delete ${toDelete.length} products`);
     
     if (toUpsert.length) {
       await this.executeProductUpsert(client, toUpsert, errors);
@@ -66,6 +137,11 @@ export class ExcelSyncHelper {
 
     if (toDelete.length > 0 && deleteMode !== 'none') {
       deleted = await this.executeProductDelete(client, toDelete, errors);
+    }
+    
+    console.log(`[ExcelSync] Complete. Errors: ${errors.length}`);
+    if (errors.length > 0) {
+      console.error('[ExcelSync] Errors:', errors.slice(0, 5)); // Log first 5 errors
     }
 
     return { 
@@ -152,7 +228,10 @@ export class ExcelSyncHelper {
       '검색어(이명(異名))':'keywords_alias',
       '사양':'specification',
       '품목특이사항':'special_notes',
+      'CAS':'cas_no',
       'CAS NO':'cas_no',
+      'CAS No':'cas_no',
+      'cas':'cas_no',
       'MOQ':'moq',
       '포장단위':'package_unit',
       'Manufacturer':'manufacturer',
@@ -234,10 +313,22 @@ export class ExcelSyncHelper {
     const normalized: Array<{ product_code: string; row: any }> = [];
     const colsInUpload = new Set<string>(['product_code']);
     const codeHeaders = Object.keys(map).filter(k => map[k] === 'product_code');
+    const seenCodes = new Set<string>();
     let skipped = 0;
 
     const DATE_COLS = new Set(['reg_date','last_update_date']);
     const isEmpty = (val:any) => val===undefined || val===null || (typeof val==='string' && val.trim()==='');
+    
+    // Pre-populate colsInUpload with ALL columns that are present in ANY row
+    // This ensures empty columns are still tracked
+    if (rows.length > 0) {
+      const firstRow = rows[0];
+      for (const [erpHeader, dbCol] of Object.entries(map)) {
+        if (erpHeader in firstRow) {
+          colsInUpload.add(dbCol);
+        }
+      }
+    }
     
     for (const r of rows) {
       const codeRaw = codeHeaders.map(h => r[h]).find(v => v!==undefined && v!==null && String(v).trim()!=='');
@@ -248,22 +339,27 @@ export class ExcelSyncHelper {
         continue; 
       }
 
+      // Skip duplicates within the uploaded CSV
+      if (seenCodes.has(code)) {
+        skipped++;
+        continue;
+      }
+      seenCodes.add(code);
+
       const obj: any = { product_code: code };
       
       for (const [erp, dbcol] of Object.entries(map)) {
-        if (r[erp] === undefined) continue;
+        // Check if this column header exists in this row (even if empty)
+        if (!(erp in r)) continue;
         
         const raw = r[erp];
         let v: any = DATE_COLS.has(dbcol) ? this.toDateText(raw) : raw;
         v = (v===undefined || v===null || (typeof v==='string' && v.trim()==='')) ? null : v;
         
-        const existed = obj.hasOwnProperty(dbcol) ? obj[dbcol] : undefined;
-        if (isEmpty(v) && !isEmpty(existed)) {
-          // keep existing non-empty value
-        } else {
-          obj[dbcol] = v;
-        }
-        colsInUpload.add(dbcol);
+        // Always set the value from CSV, even if it's null/empty
+        // This allows clearing fields by providing empty values in CSV
+        obj[dbcol] = v;
+        // Note: colsInUpload is already populated from the first row
       }
       
       normalized.push({ product_code: code, row: obj });
@@ -317,11 +413,15 @@ export class ExcelSyncHelper {
   ) {
     const codeToExisting: Record<string, any> = {};
     const allExistingCodes = new Set<string>();
+    const uploadedCodeSet = new Set(uploadedCodes);
     
     for (const ex of allExisting) {
-      allExistingCodes.add(ex.product_code);
-      if (uploadedCodes.includes(ex.product_code)) {
-        codeToExisting[ex.product_code] = ex;
+      const code = ex.product_code;
+      if (code) {
+        allExistingCodes.add(code);
+        if (uploadedCodeSet.has(code)) {
+          codeToExisting[code] = ex;
+        }
       }
     }
 
@@ -359,25 +459,11 @@ export class ExcelSyncHelper {
         continue;
       }
 
-      const existingFiltered: any = { product_code: n.product_code };
-      for (const col of colsInUpload) {
-        if (col !== 'product_code') {
-          existingFiltered[col] = (existing as any)[col];
-        }
-      }
-      
-      const newSig = signatureOf(n.row);
-      const oldSig = signatureOf(existingFiltered);
-      
-      if (newSig === oldSig) {
-        skipped++;
-        continue;
-      }
-
+      // Compare each field explicitly to detect real changes
       const diff = this.computeProductDiff(n, existing, colsInUpload);
       if (diff) {
         const prevAttrs = (existing as any)?.attrs || {};
-        diff.attrs = { ...prevAttrs, row_hash: newSig, last_sync: new Date().toISOString() };
+        diff.attrs = { ...prevAttrs, last_sync: new Date().toISOString() };
         toUpsert.push(diff);
         updated++;
       } else {
@@ -448,10 +534,20 @@ export class ExcelSyncHelper {
   ) {
     const toDelete: string[] = [];
     
-    if (deleteMode === 'missing' || deleteMode === 'all') {
-      const uploadedCodeSet = new Set(uploadedCodes);
+    if (deleteMode === 'missing') {
+      // Delete only products that exist in DB but are NOT in the uploaded CSV
+      const uploadedCodeSet = new Set(uploadedCodes.map(c => String(c).trim()).filter(Boolean));
+      
       for (const existingCode of allExistingCodes) {
-        if (!uploadedCodeSet.has(existingCode)) {
+        const normalizedExisting = String(existingCode).trim();
+        if (normalizedExisting && !uploadedCodeSet.has(normalizedExisting)) {
+          toDelete.push(existingCode);
+        }
+      }
+    } else if (deleteMode === 'all') {
+      // Delete all existing products (use with caution)
+      for (const existingCode of allExistingCodes) {
+        if (existingCode) {
           toDelete.push(existingCode);
         }
       }
@@ -465,25 +561,27 @@ export class ExcelSyncHelper {
     toUpsert: any[],
     errors: any[]
   ) {
-    const { error } = await client.from('products').upsert(toUpsert, { 
-      onConflict: 'product_code', 
-      ignoreDuplicates: false, 
-      defaultToNull: false 
-    });
-    
-    if (error) {
-      const B = 200;
-      for (let i = 0; i < toUpsert.length; i += B) {
-        const part = toUpsert.slice(i, i + B);
-        const { error: e2 } = await client.from('products').upsert(part, { 
-          onConflict: 'product_code' 
-        });
-        if (e2) {
-          errors.push({ 
-            product_code: part[0]?.product_code || '-', 
-            message: e2.message || String(e2) 
+    // Process one by one to ensure accuracy and catch individual errors
+    for (const item of toUpsert) {
+      try {
+        const { error } = await client
+          .from('products')
+          .upsert(item, { 
+            onConflict: 'product_code',
+            ignoreDuplicates: false
+          });
+        
+        if (error) {
+          errors.push({
+            product_code: item.product_code || '-',
+            message: error.message || String(error)
           });
         }
+      } catch (e: any) {
+        errors.push({
+          product_code: item.product_code || '-',
+          message: e?.message || String(e)
+        });
       }
     }
   }
@@ -575,6 +673,7 @@ export class ExcelSyncHelper {
     const diff: any = { product_code: n.product_code };
     const REQUIRED = new Set<string>(['name_kr', 'asset_category']);
     let changed = false;
+    const changes: string[] = []; // Track what changed for debugging
     
     for (const col of colsInUpload) {
       if (col === 'product_code') continue;
@@ -595,8 +694,15 @@ export class ExcelSyncHelper {
       const oldNorm = normalizeForComparison(oldVal);
       const newNorm = normalizeForComparison(newVal);
       
+      // Skip only if the column is not present in the upload at all
+      // Allow explicit empty/null values from CSV to clear DB fields
       if (newVal === undefined) continue;
-      if (newNorm === null && REQUIRED.has(col as string)) continue;
+      
+      // Don't allow clearing required fields
+      if (newNorm === null && REQUIRED.has(col as string)) {
+        // Keep existing value for required fields
+        continue;
+      }
       
       const oldStr = JSON.stringify(oldNorm);
       const newStr = JSON.stringify(newNorm);
@@ -604,20 +710,28 @@ export class ExcelSyncHelper {
       if (oldStr !== newStr) {
         (diff as any)[col] = newNorm;
         changed = true;
+        
+        // Log significant changes for debugging
+        if (col === 'cas_no' || col === 'cert_halal') {
+          changes.push(`${col}: "${oldVal}" → "${newNorm}"`);
+        }
       }
     }
     
-    const fallbackName = (existing && (existing as any).name_kr) || (n.row as any).name_kr || n.product_code;
-    const fallbackCat = (existing && (existing as any).asset_category) || (n.row as any).asset_category || 'unspecified';
-    (diff as any).name_kr = fallbackName;
-    (diff as any).asset_category = fallbackCat;
-    
-    if (changed) {
-      diff.name_kr = (n.row as any).name_kr || (existing as any).name_kr || n.product_code;
-      diff.asset_category = (n.row as any).asset_category || (existing as any).asset_category || 'unspecified';
-      return diff;
+    // Only return diff if there are actual changes
+    if (!changed) {
+      return null;
     }
     
-    return null;
+    // Debug log for products with changes
+    if (changes.length > 0) {
+      console.log(`[ExcelSync] Changes for ${n.product_code}:`, changes.join(', '));
+    }
+    
+    // Ensure required fields are present in the update
+    diff.name_kr = (n.row as any).name_kr || (existing as any).name_kr || n.product_code;
+    diff.asset_category = (n.row as any).asset_category || (existing as any).asset_category || 'unspecified';
+    
+    return diff;
   }
 }

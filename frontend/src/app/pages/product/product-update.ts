@@ -356,54 +356,38 @@ export class ProductUpdateComponent implements OnInit {
     this.processed.set(0);
     this.cancelRequested = false;
     try{
-      // Parallel chunk processing
       const rows = this.pendingRows().slice();
-      const CHUNK = 300; // bigger chunk to reduce round-trips
-      const MAX_PAR = 3; // up to 3 concurrent requests
-      const chunks: any[][] = [];
-      for (let i=0;i<rows.length;i+=CHUNK) chunks.push(rows.slice(i, i+CHUNK));
-
-      const agg = { total: rows.length, updated: 0, skipped: 0, inserted: 0, deleted: 0 } as any;
-      const errs: SyncError[] = [];
-      let next = 0;
-      const runWorker = async () => {
-        while (next < chunks.length && !this.cancelRequested){
-          const idx = next++;
-          const part = chunks[idx];
-          try{
-            // First chunk includes delete mode, subsequent chunks don't delete
-            const isFirstChunk = idx === 0;
-            const res = await this.erpData.syncProductsByExcel({ 
-              sheet: part, 
-              deleteMode: isFirstChunk ? 'missing' : 'none' 
-            });
-            agg.updated += res.updated || 0; 
-            agg.skipped += res.skipped || 0; 
-            agg.inserted += res.inserted || 0;
-            agg.deleted += res.deleted || 0;
-            if (Array.isArray(res.errors)) errs.push(...res.errors);
-          }catch(e:any){
-            errs.push({ product_code: '-', message: e?.message || String(e) });
-          } finally {
-            // update progress on completion of this chunk
-            const processedSoFar = Math.min(rows.length, (idx+1) * CHUNK);
-            // processed should reflect number of rows actually sent
-            this.processed.set(Math.min(rows.length, this.processed() + part.length));
-          }
-        }
-      };
-      const workers = Array.from({ length: Math.min(MAX_PAR, chunks.length) }, () => runWorker());
-      await Promise.all(workers);
-      this.errors.set(errs);
+      
+      // Single batch sync with all rows to ensure accurate deletion logic
+      // This ensures that all uploaded product codes are known when identifying items to delete
+      const res = await this.erpData.syncProductsByExcel({ 
+        sheet: rows, 
+        deleteMode: 'missing' 
+      });
+      
+      this.processed.set(rows.length);
+      this.errors.set(res.errors || []);
       this.stats.set({ 
-        total: this.pendingRows().length, 
-        updated: agg.updated || 0, 
-        skipped: agg.skipped || 0, 
-        inserted: agg.inserted || 0,
-        deleted: agg.deleted || 0 
+        total: rows.length, 
+        updated: res.updated || 0, 
+        skipped: res.skipped || 0, 
+        inserted: res.inserted || 0,
+        deleted: res.deleted || 0 
       });
       this.ran.set(true);
-    }finally{ this.listBusy.set(false); }
+    }catch(e:any){
+      this.errors.set([{ product_code: '-', message: e?.message || String(e) }]);
+      this.stats.set({ 
+        total: this.pendingRows().length, 
+        updated: 0, 
+        skipped: 0, 
+        inserted: 0,
+        deleted: 0 
+      });
+      this.ran.set(true);
+    }finally{ 
+      this.listBusy.set(false); 
+    }
   }
 
   // Drag & Drop handlers

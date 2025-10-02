@@ -221,7 +221,7 @@ export class ProductListComponent implements OnInit, AfterViewInit {
     specification: '사양',
     special_notes: '품목특이사항',
     // Scientific / compliance
-    cas_no: 'CAS',
+    cas_no: 'CAS No.',
     moq: 'MOQ',
     package_unit: '포장단위',
     manufacturer: 'Manufacturer',
