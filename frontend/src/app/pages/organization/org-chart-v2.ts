@@ -1288,6 +1288,13 @@ export class OrgChartV2Component implements OnInit, AfterViewInit, OnDestroy {
     // Remove member from their current department
     if (this.dragFrom && this.dragUser) {
       this.dragFrom.members = this.dragFrom.members.filter(m => m !== this.dragUser.name);
+      
+      // Also remove from user's assignedDepts
+      const userInList = this.users().find(u => u.name === this.dragUser.name);
+      if (userInList && userInList.assignedDepts) {
+        userInList.assignedDepts = userInList.assignedDepts.filter((d: string) => d !== this.dragFrom!.name);
+      }
+      
       this.dragUser = null;
       this.dragFrom = null;
     }
