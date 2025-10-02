@@ -75,7 +75,7 @@ import { TabService } from '../../services/tab.service';
             <span class="status" [class.saved]="saved" [class.unsaved]="!saved">{{ saved? '저장됨' : '저장되지 않음' }}</span>
             <button class="btn" [disabled]="!isEditable()" (click)="saveCompositions()">저장</button>
             <button class="btn" (click)="openIngredientFormNew()">신규성분등록</button>
-            <button class="btn primary" [disabled]="!isEditable()" (click)="openPicker()">성분 추가</button>
+            <button class="btn btn-light-blue" [disabled]="!isEditable()" (click)="openPicker()">성분 추가</button>
           </div>
           <div class="table-scroll" #compTableRef>
             <table class="grid">
@@ -259,6 +259,8 @@ import { TabService } from '../../services/tab.service';
     .btn{ height:28px; padding:0 10px; border-radius:8px; border:1px solid #d1d5db; background:#fff; cursor:pointer; font-size:12px; }
     .btn.primary{ background:#111827; color:#fff; border-color:#111827; }
     .btn.ghost{ background:#fff; color:#111827; }
+    .btn.btn-light-blue{ background:#dbeafe; color:#1e40af; border-color:#93c5fd; font-weight:600; }
+    .btn.btn-light-blue:hover{ background:#bfdbfe; border-color:#60a5fa; }
     .btn.danger{ background:#fee2e2; color:#b91c1c; border-color:#fecaca; font-weight:700; }
     .mini{ height:24px; padding:0 8px; border-radius:6px; font-weight:700; }
     .filled-light{ background:#eef2ff; border-color:#c7d2fe; color:#111827; }
@@ -334,10 +336,11 @@ import { TabService } from '../../services/tab.service';
     .modal .search-bar .search-btn{ background:#f3f4f6; color:#374151; border-color:#d1d5db; white-space:nowrap; flex-shrink:0; }
     .modal .search-bar .search-btn:hover{ background:#e5e7eb; }
     .modal .table-scroll.small{ max-height: calc(50vh - 70px); overflow:auto; }
-    /* Material picker column sizing: narrow code/spec, widen name */
-    .modal .grid thead th:nth-child(1), .modal .grid tbody td:nth-child(1){ width:120px; }
-    .modal .grid thead th:nth-child(3), .modal .grid tbody td:nth-child(3){ width:120px; }
-    .modal .grid td:nth-child(2){ white-space:normal; word-break:break-word; }
+    /* Ingredient picker column sizing: INCI Name and 한글성분명 equal width */
+    .modal .grid thead th:nth-child(1), .modal .grid tbody td:nth-child(1){ width:35%; }
+    .modal .grid thead th:nth-child(2), .modal .grid tbody td:nth-child(2){ width:35%; white-space:normal; word-break:break-word; }
+    .modal .grid thead th:nth-child(3), .modal .grid tbody td:nth-child(3){ width:20%; }
+    .modal .grid thead th:nth-child(4), .modal .grid tbody td:nth-child(4){ width:10%; }
     .product-picker{ margin-top:10px; position:relative; }
     .product-picker .picker-label{ display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:8px; }
     .product-picker .search-input-wrapper{ position:relative; display:flex; align-items:center; }

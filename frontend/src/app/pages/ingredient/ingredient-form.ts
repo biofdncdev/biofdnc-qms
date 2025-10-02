@@ -40,53 +40,73 @@ export class AutoGrowDirective implements AfterViewInit {
       <button class="btn ghost" (click)="cancel()">취소</button>
     </div>
 
-    <section class="form-body">
-      <div class="grid">
-        <label>INCI Name</label>
-        <textarea rows="1" autoGrow class="hl-green" [(ngModel)]="model.inci_name"></textarea>
-        <label>국문명</label>
-        <textarea rows="1" autoGrow class="hl-green" [(ngModel)]="model.korean_name"></textarea>
-        <label>중국명</label>
-        <textarea rows="1" autoGrow [(ngModel)]="model.chinese_name"></textarea>
-        <label>CAS No</label>
-        <input [(ngModel)]="model.cas_no" />
-        <label>기능(EN)</label>
-        <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.function_en"></textarea>
-        <label>기능(KR)</label>
-        <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.function_kr"></textarea>
-        <label>Scientific Name</label>
-        <textarea rows="1" autoGrow [(ngModel)]="model.scientific_name"></textarea>
-        <label>EINECS No</label>
-        <input [(ngModel)]="model.einecs_no" />
-        <label>이전국문명</label>
-        <textarea rows="1" autoGrow [(ngModel)]="model.old_korean_name"></textarea>
-        <label>원산/ABS</label>
-        <textarea rows="1" autoGrow [(ngModel)]="model.origin_abs"></textarea>
-        <label>비고</label>
-        <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.remarks" spellcheck="false"></textarea>
-      </div>
-      <div class="meta" *ngIf="meta">
-        <div>처음 생성: {{ meta.created_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.created_by_name || meta.created_by_email || meta.created_by || '-' }}</div>
-        <div>마지막 수정: {{ meta.updated_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.updated_by_name || meta.updated_by_email || meta.updated_by || '-' }}</div>
-      </div>
-    </section>
+    <div class="content-layout">
+      <!-- 왼쪽: 성분 검색 -->
+      <aside class="search-panel">
+        <div class="search-header">
+          <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+          <h3>성분 검색</h3>
+        </div>
+        <input class="search-input" [(ngModel)]="ingQuery" (keydown.arrowDown)="moveIngPointer(1)" (keydown.arrowUp)="moveIngPointer(-1)" (keydown.enter)="onIngEnterOrSearch($event)" (keydown.escape)="onIngEsc($event)" placeholder="INCI/국문명/CAS 검색 (공백=AND)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
+        <ul class="search-results" *ngIf="ingResults.length">
+          <li *ngFor="let r of ingResults; let i = index" [class.selected]="i===ingPointer" (click)="pickIngredient(r)">
+            <div class="result-inci">{{ r.inci_name }}</div>
+            <div class="result-details">
+              {{ r.korean_name || '-' }}<span *ngIf="r.old_korean_name"> ({{ r.old_korean_name }})</span> · {{ r.cas_no || '-' }}
+            </div>
+          </li>
+        </ul>
+        <div class="search-empty" *ngIf="ingQuery && !ingResults.length">
+          검색 결과가 없습니다
+        </div>
+      </aside>
 
-    <section class="ing-picker">
-      <label class="picker-label">성분 검색</label>
-      <input class="picker-input" [(ngModel)]="ingQuery" (keydown.arrowDown)="moveIngPointer(1)" (keydown.arrowUp)="moveIngPointer(-1)" (keydown.enter)="onIngEnterOrSearch($event)" (keydown.escape)="onIngEsc($event)" placeholder="INCI/국문명/CAS 검색 (공백=AND)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
-      <ul class="picker-list" *ngIf="ingResults.length">
-        <li *ngFor="let r of ingResults; let i = index" [class.selected]="i===ingPointer" (click)="pickIngredient(r)">
-          {{ r.inci_name }} · {{ r.korean_name || '' }}<span *ngIf="r.old_korean_name"> ({{ r.old_korean_name }})</span> · {{ r.cas_no || '-' }}
-        </li>
-      </ul>
-    </section>
+      <!-- 오른쪽: 성분 정보 입력 -->
+      <main class="form-main">
+        <section class="form-body">
+          <div class="grid">
+            <label>INCI Name</label>
+            <textarea rows="1" autoGrow class="hl-green" [(ngModel)]="model.inci_name"></textarea>
+            <label>국문명</label>
+            <textarea rows="1" autoGrow class="hl-green" [(ngModel)]="model.korean_name"></textarea>
+            <label>중국명</label>
+            <textarea rows="1" autoGrow [(ngModel)]="model.chinese_name"></textarea>
+            <label>CAS No</label>
+            <input [(ngModel)]="model.cas_no" />
+            <label>기원 및 정의</label>
+            <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.origin_definition" spellcheck="false"></textarea>
+            <label>기능(EN)</label>
+            <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.function_en"></textarea>
+            <label>기능(KR)</label>
+            <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.function_kr"></textarea>
+            <label>Scientific Name</label>
+            <textarea rows="1" autoGrow [(ngModel)]="model.scientific_name"></textarea>
+            <label>EINECS No</label>
+            <input [(ngModel)]="model.einecs_no" />
+            <label>이전국문명</label>
+            <textarea rows="1" autoGrow [(ngModel)]="model.old_korean_name"></textarea>
+            <label>원산/ABS</label>
+            <textarea rows="1" autoGrow [(ngModel)]="model.origin_abs"></textarea>
+            <label>비고</label>
+            <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.remarks" spellcheck="false"></textarea>
+          </div>
+          <div class="meta" *ngIf="meta">
+            <div>처음 생성: {{ meta.created_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.created_by_name || meta.created_by_email || meta.created_by || '-' }}</div>
+            <div>마지막 수정: {{ meta.updated_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.updated_by_name || meta.updated_by_email || meta.updated_by || '-' }}</div>
+          </div>
+        </section>
+      </main>
+    </div>
 
     <div class="notice" *ngIf="notice()">{{ notice() }}</div>
   </div>
   `,
   styles: [`
   .form-page{ padding:10px 12px; }
-  .page-head{ display:flex; align-items:center; gap:8px; }
+  .page-head{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
   .page-head .sub{ font-size:14px; font-weight:700; margin-left:6px; color:#6b7280; }
   .page-head h2{ margin:0; font-size:20px; font-weight:800; }
   .page-head .spacer{ flex:1; }
@@ -94,7 +114,28 @@ export class AutoGrowDirective implements AfterViewInit {
   .btn.primary{ background:#111827; color:#fff; border-color:#111827; }
   .btn.ghost{ background:#fff; color:#111827; }
   .notice{ margin:8px 0 0; padding:8px 10px; border:1px solid #bbf7d0; background:#ecfdf5; color:#065f46; border-radius:10px; font-size:12px; }
-  .form-body{ border:1px solid #eef2f7; border-radius:12px; padding:12px; margin-top:10px; overflow:hidden; }
+  
+  /* Layout: 왼쪽 검색창 + 오른쪽 폼 */
+  .content-layout{ display:grid; grid-template-columns:320px 1fr; gap:12px; }
+  
+  /* 왼쪽 검색 패널 */
+  .search-panel{ background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:12px; max-height:calc(100vh - 140px); overflow:hidden; display:flex; flex-direction:column; }
+  .search-header{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .search-header .search-icon{ color:#6b7280; }
+  .search-header h3{ margin:0; font-size:14px; font-weight:700; color:#111827; }
+  .search-input{ width:100%; box-sizing:border-box; border:2px solid #3b82f6; border-radius:8px; padding:8px 12px; font-size:13px; background:#fff; margin-bottom:8px; }
+  .search-input:focus{ outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(59,130,246,0.1); }
+  .search-results{ list-style:none; margin:0; padding:0; overflow-y:auto; flex:1; }
+  .search-results li{ padding:8px 10px; cursor:pointer; border-radius:6px; margin-bottom:4px; background:#fff; border:1px solid #e5e7eb; transition:all 0.15s; }
+  .search-results li:hover{ background:#f0f9ff; border-color:#93c5fd; }
+  .search-results li.selected{ background:#dbeafe; border-color:#3b82f6; }
+  .result-inci{ font-weight:700; font-size:12px; color:#111827; margin-bottom:2px; }
+  .result-details{ font-size:11px; color:#6b7280; }
+  .search-empty{ text-align:center; padding:20px; color:#9ca3af; font-size:12px; }
+  
+  /* 오른쪽 폼 영역 */
+  .form-main{ overflow:auto; max-height:calc(100vh - 140px); }
+  .form-body{ border:1px solid #eef2f7; border-radius:12px; padding:12px; overflow:hidden; }
   /* Two columns per row: label+input, label+input */
   .grid{ display:grid; grid-template-columns:120px minmax(0,1fr) 120px minmax(0,1fr); gap:10px 14px; align-items:center; }
   .grid label{ font-size:11px; color:#111827; text-align:right; }
@@ -105,13 +146,12 @@ export class AutoGrowDirective implements AfterViewInit {
   /* Highlight for INCI Name and 국문명 */
   .hl-green{ background:#ecfdf5; border-color:#bbf7d0; }
   .meta{ margin-top:12px; padding:8px 10px; border-top:1px dashed #e5e7eb; color:#6b7280; font-size:12px; }
-  .ing-picker{ margin-top:14px; }
-  .ing-picker .picker-label{ display:block; font-size:11px; color:#6b7280; margin-bottom:4px; }
-  .ing-picker .picker-input{ width:100%; box-sizing:border-box; border:1px solid #e5e7eb; border-radius:8px; padding:5px 7px; font-size:11px; }
-  .ing-picker .picker-list{ list-style:none; margin:6px 0 0; padding:0; max-height:160px; overflow:auto; border:1px solid #eef2f7; border-radius:8px; background:#fff; }
-  .ing-picker .picker-list li{ padding:4px 6px; cursor:pointer; font-size:11px; white-space:normal; word-break:break-word; }
-  .ing-picker .picker-list li.selected{ background:#eef6ff; }
-  .ing-picker .picker-list li:hover{ background:#f3f4f6; }
+  
+  /* 반응형: 작은 화면에서는 세로 배치 */
+  @media (max-width: 1024px) {
+    .content-layout{ grid-template-columns:1fr; }
+    .search-panel{ max-height:300px; }
+  }
   `]
 })
 export class IngredientFormComponent implements OnInit {
