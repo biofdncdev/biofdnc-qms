@@ -35,6 +35,7 @@ export class AutoGrowDirective implements AfterViewInit {
     <div class="page-head">
       <h2>Ingredient <span class="sub">성분등록</span></h2>
       <div class="spacer"></div>
+      <button class="btn" (click)="createNew()">신규</button>
       <button class="btn primary" (click)="save()">저장</button>
       <button class="btn ghost" (click)="cancel()">취소</button>
     </div>
@@ -204,6 +205,18 @@ export class IngredientFormComponent implements OnInit {
     this.notice.set('저장되었습니다.');
     setTimeout(() => this.notice.set(null), 2500);
   }
+  createNew(){
+    // Clear the form for new ingredient entry
+    this.model = {};
+    this.meta = null;
+    this.id.set(null);
+    this.ingQuery = '';
+    this.ingResults = [];
+    // Update URL to remove id parameter
+    this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
+    this.notice.set(null);
+  }
+  
   cancel(){
     const queryParams: any = {};
     if (this.backParams?.q) queryParams.q = this.backParams.q;
