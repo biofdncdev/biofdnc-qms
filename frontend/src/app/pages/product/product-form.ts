@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ErpDataService } from '../../services/erp-data.service';
 import { AuthService } from '../../services/auth.service';
+import { TabService } from '../../services/tab.service';
 
 @Component({
   selector: 'app-product-form',
@@ -73,6 +74,7 @@ import { AuthService } from '../../services/auth.service';
             <div class="spacer"></div>
             <span class="status" [class.saved]="saved" [class.unsaved]="!saved">{{ saved? '저장됨' : '저장되지 않음' }}</span>
             <button class="btn" [disabled]="!isEditable()" (click)="saveCompositions()">저장</button>
+            <button class="btn" (click)="openIngredientFormNew()">신규성분등록</button>
             <button class="btn primary" [disabled]="!isEditable()" (click)="openPicker()">성분 추가</button>
           </div>
           <div class="table-scroll" #compTableRef>
@@ -84,7 +86,7 @@ import { AuthService } from '../../services/auth.service';
                   <th class="col-kor">한글성분명</th>
                   <th class="col-cas">CAS No.</th>
                   <th class="col-pct">조성비(%)</th>
-                  <th class="col-act"></th>
+                  <th class="col-act" colspan="2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -94,14 +96,15 @@ import { AuthService } from '../../services/auth.service';
                   <td class="col-kor">{{ c.korean_name }}</td>
                   <td class="col-cas">{{ c.cas_no || '' }}</td>
                   <td class="col-pct"><input type="number" step="0.01" [(ngModel)]="c.percent" [disabled]="!isEditable()" (ngModelChange)="onPercentChange()" (keydown.enter)="navigatePercent($event, i, 1)" (keydown.arrowDown)="navigatePercent($event, i, 1)" (keydown.arrowUp)="navigatePercent($event, i, -1)" /></td>
+                  <td class="col-act"><button class="btn mini" (click)="$event.stopPropagation(); openIngredientFormEdit(c)">성분수정</button></td>
                   <td class="col-act"><button class="btn mini" [disabled]="!isEditable()" (click)="$event.stopPropagation(); removeRow(c)">삭제</button></td>
                 </tr>
-                <tr *ngIf="compositions.length===0"><td colspan="6" class="empty">성분을 추가해 주세요.</td></tr>
+                <tr *ngIf="compositions.length===0"><td colspan="7" class="empty">성분을 추가해 주세요.</td></tr>
               </tbody>
               <tfoot>
                 <tr>
                   <td colspan="5" class="sum-label">합계</td>
-                  <td class="sum" [class.ok]="percentIsHundred()" [class.bad]="!percentIsHundred()">{{ percentSum() }}%</td>
+                  <td class="sum" [class.ok]="percentIsHundred()" [class.bad]="!percentIsHundred()" colspan="2">{{ percentSum() }}%</td>
                 </tr>
               </tfoot>
             </table>
@@ -307,9 +310,12 @@ import { AuthService } from '../../services/auth.service';
     .grid th, .grid td{ border:1px solid #e5e7eb; padding:6px 8px; font-size:12px; }
     .grid thead th{ background:#f9fafb; position:sticky; top:0; z-index:1; }
     .grid tr.selected td{ background:#eef6ff; }
-    .grid .col-no{ width:40px; text-align:center; }
-    .grid .col-pct{ width:120px; }
-    .grid .col-act{ width:56px; text-align:center; }
+    .grid .col-no{ width:5%; text-align:center; }
+    .grid .col-inci{ width:25%; }
+    .grid .col-kor{ width:25%; }
+    .grid .col-cas{ width:10%; }
+    .grid .col-pct{ width:8%; }
+    .grid .col-act{ width:13.5%; text-align:center; white-space:nowrap; }
     .grid input[type='number']{ width:100%; box-sizing:border-box; padding:4px 6px; }
     .table-scroll{ max-height:60vh; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; }
     .table-scroll.small{ max-height:50vh; }
@@ -432,7 +438,7 @@ export class ProductFormComponent implements OnInit {
   }
 
   constructor(private route: ActivatedRoute, private router: Router, private erpData: ErpDataService,
-    private auth: AuthService) {}
+    private auth: AuthService, private tabService: TabService) {}
   isAdmin = false;
   async ngOnInit(){
     // capture current user for per-user persistence
@@ -725,6 +731,30 @@ export class ProductFormComponent implements OnInit {
   removeRow(row:any){ this.compositions = this.compositions.filter(r => r !== row); if (this.selectedComp===row) this.selectedComp=null; this.saveStateSnapshot(); }
   removeSelected(){ if (!this.selectedComp) return; this.compositions = this.compositions.filter(r => r !== this.selectedComp); this.selectedComp = null; this.saveStateSnapshot(); }
   onPercentChange(){ this.saved = false; this.saveStateSnapshot(); }
+  
+  openIngredientFormNew() {
+    // Open ingredient form tab without ID (new ingredient)
+    // Use fixed tabPath to ensure only one tab exists
+    const tabPath = '/app/ingredient/form';
+    const navUrl = '/app/ingredient/form';
+    this.tabService.requestOpen('성분등록', tabPath, navUrl);
+  }
+  
+  openIngredientFormEdit(composition: any) {
+    // Open ingredient form tab with the specific ingredient ID
+    // Use fixed tabPath to ensure only one tab exists, but navigate to specific ingredient
+    console.log('Opening ingredient form for:', composition);
+    if (composition && composition.ingredient_id) {
+      console.log('Opening ingredient tab for ID:', composition.ingredient_id);
+      const ingredientId = composition.ingredient_id;
+      const tabPath = '/app/ingredient/form'; // Fixed path for deduplication
+      const navUrl = `/app/ingredient/form?id=${ingredientId}`; // Actual URL with ID
+      this.tabService.requestOpen('성분등록', tabPath, navUrl);
+    } else {
+      console.warn('No ingredient_id found in composition:', composition);
+      alert('성분 정보를 찾을 수 없습니다.');
+    }
+  }
   navigatePercent(ev: Event, rowIndex: number, delta: number){
     if (ev?.preventDefault) ev.preventDefault();
     const inputs = Array.from(document.querySelectorAll('td.col-pct input[type="number"]')) as HTMLInputElement[];
