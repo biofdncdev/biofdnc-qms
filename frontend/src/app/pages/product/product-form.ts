@@ -12,7 +12,7 @@ import { AuthService } from '../../services/auth.service';
   template: `
   <div class="form-page">
     <div class="page-head">
-      <h2>Product <span class="sub">품목등록</span></h2>
+      <h2>Product <span class="sub">품목 조성비 등록</span></h2>
     </div>
 
     <!-- 탭: 조성성분/RMI -->
@@ -82,7 +82,6 @@ import { AuthService } from '../../services/auth.service';
                   <th class="col-no">No.</th>
                   <th class="col-inci">INCI Name</th>
                   <th class="col-kor">한글성분명</th>
-                  <th class="col-cn">중국성분명</th>
                   <th class="col-cas">CAS No.</th>
                   <th class="col-pct">조성비(%)</th>
                   <th class="col-act"></th>
@@ -93,16 +92,15 @@ import { AuthService } from '../../services/auth.service';
                   <td class="col-no">{{ i+1 }}</td>
                   <td class="col-inci">{{ c.inci_name }}</td>
                   <td class="col-kor">{{ c.korean_name }}</td>
-                  <td class="col-cn">{{ c.chinese_name || '' }}</td>
                   <td class="col-cas">{{ c.cas_no || '' }}</td>
                   <td class="col-pct"><input type="number" step="0.01" [(ngModel)]="c.percent" [disabled]="!isEditable()" (ngModelChange)="onPercentChange()" (keydown.enter)="navigatePercent($event, i, 1)" (keydown.arrowDown)="navigatePercent($event, i, 1)" (keydown.arrowUp)="navigatePercent($event, i, -1)" /></td>
                   <td class="col-act"><button class="btn mini" [disabled]="!isEditable()" (click)="$event.stopPropagation(); removeRow(c)">삭제</button></td>
                 </tr>
-                <tr *ngIf="compositions.length===0"><td colspan="7" class="empty">성분을 추가해 주세요.</td></tr>
+                <tr *ngIf="compositions.length===0"><td colspan="6" class="empty">성분을 추가해 주세요.</td></tr>
               </tbody>
               <tfoot>
                 <tr>
-                  <td colspan="6" class="sum-label">합계</td>
+                  <td colspan="5" class="sum-label">합계</td>
                   <td class="sum" [class.ok]="percentIsHundred()" [class.bad]="!percentIsHundred()">{{ percentSum() }}%</td>
                 </tr>
               </tfoot>
@@ -122,16 +120,15 @@ import { AuthService } from '../../services/auth.service';
               </div>
               <div class="table-scroll small">
                 <table class="grid">
-                  <thead><tr><th>INCI Name</th><th>한글성분명</th><th>중국성분명</th><th>CAS No.</th><th class="col-act"></th></tr></thead>
+                  <thead><tr><th>INCI Name</th><th>한글성분명</th><th>CAS No.</th><th class="col-act"></th></tr></thead>
                   <tbody>
                     <tr *ngFor="let r of pickerRows; let i = index" [class.selected]="i===pickerPointer" (dblclick)="addPicked(r)">
                       <td>{{ r.inci_name }}</td>
                       <td>{{ r.korean_name }}</td>
-                      <td>{{ r.chinese_name || '' }}</td>
                       <td>{{ r.cas_no || '' }}</td>
                       <td class="col-act"><button class="btn mini filled-light" (click)="addPicked(r)">추가</button></td>
                     </tr>
-                    <tr *ngIf="pickerRows.length===0"><td colspan="5" class="empty">검색 결과가 없습니다.</td></tr>
+                    <tr *ngIf="pickerRows.length===0"><td colspan="4" class="empty">검색 결과가 없습니다.</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -268,8 +265,8 @@ import { AuthService } from '../../services/auth.service';
     .ro .field label{ font-size:11px; color:#6b7280; }
     .ro input, .ro textarea{ height:26px; padding:3px 6px; font-size:12px; }
     .ro .ro-display{ min-height:26px; padding:4px 6px; border:1px solid #e5e7eb; border-radius:8px; background:#f9fafb; font-size:12px; line-height:1.3; white-space:normal; word-break:break-word; color:#6b7280; }
-    /* 강조 표시: 품번/품명 (연한 파랑 + 그림자) */
-    .ro .field.key .ro-display{ background:#eef6ff; color:#0f172a; font-weight:400; border-color:#c7d2fe; box-shadow:0 2px 6px rgba(59,130,246,.12); }
+    /* 강조 표시: 품번/품명 (연한 파랑 + 그림자 + 굵게) */
+    .ro .field.key .ro-display{ background:#eef6ff; color:#0f172a; font-weight:700; border-color:#c7d2fe; box-shadow:0 2px 6px rgba(59,130,246,.12); font-size:13px; min-height:28px; padding:5px 8px; }
     .ro .field .ro-display.warn{ background:#fff1f2; color:#7f1d1d; border-color:#fecaca; box-shadow:0 2px 6px rgba(239,68,68,.15); }
     .ro-note{ margin-top:6px; font-size:11px; color:#6b7280; }
     .row-3{ display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap:10px; align-items:end; }
@@ -412,6 +409,20 @@ export class ProductFormComponent implements OnInit {
   materials: Array<{ material_id?: string; material_number?: string; material_name?: string; spec?: string; specification?: string; search_keyword?: string; linked_inci?: string | null }> = [];
   matSaved = false;
   matPickerOpen = false; matPickerQuery = ''; matPickerRows: any[] = [];
+
+  @HostListener('window:keydown', ['$event'])
+  handleKeyDown(event: KeyboardEvent) {
+    // Ctrl+S (Windows/Linux) or Cmd+S (Mac) to save
+    if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+      event.preventDefault();
+      // Save based on active tab
+      if (this.activeTab === 'composition') {
+        this.saveCompositions();
+      } else if (this.activeTab === 'materials') {
+        this.saveMaterials();
+      }
+    }
+  }
 
   constructor(private route: ActivatedRoute, private router: Router, private erpData: ErpDataService,
     private auth: AuthService) {}

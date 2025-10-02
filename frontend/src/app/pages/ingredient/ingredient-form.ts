@@ -123,6 +123,16 @@ export class IngredientFormComponent implements OnInit {
   ingQuery: string = '';
   ingResults: Array<{ id: string; inci_name: string; korean_name?: string; old_korean_name?: string; cas_no?: string }> = [];
   ingPointer = -1;
+  
+  @HostListener('window:keydown', ['$event'])
+  handleKeyDown(event: KeyboardEvent) {
+    // Ctrl+S (Windows/Linux) or Cmd+S (Mac) to save
+    if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+      event.preventDefault();
+      this.save();
+    }
+  }
+  
   constructor(private route: ActivatedRoute, private router: Router, private erpData: ErpDataService,
     private auth: AuthService) {}
   async ngOnInit(){

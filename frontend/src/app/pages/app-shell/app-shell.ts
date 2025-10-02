@@ -111,7 +111,7 @@ export class AppShellComponent implements OnDestroy, AfterViewInit {
             { label: '거래처 평가', path: '/app/partner?tab=evaluation' }
           ] },
           { key: 'ingredient', icon: 'category', label: 'Ingredient', submenu: [ { label: '성분조회', path: '/app/ingredient' }, { label: '성분등록', path: '/app/ingredient/form' } ] },
-          { key: 'product', icon: 'inventory', label: 'Product', submenu: [ { label: '품목 일괄 등록', path: '/app/product/update' }, { label: '품목조회', path: '/app/product' }, { label: '품목등록', path: '/app/product/form' }, { label: 'BOM TREE', path: '/app/product/bom-tree' }, { label: '기본서류', path: '/app/product/docs' }, { label: '서류양식', path: '/app/product/doc-templates' } ] },
+          { key: 'product', icon: 'inventory', label: 'Product', submenu: [ { label: '품목 일괄 등록', path: '/app/product/update' }, { label: '품목조회', path: '/app/product' }, { label: '품목 조성비 등록', path: '/app/product/form' }, { label: 'BOM TREE', path: '/app/product/bom-tree' }, { label: '기본서류', path: '/app/product/docs' }, { label: '서류양식', path: '/app/product/doc-templates' } ] },
           { key: 'material', icon: 'eco', label: 'Material', submenu: [
             { label: '자재조회', path: '/app/material' },
             { label: '자재등록', path: '/app/material/form' },
