@@ -37,8 +37,9 @@ import { TabService } from '../../services/tab.service';
                 <path d="m21 21-4.35-4.35"></path>
               </svg>
               <input class="picker-input" [(ngModel)]="productQuery" (input)="debouncedProductSearch()" (keydown.arrowDown)="moveProductPointer(1)" (keydown.arrowUp)="moveProductPointer(-1)" (keydown.enter)="onProductEnterOrSearch($event)" (keydown.escape)="onProductEsc($event)" placeholder="품번, 품명, 영문명, CAS, 사양 등으로 검색..." />
+              <div class="spinner" *ngIf="productSearchLoading"></div>
             </div>
-            <ul class="picker-list" *ngIf="productResults.length" #pickerList>
+            <ul class="picker-list" *ngIf="productResults.length && !productSearchLoading" #pickerList>
               <li *ngFor="let p of productResults; let i = index" [class.selected]="i===productPointer" (click)="pickProduct(p)" [attr.data-index]="i">
                 <span class="dot" [class.red]="p.status==='red'" [class.orange]="p.status==='orange'" [class.blue]="p.status==='blue'"></span>
                 {{ p.product_code }} · {{ p.name_kr }} · {{ p.spec || p.specification || '-' }}
@@ -345,6 +346,8 @@ import { TabService } from '../../services/tab.service';
     .product-picker .picker-label{ display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:8px; }
     .product-picker .search-input-wrapper{ position:relative; display:flex; align-items:center; }
     .product-picker .search-icon{ position:absolute; left:12px; color:#9ca3af; pointer-events:none; z-index:1; }
+    .product-picker .spinner{ position:absolute; right:12px; width:16px; height:16px; border:2px solid #e5e7eb; border-top-color:#3b82f6; border-radius:50%; animation:spin 0.8s linear infinite; z-index:1; }
+    @keyframes spin{ 0%{ transform:rotate(0deg); } 100%{ transform:rotate(360deg); } }
     .product-picker .picker-input{ width:100%; box-sizing:border-box; border:2px solid #d1d5db; border-radius:10px; padding:10px 12px 10px 40px; font-size:13px; background:#fff; transition: all 0.2s; }
     .product-picker .picker-input:hover{ border-color:#9ca3af; }
     .product-picker .picker-input:focus{ outline:none; border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,0.1); }
@@ -414,6 +417,7 @@ export class ProductFormComponent implements OnInit {
   productQuery = '';
   productResults: Array<{ id: string; product_code: string; name_kr?: string; spec?: string; specification?: string; status?: 'red'|'orange'|'blue' }> = [];
   productPointer = 0;
+  productSearchLoading = false;
   @ViewChild('pickerRef') pickerRef!: ElementRef<HTMLDivElement>;
   @ViewChild('pickerList') pickerList!: ElementRef<HTMLUListElement>;
   modalTop = 0;
@@ -778,11 +782,18 @@ export class ProductFormComponent implements OnInit {
   private productTimer: any = null;
   debouncedProductSearch(){
     if (this.productTimer) clearTimeout(this.productTimer);
+    this.productSearchLoading = true;
     this.productTimer = setTimeout(() => this.runProductSearch(), 250);
   }
   async runProductSearch(){
     const q = (this.productQuery||'').trim();
-    if (!q){ this.productResults = []; this.productPointer = 0; return; }
+    if (!q){ 
+      this.productResults = []; 
+      this.productPointer = 0; 
+      this.productSearchLoading = false;
+      return; 
+    }
+    this.productSearchLoading = true;
     const { data } = await this.erpData.quickSearchProducts(q);
     const base: any[] = data || [];
     const computeStatus = async (row: any): Promise<'red'|'orange'|'blue'> => {
@@ -798,6 +809,7 @@ export class ProductFormComponent implements OnInit {
     const tasks = base.map(async (r)=> ({ ...r, status: await computeStatus(r) }));
     this.productResults = await Promise.all(tasks);
     this.productPointer = 0;
+    this.productSearchLoading = false;
   }
   async pickProduct(p: any){
     // load selected product
