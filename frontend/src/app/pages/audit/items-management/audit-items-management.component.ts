@@ -24,10 +24,10 @@ interface AuditItem {
       <div class="header">
         <h1>Audit 평가 항목 관리</h1>
         <div class="actions">
-          <button class="btn" (click)="addNewItem()" style="background: #10b981; color: white; border-color: #10b981;">
-            + 추가
+          <button class="btn add-btn" (click)="addNewItem()">
+            항목추가
           </button>
-          <button class="btn primary" (click)="saveAll()" [disabled]="saving()">
+          <button class="btn save-btn" (click)="saveAll()" [disabled]="saving()">
             <span *ngIf="!saving()">저장</span>
             <span *ngIf="saving()">저장 중...</span>
           </button>
@@ -142,15 +142,28 @@ interface AuditItem {
       line-height: 1;
     }
 
-    .btn.primary {
-      background: #3b82f6;
-      color: white;
-      border-color: #3b82f6;
+    .btn.add-btn {
+      background: #f0fdf4;
+      color: #15803d;
+      border-color: #bbf7d0;
+      font-weight: 600;
     }
 
-    .btn.primary:hover:not(:disabled) {
-      background: #2563eb;
-      border-color: #2563eb;
+    .btn.add-btn:hover {
+      background: #dcfce7;
+      border-color: #86efac;
+    }
+
+    .btn.save-btn {
+      background: #eff6ff;
+      color: #1e40af;
+      border-color: #bfdbfe;
+      font-weight: 600;
+    }
+
+    .btn.save-btn:hover:not(:disabled) {
+      background: #dbeafe;
+      border-color: #93c5fd;
     }
 
     .btn:disabled {
