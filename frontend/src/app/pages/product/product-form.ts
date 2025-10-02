@@ -113,10 +113,12 @@ import { AuthService } from '../../services/auth.service';
             <div class="modal-head" (mousedown)="startDrag($event)">
               <b>성분 선택</b>
               <div class="spacer"></div>
+              <button class="modal-close" (click)="closePicker()" (mousedown)="$event.stopPropagation()" title="닫기">×</button>
             </div>
             <div class="modal-body">
               <div class="search-bar">
                 <input [(ngModel)]="pickerQuery" (keydown.arrowDown)="movePickerPointer(1)" (keydown.arrowUp)="movePickerPointer(-1)" (keydown.enter)="onPickerSearchEnter($event)" placeholder="INCI/국문명 검색" />
+                <button class="btn search-btn" (click)="onPickerSearchEnter($event)">검색</button>
               </div>
               <div class="table-scroll small">
                 <table class="grid">
@@ -198,6 +200,7 @@ import { AuthService } from '../../services/auth.service';
             <div class="modal-head" (mousedown)="startDrag($event)">
               <b>자재 선택</b>
               <div class="spacer"></div>
+              <button class="modal-close" (click)="closeMatPicker()" (mousedown)="$event.stopPropagation()" title="닫기">×</button>
             </div>
             <div class="modal-body">
               <div class="search-bar">
@@ -317,9 +320,13 @@ import { AuthService } from '../../services/auth.service';
     .empty{ text-align:center; color:#9ca3af; }
     .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.25); z-index:1000; }
     .modal{ position:fixed; top:20vh; left:50%; transform:translateX(-50%); width:min(1000px, 90vw); background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.18); z-index:1001; max-height:72vh; display:flex; flex-direction:column; }
-    .modal-head{ display:flex; align-items:center; gap:8px; padding:10px; border-bottom:1px solid #e5e7eb; }
+    .modal-head{ display:flex; align-items:center; gap:8px; padding:10px; border-bottom:1px solid #e5e7eb; cursor:move; position:relative; }
+    .modal-close{ position:absolute; top:8px; right:8px; width:32px; height:32px; border:none; background:transparent; color:#6b7280; cursor:pointer; font-size:28px; line-height:1; padding:0; border-radius:8px; transition:all 0.2s; display:flex; align-items:center; justify-content:center; z-index:10; }
+    .modal-close:hover{ background:#f3f4f6; color:#111827; }
     .modal-body{ padding:10px; overflow:hidden; }
     .modal .search-bar{ display:flex; gap:8px; margin-bottom:8px; }
+    .modal .search-bar .search-btn{ background:#f3f4f6; color:#374151; border-color:#d1d5db; white-space:nowrap; flex-shrink:0; }
+    .modal .search-bar .search-btn:hover{ background:#e5e7eb; }
     .modal .table-scroll.small{ max-height: calc(50vh - 70px); overflow:auto; }
     /* Material picker column sizing: narrow code/spec, widen name */
     .modal .grid thead th:nth-child(1), .modal .grid tbody td:nth-child(1){ width:120px; }
