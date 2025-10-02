@@ -12,6 +12,7 @@ interface AuditItem {
   category_no?: string;
   question?: string;
   translation?: string;
+  isNew?: boolean; // 새로 추가된 항목인지 표시
 }
 
 @Component({
@@ -23,6 +24,9 @@ interface AuditItem {
       <div class="header">
         <h1>Audit 평가 항목 관리</h1>
         <div class="actions">
+          <button class="btn" (click)="addNewItem()" style="background: #10b981; color: white; border-color: #10b981;">
+            + 추가
+          </button>
           <button class="btn primary" (click)="saveAll()" [disabled]="saving()">
             <span *ngIf="!saving()">저장</span>
             <span *ngIf="saving()">저장 중...</span>
@@ -97,9 +101,10 @@ interface AuditItem {
       gap: 16px;
       padding: 24px;
       max-width: 1400px;
-      height: 100%;
+      height: calc(100% - 32px);
       min-height: 0;
       margin: 0 auto;
+      box-sizing: border-box;
     }
 
     .header {
@@ -157,9 +162,10 @@ interface AuditItem {
       background: white;
       border-radius: 8px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border: 1px solid #e5e7eb;
       overflow: hidden;
-      display: grid;
-      grid-template-rows: auto 1fr;
+      display: flex;
+      flex-direction: column;
       min-height: 0;
     }
 
@@ -171,6 +177,10 @@ interface AuditItem {
 
     .items-table thead {
       background: #f9fafb;
+    }
+    
+    .table-container > .items-table {
+      flex-shrink: 0;
     }
 
     .items-table th {
@@ -206,8 +216,11 @@ interface AuditItem {
 
     .scroll-body {
       overflow: auto;
+      flex: 1;
       min-height: 0;
-      max-height: calc(100vh - 220px);
+      max-height: calc(100vh - 280px);
+      padding-bottom: 24px;
+      box-sizing: border-box;
     }
 
     .items-table td.center {
@@ -372,6 +385,13 @@ export class AuditItemsManagementComponent implements OnInit, AfterViewInit {
   }
 
   async onToggleActive(item: AuditItem) {
+    // 새 항목은 저장 후에만 토글 가능
+    if (item.isNew) {
+      item.is_active = !item.is_active; // 되돌리기
+      alert('새 항목은 저장 후에 사용 여부를 변경할 수 있습니다.');
+      return;
+    }
+    
     try {
       await this.audit.toggleAuditItemActive(item.number, item.is_active);
       console.log(`Item ${item.number} active status changed to ${item.is_active}`);
@@ -385,11 +405,17 @@ export class AuditItemsManagementComponent implements OnInit, AfterViewInit {
 
   async saveItem(item: AuditItem) {
     try {
-      await this.audit.updateAuditItem(item.number, {
-        title_ko: item.title_ko || '',
-        title_en: item.title_en || '',
-        is_active: item.is_active
-      });
+      // upsert 방식으로 저장 (새 항목이든 기존 항목이든 처리)
+      await this.audit.upsertAuditItems([{
+        number: item.number,
+        titleKo: item.title_ko || '',
+        titleEn: item.title_en || ''
+      }]);
+      
+      // 새 항목이었다면 isNew 플래그 제거
+      if (item.isNew) {
+        delete item.isNew;
+      }
       
       this.modifiedItems.delete(item.number);
       console.log(`Item ${item.number} saved successfully`);
@@ -397,6 +423,36 @@ export class AuditItemsManagementComponent implements OnInit, AfterViewInit {
       console.error('Failed to save item:', error);
       alert('저장 중 오류가 발생했습니다.');
     }
+  }
+
+  addNewItem() {
+    const currentItems = this.items();
+    const maxNumber = currentItems.length > 0 
+      ? Math.max(...currentItems.map(item => item.number))
+      : 0;
+    
+    const newItem: AuditItem = {
+      number: maxNumber + 1,
+      title_ko: '',
+      title_en: '',
+      is_active: true,
+      category_no: '',
+      question: '',
+      translation: '',
+      isNew: true // 새 항목 표시
+    };
+    
+    this.items.set([...currentItems, newItem]);
+    this.modifiedItems.add(newItem.number);
+    
+    // 스크롤을 맨 아래로 이동
+    setTimeout(() => {
+      const scrollBody = document.querySelector('.scroll-body');
+      if (scrollBody) {
+        scrollBody.scrollTop = scrollBody.scrollHeight;
+      }
+      this.measureAll();
+    }, 0);
   }
 
   async saveAll() {
