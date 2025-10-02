@@ -30,10 +30,14 @@ interface V2Node {
         <button class="add-chip-btn" (click)="addChip()">추가</button>
         </div>
       </div>
-      <div class="user-list">
-        <div class="user-chip" *ngFor="let u of users()" 
+      <div class="user-list" #userList (wheel)="onWheel($event)">
+        <div class="user-chip" *ngFor="let u of users(); let i = index" 
              draggable="true" 
+             [class.drop-target-top]="isDropTargetTop(i)"
+             [class.drop-target-bottom]="isDropTargetBottom(i)"
              (dragstart)="onDragUser($event,u)"
+             (dragenter)="onDragEnterUserChip($event,u,i)"
+             (dragleave)="onDragLeaveUserChip($event)"
              (dragover)="onDragOverUserChip($event)"
              (drop)="onDropUserChip($event,u)">
           <span class="chip-label">{{u.name}}{{getAssignedDeptsLabel(u)}}</span>
@@ -269,9 +273,10 @@ interface V2Node {
       padding: 0 16px 16px 16px;
       overflow-y: auto;
       flex: 1;
+      overscroll-behavior: contain;
     }
     
-    .user-chip { display:flex; align-items:center; justify-content:space-between; padding: 4px 8px; border-radius: 8px; background: #e2e8f0; color: #475569; cursor: move; transition: all 0.2s; font-size: 12px; white-space: nowrap; }
+    .user-chip { display:flex; align-items:center; justify-content:space-between; padding: 4px 8px; border-radius: 8px; background: #e2e8f0; color: #475569; cursor: move; transition: all 0.2s; font-size: 12px; white-space: nowrap; position: relative; }
     .user-chip .chip-label { pointer-events:none; }
     .user-chip .chip-actions { display:flex; gap:4px; }
     .user-chip .chip-remove, .user-chip .chip-edit { border:none; background:transparent; cursor:pointer; font-size:14px; padding:0 4px; }
@@ -280,6 +285,14 @@ interface V2Node {
     .user-chip:hover {
       background: #cbd5e1;
       transform: translateX(2px);
+    }
+    
+    .user-chip.drop-target-top {
+      box-shadow: 0 -3px 0 0 #3b82f6;
+    }
+    
+    .user-chip.drop-target-bottom {
+      box-shadow: 0 3px 0 0 #3b82f6;
     }
     
     .user-chip.assigned {
@@ -815,10 +828,14 @@ export class OrgChartV2Component implements OnInit, AfterViewInit, OnDestroy {
   showAddModal = false;
   dragUser: any = null;
   dragFrom: V2Node | null = null;
+  dropTargetIndex: number | null = null;
   newChipName = '';
   private leaderLines: any[] = []; // LeaderLine 인스턴스들을 저장
+  private isDragging = false;
 
   @ViewChild('chartContainer') chartContainer!: ElementRef;
+  @ViewChild('userList') userList!: ElementRef;
+  private wheelListener: ((e: WheelEvent) => void) | null = null;
 
   constructor(private orgService: OrganizationService,
     private auth: AuthService) {}
@@ -962,15 +979,103 @@ export class OrgChartV2Component implements OnInit, AfterViewInit, OnDestroy {
   
   onDragUser(e:DragEvent,u:any){ 
     this.dragUser=u; 
-    this.dragFrom=null; 
+    this.dragFrom=null;
+    this.isDragging = true;
+    // Enable scrolling during drag - prevent default behavior that blocks scroll
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+    }
+    
+    // Add global wheel listener during drag
+    this.setupDragWheelListener();
+  }
+
+  onWheel(e: WheelEvent) {
+    // Force wheel scrolling to work even during drag
+    if (!this.userList?.nativeElement) return;
+    
+    const target = this.userList.nativeElement;
+    const newScrollTop = target.scrollTop + e.deltaY;
+    const maxScroll = target.scrollHeight - target.clientHeight;
+    
+    // Clamp scroll position
+    target.scrollTop = Math.max(0, Math.min(maxScroll, newScrollTop));
+    
+    // Prevent any default behavior
+    e.preventDefault();
+    e.stopPropagation();
+    return false;
+  }
+
+  setupDragWheelListener() {
+    if (this.wheelListener) return; // Already set up
+    
+    this.wheelListener = (e: WheelEvent) => {
+      if (!this.isDragging || !this.userList?.nativeElement) return;
+      
+      const target = this.userList.nativeElement;
+      const rect = target.getBoundingClientRect();
+      
+      // Check if mouse is over the user list area
+      if (e.clientX >= rect.left && e.clientX <= rect.right &&
+          e.clientY >= rect.top && e.clientY <= rect.bottom) {
+        
+        const newScrollTop = target.scrollTop + e.deltaY;
+        const maxScroll = target.scrollHeight - target.clientHeight;
+        target.scrollTop = Math.max(0, Math.min(maxScroll, newScrollTop));
+        
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    
+    // Use capture phase and passive: false to ensure we can prevent default
+    document.addEventListener('wheel', this.wheelListener, { capture: true, passive: false });
+  }
+
+  removeDragWheelListener() {
+    if (this.wheelListener) {
+      document.removeEventListener('wheel', this.wheelListener, { capture: true } as any);
+      this.wheelListener = null;
+    }
+  }
+
+  onDragEnterUserChip(e: DragEvent, u: any, index: number) {
+    e.preventDefault();
+    if (this.dragUser && this.dragUser !== u && !this.dragFrom) {
+      this.dropTargetIndex = index;
+    }
+  }
+
+  onDragLeaveUserChip(e: DragEvent) {
+    // Clear drag over state when leaving
+    this.dropTargetIndex = null;
+  }
+
+  isDropTargetTop(index: number): boolean {
+    if (this.dropTargetIndex === null || !this.dragUser) return false;
+    const draggedIndex = this.users().findIndex(u => u === this.dragUser);
+    // 드래그한 칩의 위에 삽입될 경우 (드래그한 칩보다 작은 인덱스)
+    return this.dropTargetIndex === index && draggedIndex > index;
+  }
+
+  isDropTargetBottom(index: number): boolean {
+    if (this.dropTargetIndex === null || !this.dragUser) return false;
+    const draggedIndex = this.users().findIndex(u => u === this.dragUser);
+    // 드래그한 칩의 아래에 삽입될 경우 (드래그한 칩보다 큰 인덱스)
+    return this.dropTargetIndex === index && draggedIndex < index;
   }
 
   onDragOverUserChip(e: DragEvent){
     e.preventDefault();
+    e.stopPropagation();
   }
 
   onDropUserChip(e: DragEvent, targetUser: any){
     e.preventDefault();
+    this.isDragging = false;
+    this.dropTargetIndex = null;
+    this.removeDragWheelListener();
     // 현재 드래그 중인 사용자가 없으면 무시
     if(!this.dragUser || this.dragFrom) return; // dragFrom이 있으면 부서 칩 드래그 중
     const list = this.users();
@@ -1030,6 +1135,8 @@ export class OrgChartV2Component implements OnInit, AfterViewInit, OnDestroy {
   
   drop(e:DragEvent,target:V2Node){
     e.preventDefault();
+    this.isDragging = false;
+    this.removeDragWheelListener();
     if(!this.dragUser) return;
     if(this.dragFrom){ 
       this.dragFrom.members = this.dragFrom.members.filter(n=>n!==this.dragUser.name); 
@@ -1168,6 +1275,8 @@ export class OrgChartV2Component implements OnInit, AfterViewInit, OnDestroy {
 
   dropOutside(e: DragEvent) {
     e.preventDefault();
+    this.isDragging = false;
+    this.removeDragWheelListener();
     e.stopPropagation();
     
     // Check if drop is on a node (don't remove in that case)
