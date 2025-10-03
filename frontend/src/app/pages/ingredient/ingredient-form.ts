@@ -78,6 +78,7 @@ export class AutoGrowDirective implements AfterViewInit {
             <input [(ngModel)]="model.ingredient_code" />
             <label>ICID Monograph ID</label>
             <input [(ngModel)]="model.icid_monograph_id" />
+            <div class="field-note wide">동일한 코드가 둘 이상의 성분명(INCI Name)에 해당하는 경우, 각 성분명을 분리하여 별도로 저장해주세요.</div>
             <label>성분명</label>
             <textarea rows="1" autoGrow class="hl-green" [(ngModel)]="model.korean_name"></textarea>
             <label>구명칭</label>
@@ -92,9 +93,9 @@ export class AutoGrowDirective implements AfterViewInit {
             <input [(ngModel)]="model.einecs_no" />
             <label>기원 및 정의</label>
             <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.origin_definition" spellcheck="false"></textarea>
-            <label>기능(KR)</label>
+            <label>기능/배합목적(KR)</label>
             <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.function_kr"></textarea>
-            <label>기능(EN)</label>
+            <label>기능/배합목적(EN)</label>
             <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.function_en"></textarea>
             <label>Scientific Name</label>
             <textarea rows="1" autoGrow [(ngModel)]="model.scientific_name"></textarea>
@@ -167,6 +168,7 @@ export class AutoGrowDirective implements AfterViewInit {
   textarea{ white-space:normal; word-break:break-word; resize:none; overflow:hidden; min-height:28px; }
   /* Only textareas with .wide span remaining columns */
   .grid textarea.wide{ grid-column: 2 / span 3; }
+  .grid .field-note.wide{ grid-column: 2 / span 3; font-size:11px; color:#6b7280; padding:2px 0; line-height:1.4; }
   /* Highlight for INCI Name and 국문명 */
   .hl-green{ background:#ecfdf5; border-color:#bbf7d0; }
   .meta{ margin-top:12px; padding:8px 10px; border-top:1px dashed #e5e7eb; color:#6b7280; font-size:12px; }

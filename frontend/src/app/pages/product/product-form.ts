@@ -147,16 +147,15 @@ import { TabService } from '../../services/tab.service';
               </div>
               <div class="table-scroll small">
                 <table class="grid">
-                  <thead><tr><th>INCI Name</th><th>한글성분명</th><th>CAS No.</th><th class="col-act"></th></tr></thead>
+                  <thead><tr><th>INCI Name</th><th>한글성분명</th><th>CAS No.</th></tr></thead>
                   <tbody>
-                    <tr *ngFor="let r of pickerRows; let i = index" [class.selected]="i===pickerPointer" (dblclick)="addPicked(r)">
+                    <tr *ngFor="let r of pickerRows; let i = index" [class.selected]="i===pickerPointer" (click)="addPicked(r)" style="cursor:pointer;">
                       <td>{{ r.inci_name }}</td>
                       <td>{{ r.korean_name }}</td>
                       <td>{{ r.cas_no || '' }}</td>
-                      <td class="col-act"><button class="btn mini filled-light" (click)="addPicked(r)">추가</button></td>
                     </tr>
-                    <tr *ngIf="pickerRows.length===0 && !pickerSearchLoading"><td colspan="4" class="empty">검색 결과가 없습니다.</td></tr>
-                    <tr *ngIf="pickerSearchLoading"><td colspan="4" class="empty">검색 중...</td></tr>
+                    <tr *ngIf="pickerRows.length===0 && !pickerSearchLoading"><td colspan="3" class="empty">검색 결과가 없습니다.</td></tr>
+                    <tr *ngIf="pickerSearchLoading"><td colspan="3" class="empty">검색 중...</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -422,10 +421,9 @@ import { TabService } from '../../services/tab.service';
     .modal .search-bar .search-btn:hover{ background:#e5e7eb; }
     .modal .table-scroll.small{ flex:1; overflow:auto; min-height:0; }
     /* Ingredient picker column sizing: INCI Name and 한글성분명 equal width */
-    .modal .grid thead th:nth-child(1), .modal .grid tbody td:nth-child(1){ width:35%; }
-    .modal .grid thead th:nth-child(2), .modal .grid tbody td:nth-child(2){ width:35%; white-space:normal; word-break:break-word; }
+    .modal .grid thead th:nth-child(1), .modal .grid tbody td:nth-child(1){ width:40%; }
+    .modal .grid thead th:nth-child(2), .modal .grid tbody td:nth-child(2){ width:40%; white-space:normal; word-break:break-word; }
     .modal .grid thead th:nth-child(3), .modal .grid tbody td:nth-child(3){ width:20%; }
-    .modal .grid thead th:nth-child(4), .modal .grid tbody td:nth-child(4){ width:10%; }
     .product-picker{ margin-top:10px; position:relative; }
     .product-picker .picker-label{ display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:8px; }
     .product-picker .search-input-wrapper{ position:relative; display:flex; align-items:center; }
