@@ -50,7 +50,7 @@ export class AutoGrowDirective implements AfterViewInit {
           </svg>
           <h3>성분 검색</h3>
         </div>
-        <input class="search-input" [(ngModel)]="ingQuery" (keydown.arrowDown)="moveIngPointer(1)" (keydown.arrowUp)="moveIngPointer(-1)" (keydown.enter)="onIngEnterOrSearch($event)" (keydown.escape)="onIngEsc($event)" placeholder="INCI/국문명/CAS 검색 (공백=AND)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
+        <input class="search-input" [(ngModel)]="ingQuery" (keydown.arrowDown)="moveIngPointer(1)" (keydown.arrowUp)="moveIngPointer(-1)" (keydown.enter)="onIngEnterOrSearch($event)" (keydown.escape)="onIngEsc($event)" placeholder="INCI/성분명/CAS 검색 (공백=AND)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
         <ul class="search-results" *ngIf="ingResults.length">
           <li *ngFor="let r of ingResults; let i = index" [class.selected]="i===ingPointer" (click)="pickIngredient(r)">
             <div class="result-inci">{{ r.inci_name }}</div>
@@ -68,27 +68,27 @@ export class AutoGrowDirective implements AfterViewInit {
       <main class="form-main">
         <section class="form-body">
           <div class="grid">
+            <label>성분명</label>
+            <textarea rows="1" autoGrow class="hl-green" [(ngModel)]="model.korean_name"></textarea>
+            <label>구명칭</label>
+            <textarea rows="1" autoGrow [(ngModel)]="model.old_korean_name"></textarea>
             <label>INCI Name</label>
             <textarea rows="1" autoGrow class="hl-green" [(ngModel)]="model.inci_name"></textarea>
-            <label>국문명</label>
-            <textarea rows="1" autoGrow class="hl-green" [(ngModel)]="model.korean_name"></textarea>
-            <label>중국명</label>
+            <label>중국성분명</label>
             <textarea rows="1" autoGrow [(ngModel)]="model.chinese_name"></textarea>
-            <label>CAS No</label>
+            <label>CAS No.</label>
             <input [(ngModel)]="model.cas_no" />
+            <label>EINECS No.</label>
+            <input [(ngModel)]="model.einecs_no" />
             <label>기원 및 정의</label>
             <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.origin_definition" spellcheck="false"></textarea>
-            <label>기능(EN)</label>
-            <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.function_en"></textarea>
             <label>기능(KR)</label>
             <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.function_kr"></textarea>
+            <label>기능(EN)</label>
+            <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.function_en"></textarea>
             <label>Scientific Name</label>
             <textarea rows="1" autoGrow [(ngModel)]="model.scientific_name"></textarea>
-            <label>EINECS No</label>
-            <input [(ngModel)]="model.einecs_no" />
-            <label>이전국문명</label>
-            <textarea rows="1" autoGrow [(ngModel)]="model.old_korean_name"></textarea>
-            <label>원산/ABS</label>
+            <label>원산지/ABS</label>
             <textarea rows="1" autoGrow [(ngModel)]="model.origin_abs"></textarea>
             <label>비고</label>
             <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.remarks" spellcheck="false"></textarea>
@@ -262,7 +262,8 @@ export class IngredientFormComponent implements OnInit {
     try{
       const uid = user.user?.email || user.user?.id || 'user';
       const logs = Array.isArray(this.changeLogs) ? this.changeLogs.slice() : [];
-      logs.push({ user: uid, time: now.replace('T',' ').substring(0,19) });
+      // Use local time (KST) string rather than UTC
+      logs.push({ user: uid, time: this.formatLocalDateTime(new Date()) });
       this.changeLogs = logs;
       if (this.id()) await this.erpData.setIngredientChangeLogs(this.id()!, logs);
     }catch{}
@@ -271,6 +272,16 @@ export class IngredientFormComponent implements OnInit {
     // Show success notice
     this.notice.set('저장되었습니다.');
     setTimeout(() => this.notice.set(null), 2500);
+  }
+  private formatLocalDateTime(d: Date){
+    const pad = (n:number)=> String(n).padStart(2,'0');
+    const yyyy = d.getFullYear();
+    const mm = pad(d.getMonth()+1);
+    const dd = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const mi = pad(d.getMinutes());
+    const ss = pad(d.getSeconds());
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
   }
   createNew(){
     // Clear the form for new ingredient entry

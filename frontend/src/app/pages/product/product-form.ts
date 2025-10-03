@@ -73,8 +73,16 @@ import { TabService } from '../../services/tab.service';
           <div class="toolbar">
             <div class="title">조성성분</div>
             <div class="spacer"></div>
-            <span class="status" [class.saved]="saved" [class.unsaved]="!saved">{{ saved? '저장됨' : '저장되지 않음' }}</span>
-            <button class="btn save-btn" [class.need]="!saved" [class.done]="saved" [disabled]="!isEditable() || saved" (click)="saveCompositions()">저장</button>
+            <span class="order-edit-status" *ngIf="orderEditStatus !== 'idle'">
+              {{ orderEditStatus === 'editing' ? '성분 순서 편집 중' : '성분 순서 편집 완료' }}
+            </span>
+            <button *ngIf="orderEditMode" class="btn btn-cancel" (click)="cancelOrderEdit()">순서 편집 취소</button>
+            <button class="btn" (click)="toggleOrderEditMode()">{{ orderEditMode ? '순서 편집 저장' : '순서 편집' }}</button>
+            <div class="status-wrapper">
+              <div class="spinner" *ngIf="saving"></div>
+              <span class="status" [class.saved]="saved" [class.unsaved]="!saved">{{ saving ? '저장 중...' : (saved? '저장 완료' : '저장되지 않음') }}</span>
+            </div>
+            <button class="btn save-btn" [class.need]="!saved" [class.done]="saved" [disabled]="!isEditable() || saved || saving" (click)="saveCompositions()">저장</button>
             <button class="btn btn-light-blue" [disabled]="!isEditable()" (click)="openPicker()">성분 추가</button>
           </div>
           <div class="table-scroll" #compTableRef>
@@ -90,8 +98,16 @@ import { TabService } from '../../services/tab.service';
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let c of compositions; let i = index" [class.selected]="selectedComp===c" (click)="selectedComp=c">
-                  <td class="col-no">{{ i+1 }}</td>
+                <tr *ngFor="let c of compositions; let i = index" 
+                    [class.selected]="selectedComp===c" 
+                    [class.draggable]="orderEditMode"
+                    [attr.draggable]="orderEditMode"
+                    (click)="selectedComp=c"
+                    (dragstart)="onDragStart($event, i)"
+                    (dragover)="onDragOver($event, i)"
+                    (drop)="onDrop($event, i)"
+                    (dragend)="onDragEnd($event)">
+                  <td class="col-no" [class.drag-handle]="orderEditMode">{{ i+1 }}</td>
                   <td class="col-inci">{{ c.inci_name }}</td>
                   <td class="col-kor">{{ c.korean_name }}</td>
                   <td class="col-cas">{{ c.cas_no || '' }}</td>
@@ -162,6 +178,7 @@ import { TabService } from '../../services/tab.service';
                 </div>
               </div>
               <div class="spacer"></div>
+              <button class="btn new-ing-btn" (click)="openIngredientList()">성분조회</button>
               <button class="btn new-ing-btn" (click)="openIngredientFormNew()">신규성분등록</button>
             </div>
             <!-- 펼쳐진 이전 로그들 - 버튼 아래 독립 배치 -->
@@ -182,7 +199,7 @@ import { TabService } from '../../services/tab.service';
           <div class="toolbar">
             <div class="title">투입품목/자재</div>
             <div class="spacer"></div>
-            <span class="status" [class.saved]="matSaved" [class.unsaved]="!matSaved">{{ matSaved? '저장됨' : '저장되지 않음' }}</span>
+            <span class="status" [class.saved]="matSaved" [class.unsaved]="!matSaved">{{ matSaved? '저장 완료' : '저장되지 않음' }}</span>
             <button class="btn" (click)="saveMaterials()">저장</button>
             <button class="btn primary" (click)="openMatPicker()">자재 추가</button>
           </div>
@@ -298,12 +315,15 @@ import { TabService } from '../../services/tab.service';
     .tab.active{ background:#fff; border-color:#d1d5db; font-weight:700; }
     .form-header{ display:flex; align-items:center; justify-content:space-between; position:sticky; top:10px; background:#fff; z-index:5; padding:6px 0; }
     .actions{ display:flex; gap:8px; align-items:center; }
-    .btn{ height:28px; padding:0 10px; border-radius:8px; border:1px solid #d1d5db; background:#fff; cursor:pointer; font-size:12px; }
+    .btn{ height:28px; padding:0 10px; border-radius:8px; border:1px solid #d1d5db; background:#fff; cursor:pointer; font-size:12px; transition:all 0.2s; }
     .btn:disabled{ opacity:.6; cursor:not-allowed; }
+    .btn.active{ background:#dbeafe; color:#1e40af; border-color:#60a5fa; }
     .btn.primary{ background:#111827; color:#fff; border-color:#111827; }
     .btn.ghost{ background:#fff; color:#111827; }
     .btn.btn-light-blue{ background:#dbeafe; color:#1e40af; border-color:#93c5fd; font-weight:600; }
     .btn.btn-light-blue:hover{ background:#bfdbfe; border-color:#60a5fa; }
+    .btn.btn-cancel{ background:#f3f4f6; color:#6b7280; border-color:#d1d5db; font-weight:600; }
+    .btn.btn-cancel:hover{ background:#e5e7eb; border-color:#9ca3af; }
     .btn.danger{ background:#fee2e2; color:#b91c1c; border-color:#fecaca; font-weight:700; }
     .mini{ height:24px; padding:0 8px; border-radius:6px; font-weight:700; }
     .filled-light{ background:#eef2ff; border-color:#c7d2fe; color:#111827; }
@@ -347,6 +367,9 @@ import { TabService } from '../../services/tab.service';
     .comp-wrap .toolbar, .right-main .toolbar{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
     .comp-wrap .toolbar .title{ font-weight:700; }
     .comp-wrap .toolbar .spacer, .right-main .toolbar .spacer{ flex:1; }
+    .order-edit-status{ font-size:13px; font-weight:500; color:#059669; padding:4px 8px; background:#d1fae5; border-radius:6px; }
+    .status-wrapper{ display:flex; align-items:center; gap:8px; }
+    .status-wrapper .spinner{ width:14px; height:14px; border:2px solid #e5e7eb; border-top-color:#3b82f6; border-radius:50%; animation:spin 0.8s linear infinite; }
     .status{ font-size:12px; }
     .status.saved{ color:#2563eb; }
     .status.unsaved{ color:#f97316; }
@@ -355,6 +378,10 @@ import { TabService } from '../../services/tab.service';
     .grid th, .grid td{ border:1px solid #e5e7eb; padding:6px 8px; font-size:12px; }
     .grid thead th{ background:#f9fafb; position:sticky; top:0; z-index:1; }
     .grid tr.selected td{ background:#eef6ff; }
+    .grid tr.draggable{ cursor:move; }
+    .grid tr.draggable:hover{ background:#f9fafb; }
+    .grid td.drag-handle{ cursor:grab; user-select:none; text-align:center; font-weight:700; color:#6b7280; }
+    .grid td.drag-handle:active{ cursor:grabbing; }
     .grid .col-no{ width:5%; text-align:center; }
     .grid .col-inci{ width:25%; }
     .grid .col-kor{ width:25%; }
@@ -378,14 +405,14 @@ import { TabService } from '../../services/tab.service';
     .empty.clickable:hover{ color:#374151; background:#f9fafb; }
     .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.25); z-index:1000; }
     .modal{ position:fixed; top:20vh; left:50%; transform:translateX(-50%); width:min(1000px, 90vw); background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.18); z-index:1001; max-height:72vh; display:flex; flex-direction:column; }
-    .modal-head{ display:flex; align-items:center; gap:8px; padding:10px; border-bottom:1px solid #e5e7eb; cursor:move; position:relative; }
+    .modal-head{ display:flex; align-items:center; gap:8px; padding:10px; border-bottom:1px solid #e5e7eb; cursor:move; position:relative; flex-shrink:0; }
     .modal-close{ position:absolute; top:8px; right:8px; width:32px; height:32px; border:none; background:transparent; color:#6b7280; cursor:pointer; font-size:28px; line-height:1; padding:0; border-radius:8px; transition:all 0.2s; display:flex; align-items:center; justify-content:center; z-index:10; }
     .modal-close:hover{ background:#f3f4f6; color:#111827; }
-    .modal-body{ padding:10px; overflow:hidden; }
-    .modal .search-bar{ display:flex; gap:8px; margin-bottom:8px; }
+    .modal-body{ padding:10px; display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+    .modal .search-bar{ display:flex; gap:8px; margin-bottom:8px; flex-shrink:0; }
     .modal .search-bar .search-btn{ background:#f3f4f6; color:#374151; border-color:#d1d5db; white-space:nowrap; flex-shrink:0; }
     .modal .search-bar .search-btn:hover{ background:#e5e7eb; }
-    .modal .table-scroll.small{ max-height: calc(50vh - 70px); overflow:auto; }
+    .modal .table-scroll.small{ flex:1; overflow:auto; min-height:0; }
     /* Ingredient picker column sizing: INCI Name and 한글성분명 equal width */
     .modal .grid thead th:nth-child(1), .modal .grid tbody td:nth-child(1){ width:35%; }
     .modal .grid thead th:nth-child(2), .modal .grid tbody td:nth-child(2){ width:35%; white-space:normal; word-break:break-word; }
@@ -478,8 +505,13 @@ export class ProductFormComponent implements OnInit {
   private pickerTimer: any = null;
   private pickerDefaultsCache: Array<{ id: string; inci_name: string; korean_name?: string; chinese_name?: string; cas_no?: string }> | null = null;
   saved = false;
+  saving = false;
   pickerPointer = -1;
   private pickerPointerMoved = false;
+  // Order editing
+  orderEditMode = false;
+  private draggedIndex: number | null = null;
+  private orderWasEdited = false; // Track if user has edited order
   // Product picker
   productQuery = '';
   productResults: Array<{ id: string; product_code: string; name_kr?: string; spec?: string; specification?: string; status?: 'red'|'orange'|'blue' }> = [];
@@ -806,6 +838,13 @@ export class ProductFormComponent implements OnInit {
   removeSelected(){ if (!this.selectedComp) return; this.compositions = this.compositions.filter(r => r !== this.selectedComp); this.selectedComp = null; this.saveStateSnapshot(); }
   onPercentChange(){ this.saved = false; this.saveStateSnapshot(); }
   
+  openIngredientList() {
+    // Open ingredient list tab
+    const tabPath = '/app/ingredient';
+    const navUrl = '/app/ingredient';
+    this.tabService.requestOpen('성분조회', tabPath, navUrl);
+  }
+  
   openIngredientFormNew() {
     // Open ingredient form tab without ID (new ingredient)
     // Use fixed tabPath to ensure only one tab exists
@@ -828,6 +867,99 @@ export class ProductFormComponent implements OnInit {
       console.warn('No ingredient_id found in composition:', composition);
       alert('성분 정보를 찾을 수 없습니다.');
     }
+  }
+
+  // Order editing methods
+  orderEditStatus: 'idle' | 'editing' | 'completed' = 'idle'; // Track order edit status
+  private compositionsBeforeEdit: any[] = []; // Store original order before editing
+  private needsReVerificationBeforeEdit = false; // Store verification flag before editing
+  
+  toggleOrderEditMode() {
+    this.orderEditMode = !this.orderEditMode;
+    if (this.orderEditMode) {
+      // Entering edit mode - save current state
+      this.orderEditStatus = 'editing';
+      this.compositionsBeforeEdit = JSON.parse(JSON.stringify(this.compositions));
+      this.needsReVerificationBeforeEdit = this.needsReVerification;
+    } else {
+      // Exiting edit mode - check if order actually changed
+      const orderChanged = this.hasOrderChanged();
+      if (orderChanged) {
+        this.orderEditStatus = 'completed';
+      } else {
+        this.orderEditStatus = 'idle';
+      }
+      this.compositionsBeforeEdit = [];
+    }
+  }
+  
+  private hasOrderChanged(): boolean {
+    // Check if the order of compositions has actually changed
+    if (this.compositionsBeforeEdit.length !== this.compositions.length) {
+      return true;
+    }
+    
+    for (let i = 0; i < this.compositions.length; i++) {
+      const beforeId = this.compositionsBeforeEdit[i]?.ingredient_id;
+      const currentId = this.compositions[i]?.ingredient_id;
+      if (beforeId !== currentId) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
+  cancelOrderEdit() {
+    // Restore original order and verification state
+    if (this.compositionsBeforeEdit.length > 0) {
+      this.compositions = JSON.parse(JSON.stringify(this.compositionsBeforeEdit));
+    }
+    this.needsReVerification = this.needsReVerificationBeforeEdit;
+    this.orderEditMode = false;
+    this.orderEditStatus = 'idle';
+    this.compositionsBeforeEdit = [];
+    // Note: orderWasEdited is not changed - it reflects DB state
+  }
+
+  onDragStart(event: DragEvent, index: number) {
+    this.draggedIndex = index;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/html', '');
+    }
+  }
+
+  onDragOver(event: DragEvent, index: number) {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+  }
+
+  onDrop(event: DragEvent, dropIndex: number) {
+    event.preventDefault();
+    if (this.draggedIndex === null || this.draggedIndex === dropIndex) return;
+    
+    // Reorder the array
+    const draggedItem = this.compositions[this.draggedIndex];
+    const newCompositions = [...this.compositions];
+    newCompositions.splice(this.draggedIndex, 1);
+    newCompositions.splice(dropIndex, 0, draggedItem);
+    this.compositions = newCompositions;
+    this.draggedIndex = dropIndex;
+    
+    // Mark that order has been edited
+    this.orderWasEdited = true;
+    
+    // If composition was verified, require re-verification after order change
+    if (this.verifyLogs && this.verifyLogs.length > 0) {
+      this.needsReVerification = true;
+    }
+  }
+
+  onDragEnd(event: DragEvent) {
+    this.draggedIndex = null;
   }
   navigatePercent(ev: Event, rowIndex: number, delta: number){
     if (ev?.preventDefault) ev.preventDefault();
@@ -928,22 +1060,30 @@ export class ProductFormComponent implements OnInit {
   async saveCompositions(){
     if (!this.isEditable()) return;
     if (!this.id()) { alert('품목이 선택되지 않았습니다. 좌측에서 품목을 검색하여 선택해 주세요.'); this.saved = false; return; }
+    this.saving = true;
     try{
       const pid = this.id()!;
       // 1) Snapshot of DB rows
       const { data: dbComps } = await this.erpData.listProductCompositions(pid) as any;
       const dbList: Array<{ id: string; ingredient_id: string }> = (dbComps||[]).map((x:any)=> ({ id: x.id, ingredient_id: x.ingredient_id }));
-      // 2) Build latest percent per ingredient from current UI
-      const latestPercent: Record<string, number> = {};
+      // 2) Build latest percent and display_order per ingredient from current UI
+      const latestData: Record<string, { percent: number; order: number | null }> = {};
       const existingByIngredient: Record<string, string> = {}; // ingredient_id -> composition id (from UI row)
-      for (const c of this.compositions){
-        if (c.ingredient_id){ latestPercent[c.ingredient_id] = Number(c.percent)||0; }
+      for (let i = 0; i < this.compositions.length; i++){
+        const c = this.compositions[i];
+        if (c.ingredient_id){ 
+          latestData[c.ingredient_id] = { 
+            percent: Number(c.percent)||0,
+            // Only save display_order if user has edited the order
+            order: this.orderWasEdited ? (i + 1) : null
+          };
+        }
         if (c.id && c.ingredient_id){ existingByIngredient[c.ingredient_id] = c.id as any; }
       }
       // 3) Delete rows that are not in UI anymore, and delete duplicate DB rows per ingredient beyond the one bound to UI
       const allowedIdByIngredient: Record<string, string|undefined> = { ...existingByIngredient };
       for (const row of dbList){
-        const inUI = latestPercent[row.ingredient_id] !== undefined;
+        const inUI = latestData[row.ingredient_id] !== undefined;
         const allowedId = allowedIdByIngredient[row.ingredient_id];
         if (!inUI || (allowedId && row.id !== allowedId)){
           await this.erpData.deleteProductComposition(row.id);
@@ -951,16 +1091,26 @@ export class ProductFormComponent implements OnInit {
       }
       // 4) Apply updates to existing rows that remain
       for (const [ingredientId, compId] of Object.entries(existingByIngredient)){
-        const pct = latestPercent[ingredientId] ?? 0;
-        await this.erpData.updateProductComposition(compId, { percent: pct });
-      }
-      // 5) Insert new ingredients that don't exist yet in DB
-      for (const [ingredientId, pct] of Object.entries(latestPercent)){
-        if (!existingByIngredient[ingredientId]){
-          await this.erpData.addProductComposition({ product_id: pid, ingredient_id: ingredientId, percent: pct });
+        const data = latestData[ingredientId];
+        if (data) {
+          await this.erpData.updateProductComposition(compId, { 
+            percent: data.percent,
+            display_order: data.order
+          } as any);
         }
       }
-      // Re-fetch compositions sorted by percent desc
+      // 5) Insert new ingredients that don't exist yet in DB
+      for (const [ingredientId, data] of Object.entries(latestData)){
+        if (!existingByIngredient[ingredientId]){
+          await this.erpData.addProductComposition({ 
+            product_id: pid, 
+            ingredient_id: ingredientId, 
+            percent: data.percent,
+            display_order: data.order
+          } as any);
+        }
+      }
+      // Re-fetch compositions
       const { data: comps } = await this.erpData.listProductCompositions(pid) as any;
       const mapped = (comps || []).map((c:any)=>({
         ...c,
@@ -968,9 +1118,26 @@ export class ProductFormComponent implements OnInit {
         korean_name: (c.ingredient && c.ingredient.korean_name) || '',
         cas_no: (c.ingredient && c.ingredient.cas_no) || '',
       }));
-      mapped.sort((a:any,b:any)=> (Number(b.percent)||0) - (Number(a.percent)||0));
+      
+      // Check if display_order exists in saved data and update flag
+      const hasDisplayOrder = mapped.some((c:any) => c.display_order != null && c.display_order > 0);
+      this.orderWasEdited = hasDisplayOrder;
+      
+      // Sort based on actual data
+      if (hasDisplayOrder) {
+        // display_order exists - sort by it
+        mapped.sort((a:any,b:any)=> {
+          const orderA = Number(a.display_order) || 999999;
+          const orderB = Number(b.display_order) || 999999;
+          return orderA - orderB;
+        });
+      } else {
+        // No display_order - sort by percent desc
+        mapped.sort((a:any,b:any)=> (Number(b.percent)||0) - (Number(a.percent)||0));
+      }
       this.compositions = mapped as any;
       this.saved = true;
+      this.orderEditStatus = 'idle'; // 저장 후 순서 편집 상태 초기화
       this.saveStateSnapshot();
       // After successful save, persist verification logs to DB as-is
       try{ await this.erpData.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
@@ -978,6 +1145,7 @@ export class ProductFormComponent implements OnInit {
       this.lastVerifiedAt = null;
       this.notice.set('조성성분이 저장되었습니다.'); setTimeout(()=> this.notice.set(null), 1800);
     }catch{ this.saved = false; }
+    finally{ this.saving = false; }
   }
 
   // Editable state: allow when item_status is '사용' or '임시'
@@ -1044,12 +1212,27 @@ export class ProductFormComponent implements OnInit {
       updated_by_name: data?.updated_by_name,
     } as any;
     const { data: comps } = await this.erpData.listProductCompositions(pid) as any;
-    this.compositions = (comps || []).map((c:any)=>({
+    const mapped = (comps || []).map((c:any)=>({
       ...c,
       inci_name: (c.ingredient && c.ingredient.inci_name) || '',
       korean_name: (c.ingredient && c.ingredient.korean_name) || '',
       cas_no: (c.ingredient && c.ingredient.cas_no) || '',
     }));
+    // Check if display_order exists and set orderWasEdited flag
+    const hasDisplayOrder = mapped.some((c:any) => c.display_order != null && c.display_order > 0);
+    this.orderWasEdited = hasDisplayOrder;
+    
+    // Sort by display_order if present, otherwise by percent desc
+    if (hasDisplayOrder) {
+      mapped.sort((a:any,b:any)=> {
+        const orderA = Number(a.display_order) || 999999;
+        const orderB = Number(b.display_order) || 999999;
+        return orderA - orderB;
+      });
+    } else {
+      mapped.sort((a:any,b:any)=> (Number(b.percent)||0) - (Number(a.percent)||0));
+    }
+    this.compositions = mapped;
     this.ingredientSuggest = this.compositions.map(()=>[]);
     this.saved = Array.isArray(this.compositions) && this.compositions.length>0;
     try{
@@ -1096,7 +1279,8 @@ export class ProductFormComponent implements OnInit {
   verifyLogs: Array<{ user: string; time: string }> = [];
   private lastVerifiedAt: string | null = null;
   showAllVerifyLogs = false; // 로그 펼치기 상태
-  isVerified(){ return (this.verifyLogs && this.verifyLogs.length > 0); }
+  needsReVerification = false; // 순서 편집 후 재확인 필요 플래그
+  isVerified(){ return (this.verifyLogs && this.verifyLogs.length > 0) && !this.needsReVerification; }
   onVerifyClick(){
     const err = this.validateBeforeVerify();
     if (err){ alert(err); return; }
@@ -1121,6 +1305,7 @@ export class ProductFormComponent implements OnInit {
       const time = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
       this.verifyLogs = [...this.verifyLogs, { user: name, time }];
       this.lastVerifiedAt = time;
+      this.needsReVerification = false; // 확인 완료 후 플래그 초기화
       this.saveVerifyState();
       const pid = this.id(); if (pid) try{ await this.erpData.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
       this.saveStateSnapshot();

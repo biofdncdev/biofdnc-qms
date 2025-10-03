@@ -216,12 +216,13 @@ export class ErpDataService {
     product_id: string; 
     ingredient_id: string; 
     percent?: number | null; 
-    note?: string | null; 
+    note?: string | null;
+    display_order?: number | null;
   }) {
     return this.client.from('product_compositions').insert(row).select('*').single();
   }
   
-  async updateProductComposition(id: string, row: Partial<{ percent: number; note: string; }>) {
+  async updateProductComposition(id: string, row: Partial<{ percent: number; note: string; display_order: number; }>) {
     return this.client.from('product_compositions').update(row).eq('id', id).select('*').single();
   }
   
