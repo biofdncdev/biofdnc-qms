@@ -287,7 +287,33 @@ export class IngredientFormComponent implements OnInit {
       }
     }
     
-    // 2. Check korean_name + inci_name duplicate - must be unique
+    // 2. Check korean_name or inci_name individual duplicates - show confirmation dialog
+    let koreanNameDuplicate = false;
+    let inciNameDuplicate = false;
+    
+    if (koreanName) {
+      const { data: koreanCheck } = await this.erpData.checkKoreanNameExists(koreanName, this.id() || undefined);
+      koreanNameDuplicate = koreanCheck && koreanCheck.exists;
+    }
+    
+    if (inciName) {
+      const { data: inciCheck } = await this.erpData.checkInciNameExists(inciName, this.id() || undefined);
+      inciNameDuplicate = inciCheck && inciCheck.exists;
+    }
+    
+    if (koreanNameDuplicate || inciNameDuplicate) {
+      let message = '중복된 정보가 있습니다.\n\n';
+      if (koreanNameDuplicate) message += `성분명: ${koreanName}\n`;
+      if (inciNameDuplicate) message += `INCI Name: ${inciName}\n`;
+      message += '\n그래도 저장하시겠습니까?';
+      
+      const confirmed = confirm(message);
+      if (!confirmed) {
+        return; // User cancelled, don't save
+      }
+    }
+    
+    // 3. Check korean_name + inci_name combination - must be unique (cannot proceed)
     if (koreanName && inciName) {
       const { data: nameCheck } = await this.erpData.checkIngredientNameExists(koreanName, inciName, this.id() || undefined);
       if (nameCheck && nameCheck.exists) {

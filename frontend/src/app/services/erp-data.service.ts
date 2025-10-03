@@ -493,6 +493,34 @@ export class ErpDataService {
     return { data: { exists: (count || 0) > 0 } };
   }
 
+  async checkKoreanNameExists(koreanName: string, excludeId?: string) {
+    let query = this.client
+      .from('ingredients')
+      .select('id', { count: 'exact', head: false })
+      .ilike('korean_name', koreanName);
+    
+    if (excludeId) {
+      query = query.neq('id', excludeId);
+    }
+    
+    const { data, count } = await query;
+    return { data: { exists: (count || 0) > 0 } };
+  }
+
+  async checkInciNameExists(inciName: string, excludeId?: string) {
+    let query = this.client
+      .from('ingredients')
+      .select('id', { count: 'exact', head: false })
+      .ilike('inci_name', inciName);
+    
+    if (excludeId) {
+      query = query.neq('id', excludeId);
+    }
+    
+    const { data, count } = await query;
+    return { data: { exists: (count || 0) > 0 } };
+  }
+
   async searchIngredientsBasic(keyword: string) {
     const kw = (keyword||'').trim();
     if (!kw) return { data: [] as any[] } as any;

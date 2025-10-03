@@ -374,9 +374,11 @@ import { TabService } from '../../services/tab.service';
     .status.saved{ color:#2563eb; }
     .status.unsaved{ color:#f97316; }
     .comp-wrap.readonly{ opacity:.6; pointer-events:auto; }
-    .grid{ width:100%; border-collapse:collapse; table-layout:fixed; }
-    .grid th, .grid td{ border:1px solid #e5e7eb; padding:6px 8px; font-size:12px; }
-    .grid thead th{ background:#f9fafb; position:sticky; top:0; z-index:1; }
+    .grid{ width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed; position:relative; }
+    .grid th, .grid td{ border:1px solid #e5e7eb; padding:6px 8px; font-size:12px; border-right:0; border-bottom:0; }
+    .grid th:last-child, .grid td:last-child{ border-right:1px solid #e5e7eb; }
+    .grid tbody tr:last-child td{ border-bottom:1px solid #e5e7eb; }
+    .grid thead th{ background:#f9fafb; position:sticky; top:0; z-index:10; border-bottom:1px solid #e5e7eb !important; box-shadow:0 1px 0 0 #e5e7eb; }
     .grid tr.selected td{ background:#eef6ff; }
     .grid tr.draggable{ cursor:move; }
     .grid tr.draggable:hover{ background:#f9fafb; }
@@ -394,7 +396,7 @@ import { TabService } from '../../services/tab.service';
     .grid input[type='number']::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
     /* hide number input arrows (Firefox) */
     .grid input[type='number']{ -moz-appearance: textfield; }
-    .table-scroll{ max-height:60vh; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; }
+    .table-scroll{ max-height:60vh; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; position:relative; }
     .table-scroll.small{ max-height:50vh; }
     table tfoot .sum{ text-align:right; font-weight:400; }
     table tfoot .sum.ok{ color:#059669; }
