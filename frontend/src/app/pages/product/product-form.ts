@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ViewChild, ElementRef, HostListener } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, ElementRef, HostListener, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -407,8 +407,8 @@ import { TabService } from '../../services/tab.service';
     .empty{ text-align:center; color:#9ca3af; }
     .empty.clickable{ cursor:pointer; user-select:none; }
     .empty.clickable:hover{ color:#374151; background:#f9fafb; }
-    .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.25); z-index:1000; }
-    .modal{ position:fixed; top:20vh; left:50%; transform:translateX(-50%); width:min(1000px, 90vw); background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.18); z-index:1001; max-height:72vh; display:flex; flex-direction:column; }
+    .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.25); z-index:1000; will-change:opacity; backface-visibility:hidden; }
+    .modal{ position:fixed; top:20vh; left:50%; transform:translateX(-50%); width:min(1000px, 90vw); background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.18); z-index:1001; max-height:72vh; display:flex; flex-direction:column; will-change:transform, opacity; backface-visibility:hidden; }
     .modal-head{ display:flex; align-items:center; gap:8px; padding:10px; border-bottom:1px solid #e5e7eb; cursor:move; position:relative; flex-shrink:0; }
     .modal-close{ position:absolute; top:8px; right:8px; width:32px; height:32px; border:none; background:transparent; color:#6b7280; cursor:pointer; font-size:28px; line-height:1; padding:0; border-radius:8px; transition:all 0.2s; display:flex; align-items:center; justify-content:center; z-index:10; }
     .modal-close:hover{ background:#f3f4f6; color:#111827; }
@@ -551,7 +551,7 @@ export class ProductFormComponent implements OnInit {
   }
 
   constructor(private route: ActivatedRoute, private router: Router, private erpData: ErpDataService,
-    private auth: AuthService, private tabService: TabService) {}
+    private auth: AuthService, private tabService: TabService, private cdr: ChangeDetectorRef) {}
   isAdmin = false;
   async ngOnInit(){
     // capture current user for per-user persistence
@@ -711,13 +711,33 @@ export class ProductFormComponent implements OnInit {
     this.pickerRows = [];
     this.pickerPointer = -1;
     this.pickerPointerMoved = false;
-    // Immediately load defaults for empty query
-    this.runPickerSearch();
-    setTimeout(()=>{
-      const modalInput = document.querySelector('.modal input') as HTMLInputElement | null;
-      modalInput?.focus();
-      this.updateModalTop();
-    }, 0);
+    this.pickerSearchLoading = false;
+    
+    // Force change detection and repaint to fix rendering issues when switching browsers
+    this.cdr.detectChanges();
+    
+    // Use requestAnimationFrame to ensure browser has painted before loading data
+    requestAnimationFrame(() => {
+      // Force a reflow to ensure modal is rendered
+      const modal = document.querySelector('.modal') as HTMLElement | null;
+      if (modal) {
+        // Reading offsetHeight forces a reflow
+        void modal.offsetHeight;
+      }
+      
+      // Immediately load defaults for empty query
+      this.runPickerSearch();
+      
+      // Wait for next frame to focus and update modal position
+      requestAnimationFrame(() => {
+        const modalInput = document.querySelector('.modal input') as HTMLInputElement | null;
+        modalInput?.focus();
+        this.updateModalTop();
+        
+        // Force another change detection after modal is positioned
+        this.cdr.detectChanges();
+      });
+    });
   }
   private updateModalTop(){
     try{
