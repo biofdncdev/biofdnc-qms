@@ -74,8 +74,7 @@ import { TabService } from '../../services/tab.service';
             <div class="title">조성성분</div>
             <div class="spacer"></div>
             <span class="status" [class.saved]="saved" [class.unsaved]="!saved">{{ saved? '저장됨' : '저장되지 않음' }}</span>
-            <button class="btn" [disabled]="!isEditable()" (click)="saveCompositions()">저장</button>
-            <button class="btn" (click)="openIngredientFormNew()">신규성분등록</button>
+            <button class="btn save-btn" [class.need]="!saved" [class.done]="saved" [disabled]="!isEditable() || saved" (click)="saveCompositions()">저장</button>
             <button class="btn btn-light-blue" [disabled]="!isEditable()" (click)="openPicker()">성분 추가</button>
           </div>
           <div class="table-scroll" #compTableRef>
@@ -100,7 +99,11 @@ import { TabService } from '../../services/tab.service';
                   <td class="col-act"><button class="btn mini" (click)="$event.stopPropagation(); openIngredientFormEdit(c)">성분수정</button></td>
                   <td class="col-act"><button class="btn mini" [disabled]="!isEditable()" (click)="$event.stopPropagation(); removeRow(c)">삭제</button></td>
                 </tr>
-                <tr *ngIf="compositions.length===0"><td colspan="7" class="empty">성분을 추가해 주세요.</td></tr>
+                <tr *ngIf="compositions.length===0">
+                  <td colspan="7" class="empty clickable" (click)="openPicker()" tabindex="0" role="button" (keydown.enter)="openPicker()">
+                    성분을 추가해 주세요.
+                  </td>
+                </tr>
               </tbody>
               <tfoot>
                 <tr>
@@ -141,13 +144,33 @@ import { TabService } from '../../services/tab.service';
             </div>
           </div>
           <!-- 확인 로그 영역 -->
-          <div class="verifier">
-            <button class="btn verify-btn" [class.need]="!isVerified()" [class.done]="isVerified()" [disabled]="false" (click)="onVerifyClick()">조성성분 확인</button>
-            <span *ngIf="!isVerified()" class="verify-note">확인이 필요합니다</span>
-            <div class="logs">
-              <div class="log-item" *ngFor="let l of verifyLogs; let i = index">
-                {{ i+1 }}차 확인: {{ l.user }} · {{ l.time }}
-                <button class="log-x" *ngIf="isAdmin" title="확인 취소" (click)="removeVerify(i)">×</button>
+          <div class="verifier-wrapper">
+            <div class="verifier">
+              <button class="btn verify-btn" [class.need]="!isVerified()" [class.done]="isVerified()" [disabled]="false" (click)="onVerifyClick()">조성성분 확인</button>
+              <span *ngIf="!isVerified()" class="verify-note">확인이 필요합니다</span>
+              <div class="logs">
+                <!-- 마지막 로그와 펼치기 버튼을 수평으로 배치 -->
+                <div class="logs-header">
+                  <div class="log-item" *ngIf="verifyLogs.length > 0">
+                    {{ verifyLogs.length }}차 확인: {{ verifyLogs[verifyLogs.length-1].user }} · {{ verifyLogs[verifyLogs.length-1].time }}
+                    <button class="log-x" *ngIf="isAdmin" title="확인 취소" (click)="removeVerify(verifyLogs.length-1)">×</button>
+                  </div>
+                  <!-- 펼치기 버튼 -->
+                  <button class="logs-expand-btn" *ngIf="verifyLogs.length > 1" (click)="showAllVerifyLogs = !showAllVerifyLogs">
+                    {{ showAllVerifyLogs ? '접기 ▲' : '이전 이력 보기 (' + (verifyLogs.length - 1) + '개) ▼' }}
+                  </button>
+                </div>
+              </div>
+              <div class="spacer"></div>
+              <button class="btn new-ing-btn" (click)="openIngredientFormNew()">신규성분등록</button>
+            </div>
+            <!-- 펼쳐진 이전 로그들 - 버튼 아래 독립 배치 -->
+            <div class="old-logs-container" *ngIf="showAllVerifyLogs && verifyLogs.length > 1">
+              <div class="old-logs">
+                <div class="log-item" *ngFor="let l of verifyLogs.slice(0, -1); let i = index">
+                  {{ i+1 }}차 확인: {{ l.user }} · {{ l.time }}
+                  <button class="log-x" *ngIf="isAdmin" title="확인 취소" (click)="removeVerify(i)">×</button>
+                </div>
               </div>
             </div>
           </div>
@@ -230,13 +253,31 @@ import { TabService } from '../../services/tab.service';
           </div>
 
           <!-- 확인자 영역 (자재) -->
-          <div class="verifier">
-            <button class="btn verify-btn" [class.need]="!isMaterialsVerified()" [class.done]="isMaterialsVerified()" (click)="onMaterialsVerifyClick()">자재 확인</button>
-            <span *ngIf="!isMaterialsVerified()" class="verify-note">확인이 필요합니다</span>
-            <div class="logs">
-              <div class="log-item" *ngFor="let l of materialsVerifyLogs; let i = index">
-                {{ i+1 }}차 확인: {{ l.user }} · {{ l.time }}
-                <button class="log-x" *ngIf="isAdmin" title="확인 취소" (click)="removeMaterialsVerify(i)">×</button>
+          <div class="verifier-wrapper">
+            <div class="verifier">
+              <button class="btn verify-btn" [class.need]="!isMaterialsVerified()" [class.done]="isMaterialsVerified()" (click)="onMaterialsVerifyClick()">자재 확인</button>
+              <span *ngIf="!isMaterialsVerified()" class="verify-note">확인이 필요합니다</span>
+              <div class="logs">
+                <!-- 마지막 로그와 펼치기 버튼을 수평으로 배치 -->
+                <div class="logs-header">
+                  <div class="log-item" *ngIf="materialsVerifyLogs.length > 0">
+                    {{ materialsVerifyLogs.length }}차 확인: {{ materialsVerifyLogs[materialsVerifyLogs.length-1].user }} · {{ materialsVerifyLogs[materialsVerifyLogs.length-1].time }}
+                    <button class="log-x" *ngIf="isAdmin" title="확인 취소" (click)="removeMaterialsVerify(materialsVerifyLogs.length-1)">×</button>
+                  </div>
+                  <!-- 펼치기 버튼 -->
+                  <button class="logs-expand-btn" *ngIf="materialsVerifyLogs.length > 1" (click)="showAllMaterialsLogs = !showAllMaterialsLogs">
+                    {{ showAllMaterialsLogs ? '접기 ▲' : '이전 이력 보기 (' + (materialsVerifyLogs.length - 1) + '개) ▼' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- 펼쳐진 이전 로그들 - 버튼 아래 독립 배치 -->
+            <div class="old-logs-container" *ngIf="showAllMaterialsLogs && materialsVerifyLogs.length > 1">
+              <div class="old-logs">
+                <div class="log-item" *ngFor="let l of materialsVerifyLogs.slice(0, -1); let i = index">
+                  {{ i+1 }}차 확인: {{ l.user }} · {{ l.time }}
+                  <button class="log-x" *ngIf="isAdmin" title="확인 취소" (click)="removeMaterialsVerify(i)">×</button>
+                </div>
               </div>
             </div>
           </div>
@@ -258,6 +299,7 @@ import { TabService } from '../../services/tab.service';
     .form-header{ display:flex; align-items:center; justify-content:space-between; position:sticky; top:10px; background:#fff; z-index:5; padding:6px 0; }
     .actions{ display:flex; gap:8px; align-items:center; }
     .btn{ height:28px; padding:0 10px; border-radius:8px; border:1px solid #d1d5db; background:#fff; cursor:pointer; font-size:12px; }
+    .btn:disabled{ opacity:.6; cursor:not-allowed; }
     .btn.primary{ background:#111827; color:#fff; border-color:#111827; }
     .btn.ghost{ background:#fff; color:#111827; }
     .btn.btn-light-blue{ background:#dbeafe; color:#1e40af; border-color:#93c5fd; font-weight:600; }
@@ -320,6 +362,11 @@ import { TabService } from '../../services/tab.service';
     .grid .col-pct{ width:8%; }
     .grid .col-act{ width:13.5%; text-align:center; white-space:nowrap; }
     .grid input[type='number']{ width:100%; box-sizing:border-box; padding:4px 6px; }
+    /* hide number input arrows (Chrome, Edge, Safari) */
+    .grid input[type='number']::-webkit-outer-spin-button,
+    .grid input[type='number']::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
+    /* hide number input arrows (Firefox) */
+    .grid input[type='number']{ -moz-appearance: textfield; }
     .table-scroll{ max-height:60vh; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; }
     .table-scroll.small{ max-height:50vh; }
     table tfoot .sum{ text-align:right; font-weight:400; }
@@ -327,6 +374,8 @@ import { TabService } from '../../services/tab.service';
     table tfoot .sum.bad{ color:#b91c1c; }
     tr.selected{ background:#f0f9ff; }
     .empty{ text-align:center; color:#9ca3af; }
+    .empty.clickable{ cursor:pointer; user-select:none; }
+    .empty.clickable:hover{ color:#374151; background:#f9fafb; }
     .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.25); z-index:1000; }
     .modal{ position:fixed; top:20vh; left:50%; transform:translateX(-50%); width:min(1000px, 90vw); background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.18); z-index:1001; max-height:72vh; display:flex; flex-direction:column; }
     .modal-head{ display:flex; align-items:center; gap:8px; padding:10px; border-bottom:1px solid #e5e7eb; cursor:move; position:relative; }
@@ -370,15 +419,33 @@ import { TabService } from '../../services/tab.service';
       .left-placeholder{ max-width: none; }
       .form-body.ro .grid-ro{ grid-template-columns: 1fr; }
     }
-    .verifier{ margin-top:10px; display:flex; align-items:center; gap:12px; }
+    .verifier-wrapper{ margin-top:10px; }
+    .verifier{ display:flex; align-items:center; gap:12px; padding:8px 12px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; }
     .verifier.top{ margin:0 0 8px; }
+    .verifier .spacer{ flex:1; }
     .verifier .logs{ color:#6b7280; font-size:11px; }
+    .verifier .logs-header{ display:flex; align-items:center; gap:8px; }
     .verifier .log-item{ position:relative; padding-right:14px; }
     .verifier .log-x{ margin-left:6px; border:none; background:transparent; color:#9ca3af; cursor:pointer; font-size:12px; line-height:1; padding:0 2px; }
     .verifier .log-x:hover{ color:#ef4444; }
+    .verifier .logs-expand-btn{ height:28px; padding:0 12px; border:1px solid #e5e7eb; border-radius:8px; background:#f9fafb; color:#6b7280; cursor:pointer; font-size:11px; transition: all 0.2s; white-space:nowrap; font-weight:500; display:flex; align-items:center; }
+    .verifier .logs-expand-btn:hover{ background:#f3f4f6; border-color:#d1d5db; }
+    .old-logs-container{ margin-top:8px; padding:8px 12px; background:#fafbfc; border:1px solid #e5e7eb; border-radius:8px; }
+    .old-logs-container .old-logs{ display:flex; flex-direction:column; gap:6px; }
+    .old-logs-container .log-item{ font-size:11px; color:#6b7280; opacity:0.8; position:relative; padding-right:14px; }
+    .old-logs-container .log-x{ margin-left:6px; border:none; background:transparent; color:#9ca3af; cursor:pointer; font-size:12px; line-height:1; padding:0 2px; }
+    .old-logs-container .log-x:hover{ color:#ef4444; }
     .verify-btn.need{ background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
     .verify-btn.done{ background:#e0f2fe; border-color:#93c5fd; color:#0c4a6e; }
     .verify-note{ font-size:11px; color:#9a3412; }
+    /* save button pastel colors */
+    .save-btn.need{ background:#fff7ed; color:#9a3412; border-color:#fed7aa; font-weight:700; }
+    .save-btn.need:hover:not(:disabled){ background:#ffedd5; }
+    .save-btn.done{ background:#e0f2fe; color:#0c4a6e; border-color:#93c5fd; font-weight:700; }
+    .save-btn.done:hover:not(:disabled){ background:#dbeafe; }
+    /* new ingredient button aligned at verifier right */
+    .new-ing-btn{ background:#f3f4f6; color:#374151; border-color:#d1d5db; }
+    .new-ing-btn:hover{ background:#e5e7eb; }
     /* materials */
     .mat-wrap{ grid-column: 2; margin-top:100px; }
     .mat-wrap select{ width:100%; box-sizing:border-box; border:1px solid #e5e7eb; border-radius:8px; padding:4px 6px; font-size:12px; }
@@ -735,7 +802,7 @@ export class ProductFormComponent implements OnInit {
     this.pickerPointer = Math.max(0, Math.min(max-1, this.pickerPointer + delta));
   }
   onPickerEnter(ev: any){ if (ev?.preventDefault) ev.preventDefault(); if (this.pickerPointer < 0) return; const row = this.pickerRows[this.pickerPointer]; if (row) this.addPicked(row); }
-  removeRow(row:any){ this.compositions = this.compositions.filter(r => r !== row); if (this.selectedComp===row) this.selectedComp=null; this.saveStateSnapshot(); }
+  removeRow(row:any){ this.compositions = this.compositions.filter(r => r !== row); if (this.selectedComp===row) this.selectedComp=null; this.saved = false; this.saveStateSnapshot(); }
   removeSelected(){ if (!this.selectedComp) return; this.compositions = this.compositions.filter(r => r !== this.selectedComp); this.selectedComp = null; this.saveStateSnapshot(); }
   onPercentChange(){ this.saved = false; this.saveStateSnapshot(); }
   
@@ -1028,6 +1095,7 @@ export class ProductFormComponent implements OnInit {
   // 확인 로그 처리
   verifyLogs: Array<{ user: string; time: string }> = [];
   private lastVerifiedAt: string | null = null;
+  showAllVerifyLogs = false; // 로그 펼치기 상태
   isVerified(){ return (this.verifyLogs && this.verifyLogs.length > 0); }
   onVerifyClick(){
     const err = this.validateBeforeVerify();
@@ -1070,6 +1138,7 @@ export class ProductFormComponent implements OnInit {
   // Materials verification logs
   materialsVerifyLogs: Array<{ user: string; time: string }> = [];
   private lastMaterialsVerifiedAt: string | null = null;
+  showAllMaterialsLogs = false; // 자재 로그 펼치기 상태
   isMaterialsVerified(){ return (this.materialsVerifyLogs && this.materialsVerifyLogs.length > 0); }
   onMaterialsVerifyClick(){ if (!this.isMaterialsVerified()) this.confirmMaterials(); }
   async confirmMaterials(){
