@@ -50,7 +50,7 @@ export class AutoGrowDirective implements AfterViewInit {
           </svg>
           <h3>성분 검색</h3>
         </div>
-        <input class="search-input" [(ngModel)]="ingQuery" (keydown.arrowDown)="moveIngPointer(1)" (keydown.arrowUp)="moveIngPointer(-1)" (keydown.enter)="onIngEnterOrSearch($event)" (keydown.escape)="onIngEsc($event)" placeholder="INCI/성분명/CAS 검색 (공백=AND)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
+        <input class="search-input" [(ngModel)]="ingQuery" (focus)="onIngSearchFocus()" (keydown.arrowDown)="moveIngPointer(1)" (keydown.arrowUp)="moveIngPointer(-1)" (keydown.enter)="onIngEnterOrSearch($event)" (keydown.escape)="onIngEsc($event)" placeholder="INCI/성분명/CAS 검색 (공백=AND)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
         <ul class="search-results" *ngIf="ingResults.length">
           <li *ngFor="let r of ingResults; let i = index" [class.selected]="i===ingPointer" (click)="pickIngredient(r)">
             <div class="result-inci">{{ r.inci_name }}</div>
@@ -59,7 +59,7 @@ export class AutoGrowDirective implements AfterViewInit {
             </div>
           </li>
         </ul>
-        <div class="search-empty" *ngIf="ingQuery && !ingResults.length">
+        <div class="search-empty" *ngIf="ingSearchExecuted && ingQuery && !ingResults.length">
           검색 결과가 없습니다
         </div>
       </aside>
@@ -178,6 +178,7 @@ export class IngredientFormComponent implements OnInit {
   ingQuery: string = '';
   ingResults: Array<{ id: string; inci_name: string; korean_name?: string; old_korean_name?: string; cas_no?: string }> = [];
   ingPointer = -1;
+  ingSearchExecuted = false; // Track if search has been executed
   
   @HostListener('window:keydown', ['$event'])
   handleKeyDown(event: KeyboardEvent) {
@@ -328,17 +329,50 @@ export class IngredientFormComponent implements OnInit {
   debouncedIngSearch(){ if (this.debouncedIngTimer) clearTimeout(this.debouncedIngTimer); this.debouncedIngTimer = setTimeout(()=> this.runIngQuickSearch(), 250); }
   async runIngQuickSearch(){
     const q = (this.ingQuery||'').trim();
-    if (!q){ this.ingResults = []; this.ingPointer = -1; return; }
+    if (!q){ this.ingResults = []; this.ingPointer = -1; this.ingSearchExecuted = false; return; }
     const { data } = await this.erpData.listIngredients({ page: 1, pageSize: 20, keyword: q, keywordOp: 'AND' }) as any;
     const rows = Array.isArray(data) ? data : [];
     this.ingResults = rows.map((r:any)=> ({ id: r.id, inci_name: r.inci_name, korean_name: r.korean_name, old_korean_name: r.old_korean_name, cas_no: r.cas_no }));
-    this.ingPointer = this.ingResults.length ? 0 : -1;
+    this.ingPointer = -1; // Don't auto-select first item
+    this.ingSearchExecuted = true; // Mark that search has been executed
   }
-  moveIngPointer(delta:number){ const max=this.ingResults.length; if (!max) return; if (this.ingPointer<0){ this.ingPointer = delta>0?0:max-1; return; } this.ingPointer = Math.max(0, Math.min(max-1, this.ingPointer + delta)); }
+  moveIngPointer(delta:number){ 
+    const max=this.ingResults.length; 
+    if (!max) return; 
+    if (this.ingPointer < 0) { 
+      // Not in list yet - only go down (into list)
+      if (delta > 0) this.ingPointer = 0;
+      return; 
+    }
+    // In list - calculate new position
+    const newPos = this.ingPointer + delta;
+    if (newPos < 0) {
+      // Going up from first item - return to search input
+      this.ingPointer = -1;
+    } else if (newPos >= max) {
+      // Stay at last item
+      this.ingPointer = max - 1;
+    } else {
+      this.ingPointer = newPos;
+    }
+  }
   onIngEnter(ev: Event){ if ((ev as any)?.preventDefault) (ev as any).preventDefault(); if (this.ingPointer>=0){ const row=this.ingResults[this.ingPointer]; if (row) this.pickIngredient(row); } }
   onIngSearchEnter(ev: Event){ if ((ev as any)?.preventDefault) (ev as any).preventDefault(); this.runIngQuickSearch(); }
-  onIngEnterOrSearch(ev: Event){ if ((ev as any)?.preventDefault) (ev as any).preventDefault(); if (this.ingPointer>=0 && this.ingResults[this.ingPointer]){ this.pickIngredient(this.ingResults[this.ingPointer]); return; } this.runIngQuickSearch(); }
-  onIngEsc(ev: Event){ if ((ev as any)?.preventDefault) (ev as any).preventDefault(); this.ingQuery=''; this.ingResults=[]; this.ingPointer=-1; }
+  onIngEnterOrSearch(ev: Event){ 
+    if ((ev as any)?.preventDefault) (ev as any).preventDefault(); 
+    // Only select item if pointer is on an item (>=0)
+    if (this.ingPointer >= 0 && this.ingResults[this.ingPointer]) { 
+      this.pickIngredient(this.ingResults[this.ingPointer]); 
+      return; 
+    }
+    // Otherwise, run search
+    this.runIngQuickSearch(); 
+  }
+  onIngSearchFocus(){ 
+    // When search input is focused, reset pointer to search field
+    this.ingPointer = -1; 
+  }
+  onIngEsc(ev: Event){ if ((ev as any)?.preventDefault) (ev as any).preventDefault(); this.ingQuery=''; this.ingResults=[]; this.ingPointer=-1; this.ingSearchExecuted=false; }
   async pickIngredient(row: { id: string }){
     try{
       const { data } = await this.erpData.getIngredient(row.id);
@@ -354,10 +388,12 @@ export class IngredientFormComponent implements OnInit {
           updated_by_name: data.updated_by_name,
         } as any;
         await this.resolveActorEmails();
-        // Fill input with picked summary to indicate selection
-        this.ingQuery = `${data.inci_name || ''} ${data.korean_name ? '· '+data.korean_name : ''}`.trim();
+        try{ this.changeLogs = await this.erpData.getIngredientChangeLogs(row.id); }catch{ this.changeLogs = []; }
+        // Clear search state after selection
+        this.ingQuery = '';
         this.ingResults = [];
         this.ingPointer = -1;
+        this.ingSearchExecuted = false;
         // Reflect selected id in URL
         try { this.router.navigate([], { relativeTo: this.route, queryParams: { id: this.id() }, replaceUrl: true }); } catch {}
       }
