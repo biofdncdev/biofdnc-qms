@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, Directive, ElementRef, HostListener, AfterViewInit } from '@angular/core';
+import { Component, OnInit, signal, Directive, ElementRef, HostListener, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -37,6 +37,7 @@ export class AutoGrowDirective implements AfterViewInit {
       <div class="spacer"></div>
       <button class="btn" (click)="createNew()">신규</button>
       <button class="btn primary" (click)="save()">저장</button>
+      <button class="btn danger" *ngIf="id() && isAdmin()" (click)="deleteIngredient()">삭제</button>
       <button class="btn ghost" (click)="cancel()">취소</button>
     </div>
 
@@ -68,6 +69,8 @@ export class AutoGrowDirective implements AfterViewInit {
       <main class="form-main">
         <section class="form-body">
           <div class="grid">
+            <label>화장품성분사전 성분코드</label>
+            <input [(ngModel)]="model.ingredient_code" />
             <label>성분명</label>
             <textarea rows="1" autoGrow class="hl-green" [(ngModel)]="model.korean_name"></textarea>
             <label>구명칭</label>
@@ -90,6 +93,8 @@ export class AutoGrowDirective implements AfterViewInit {
             <textarea rows="1" autoGrow [(ngModel)]="model.scientific_name"></textarea>
             <label>원산지/ABS</label>
             <textarea rows="1" autoGrow [(ngModel)]="model.origin_abs"></textarea>
+            <label>명칭변경이력</label>
+            <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.name_change_history" spellcheck="false"></textarea>
             <label>비고</label>
             <textarea rows="1" autoGrow class="wide" [(ngModel)]="model.remarks" spellcheck="false"></textarea>
           </div>
@@ -179,6 +184,7 @@ export class IngredientFormComponent implements OnInit {
   ingResults: Array<{ id: string; inci_name: string; korean_name?: string; old_korean_name?: string; cas_no?: string }> = [];
   ingPointer = -1;
   ingSearchExecuted = false; // Track if search has been executed
+  userRole = signal<string | null>(null); // Current user's role
   
   @HostListener('window:keydown', ['$event'])
   handleKeyDown(event: KeyboardEvent) {
@@ -189,9 +195,25 @@ export class IngredientFormComponent implements OnInit {
     }
   }
   
-  constructor(private route: ActivatedRoute, private router: Router, private erpData: ErpDataService,
-    private auth: AuthService) {}
+  constructor(
+    private route: ActivatedRoute, 
+    private router: Router, 
+    private erpData: ErpDataService,
+    private auth: AuthService,
+    private cdr: ChangeDetectorRef
+  ) {}
   async ngOnInit(){
+    // Load current user role
+    try {
+      const user = await this.auth.getCurrentUser();
+      if (user?.id) {
+        const { data: profile } = await this.auth.getUserProfile(user.id);
+        this.userRole.set(profile?.role || null);
+      }
+    } catch {
+      this.userRole.set(null);
+    }
+
     // Remember list query params to preserve search state on back/cancel
     const qp = this.route.snapshot.queryParamMap;
     const q = qp.get('q') || undefined;
@@ -232,10 +254,50 @@ export class IngredientFormComponent implements OnInit {
   async save(){
     const { data: user } = await this.auth.getClient().auth.getUser();
     const now = new Date().toISOString();
+    
+    // Trim all string fields in the model directly first
+    const stringFields = [
+      'ingredient_code', 'inci_name', 'korean_name', 'old_korean_name', 'chinese_name', 
+      'cas_no', 'einecs_no', 'origin_definition', 'function_kr', 
+      'function_en', 'scientific_name', 'origin_abs', 'name_change_history', 'remarks'
+    ];
+    
+    // Apply trim to model
+    stringFields.forEach(field => {
+      if (typeof this.model[field] === 'string') {
+        this.model[field] = this.model[field].trim();
+      }
+    });
+    
+    // Force immediate UI update with trimmed values
+    this.cdr.detectChanges();
+    
+    // Check for duplicates before saving
+    const ingredientCode = (this.model.ingredient_code || '').trim();
+    const koreanName = (this.model.korean_name || '').trim();
+    const inciName = (this.model.inci_name || '').trim();
+    
+    // 1. Check ingredient_code duplicate - show confirmation dialog
+    if (ingredientCode) {
+      const { data: codeCheck } = await this.erpData.checkIngredientCodeExists(ingredientCode, this.id() || undefined);
+      if (codeCheck && codeCheck.exists) {
+        const confirmed = confirm(`동일한 성분코드를 가진 성분이 이미 존재합니다.\n성분코드: ${ingredientCode}\n\n그래도 저장하시겠습니까?`);
+        if (!confirmed) {
+          return; // User cancelled, don't save
+        }
+      }
+    }
+    
+    // 2. Check korean_name + inci_name duplicate - must be unique
+    if (koreanName && inciName) {
+      const { data: nameCheck } = await this.erpData.checkIngredientNameExists(koreanName, inciName, this.id() || undefined);
+      if (nameCheck && nameCheck.exists) {
+        alert(`이미 등록된 성분입니다.\n성분명: ${koreanName}\nINCI Name: ${inciName}\n\n성분명과 INCI Name 조합은 유니크해야 합니다.`);
+        return;
+      }
+    }
+    
     const row: any = { ...this.model };
-    // Trim primary name fields before saving
-    if (typeof row.inci_name === 'string') row.inci_name = row.inci_name.trim();
-    if (typeof row.korean_name === 'string') row.korean_name = row.korean_name.trim();
     if (!row.id) row.id = crypto.randomUUID();
     if (!this.id()) {
       row.created_at = now;
@@ -248,7 +310,19 @@ export class IngredientFormComponent implements OnInit {
     const { data: saved } = await this.erpData.upsertIngredient(row);
     // Stay on the form; update local state and URL (id) if needed
     const applied = saved || row;
-    this.model = applied;
+    
+    // Ensure all string fields are trimmed in the applied data as well
+    stringFields.forEach(field => {
+      if (typeof applied[field] === 'string') {
+        applied[field] = applied[field].trim();
+      }
+    });
+    
+    // Update each field individually to ensure NgModel binding updates
+    Object.keys(applied).forEach(key => {
+      this.model[key] = applied[key];
+    });
+    
     this.id.set(applied.id || row.id);
     this.meta = {
       created_at: applied.created_at,
@@ -258,6 +332,10 @@ export class IngredientFormComponent implements OnInit {
       updated_by: applied.updated_by,
       updated_by_name: applied.updated_by_name,
     };
+    
+    // Force change detection again after DB save
+    this.cdr.detectChanges();
+    
     await this.resolveActorEmails();
     // Append change log entry (updated_by_name and time)
     try{
@@ -306,6 +384,37 @@ export class IngredientFormComponent implements OnInit {
       this.router.navigate(['/app/ingredient'], { queryParams });
     } else {
       this.router.navigate(['/app/ingredient']);
+    }
+  }
+
+  isAdmin(): boolean {
+    return this.userRole() === 'admin';
+  }
+
+  async deleteIngredient(){
+    if (!this.id()) return;
+    
+    const confirmed = confirm('이 성분을 삭제하시겠습니까?\n삭제 후에는 복구할 수 없습니다.');
+    if (!confirmed) return;
+
+    try {
+      await this.erpData.deleteIngredient(this.id()!);
+      this.notice.set('삭제되었습니다.');
+      setTimeout(() => {
+        // Navigate back to list
+        const queryParams: any = {};
+        if (this.backParams?.q) queryParams.q = this.backParams.q;
+        if (this.backParams?.op) queryParams.op = this.backParams.op;
+        if (this.backParams?.page) queryParams.page = this.backParams.page;
+        if (this.backParams?.size) queryParams.size = this.backParams.size;
+        if (Object.keys(queryParams).length){
+          this.router.navigate(['/app/ingredient'], { queryParams });
+        } else {
+          this.router.navigate(['/app/ingredient']);
+        }
+      }, 1000);
+    } catch (error: any) {
+      alert('삭제 중 오류가 발생했습니다: ' + (error?.message || '알 수 없는 오류'));
     }
   }
 
