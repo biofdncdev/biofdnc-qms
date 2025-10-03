@@ -38,7 +38,6 @@ export class AutoGrowDirective implements AfterViewInit {
       <button class="btn" (click)="createNew()">신규</button>
       <button class="btn primary" (click)="save()">저장</button>
       <button class="btn danger" *ngIf="id() && isAdmin()" (click)="deleteIngredient()">삭제</button>
-      <button class="btn ghost" (click)="cancel()">취소</button>
     </div>
 
     <div class="content-layout">
