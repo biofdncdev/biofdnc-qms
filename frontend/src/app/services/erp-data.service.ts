@@ -418,6 +418,36 @@ export class ErpDataService {
       .single();
   }
 
+  async getIngredientChangeLogs(id: string) {
+    try {
+      const { data, error } = await this.client
+        .from('ingredients')
+        .select('change_logs')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      const logs = (data && (data as any).change_logs) || [];
+      return Array.isArray(logs) ? logs : [];
+    } catch(e) {
+      console.warn('getIngredientChangeLogs failed; returning empty list', e);
+      return [] as Array<{ user: string; time: string }>;
+    }
+  }
+
+  async setIngredientChangeLogs(id: string, logs: Array<{ user: string; time: string }>) {
+    try {
+      const { error } = await this.client
+        .from('ingredients')
+        .update({ change_logs: logs })
+        .eq('id', id);
+      if (error) throw error;
+      return true;
+    } catch(e) {
+      console.warn('setIngredientChangeLogs failed; ignoring', e);
+      return false;
+    }
+  }
+
   async upsertIngredient(row: any) {
     return this.client
       .from('ingredients')

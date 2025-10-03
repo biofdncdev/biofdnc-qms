@@ -95,7 +95,16 @@ export class AutoGrowDirective implements AfterViewInit {
           </div>
           <div class="meta" *ngIf="meta">
             <div>처음 생성: {{ meta.created_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.created_by_name || meta.created_by_email || meta.created_by || '-' }}</div>
-            <div>마지막 수정: {{ meta.updated_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.updated_by_name || meta.updated_by_email || meta.updated_by || '-' }}</div>
+            <div class="meta-row">
+              <span>마지막 수정: {{ meta.updated_at | date:'yyyy-MM-dd HH:mm' }} · {{ meta.updated_by_name || meta.updated_by_email || meta.updated_by || '-' }}</span>
+              <button class="btn mini" (click)="toggleHistory()">수정 이력</button>
+            </div>
+            <div class="history" *ngIf="showHistory">
+              <div class="history-item" *ngFor="let h of changeLogs; let i = index">
+                {{ i+1 }}. {{ h.time }} · {{ h.user }}
+              </div>
+              <div class="empty" *ngIf="!changeLogs?.length">이력이 없습니다.</div>
+            </div>
           </div>
         </section>
       </main>
@@ -146,6 +155,9 @@ export class AutoGrowDirective implements AfterViewInit {
   /* Highlight for INCI Name and 국문명 */
   .hl-green{ background:#ecfdf5; border-color:#bbf7d0; }
   .meta{ margin-top:12px; padding:8px 10px; border-top:1px dashed #e5e7eb; color:#6b7280; font-size:12px; }
+  .meta .meta-row{ display:flex; align-items:center; gap:8px; }
+  .history{ margin-top:8px; padding:8px 10px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; }
+  .history-item{ font-size:11px; color:#374151; }
   
   /* 반응형: 작은 화면에서는 세로 배치 */
   @media (max-width: 1024px) {
@@ -159,6 +171,8 @@ export class IngredientFormComponent implements OnInit {
   model: any = {};
   meta: any = null;
   notice = signal<string | null>(null);
+  showHistory = false;
+  changeLogs: Array<{ user: string; time: string }> = [];
   private backParams: { q?: string; op?: 'AND'|'OR'; page?: number; size?: number } | null = null;
   // Bottom search states
   ingQuery: string = '';
@@ -205,6 +219,7 @@ export class IngredientFormComponent implements OnInit {
       };
       // Fallback: if names are missing, resolve emails from users table
       await this.resolveActorEmails();
+      try{ this.changeLogs = await this.erpData.getIngredientChangeLogs(id); }catch{ this.changeLogs = []; }
     }
     // Preload search results when query exists from URL
     if ((this.backParams?.q || '').trim()) {
@@ -212,10 +227,14 @@ export class IngredientFormComponent implements OnInit {
       this.runIngQuickSearch();
     }
   }
+  toggleHistory(){ this.showHistory = !this.showHistory; }
   async save(){
     const { data: user } = await this.auth.getClient().auth.getUser();
     const now = new Date().toISOString();
     const row: any = { ...this.model };
+    // Trim primary name fields before saving
+    if (typeof row.inci_name === 'string') row.inci_name = row.inci_name.trim();
+    if (typeof row.korean_name === 'string') row.korean_name = row.korean_name.trim();
     if (!row.id) row.id = crypto.randomUUID();
     if (!this.id()) {
       row.created_at = now;
@@ -239,6 +258,14 @@ export class IngredientFormComponent implements OnInit {
       updated_by_name: applied.updated_by_name,
     };
     await this.resolveActorEmails();
+    // Append change log entry (updated_by_name and time)
+    try{
+      const uid = user.user?.email || user.user?.id || 'user';
+      const logs = Array.isArray(this.changeLogs) ? this.changeLogs.slice() : [];
+      logs.push({ user: uid, time: now.replace('T',' ').substring(0,19) });
+      this.changeLogs = logs;
+      if (this.id()) await this.erpData.setIngredientChangeLogs(this.id()!, logs);
+    }catch{}
     // Optionally reflect id in URL without leaving the form
     try { this.router.navigate([], { relativeTo: this.route, queryParams: { id: this.id() }, replaceUrl: true }); } catch {}
     // Show success notice
