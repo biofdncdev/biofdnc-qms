@@ -140,8 +140,10 @@ import { TabService } from '../../services/tab.service';
             </div>
             <div class="modal-body">
               <div class="search-bar">
-                <input [(ngModel)]="pickerQuery" (keydown.arrowDown)="movePickerPointer(1)" (keydown.arrowUp)="movePickerPointer(-1)" (keydown.enter)="onPickerSearchEnter($event)" placeholder="INCI/국문명 검색" />
-                <button class="btn search-btn" (click)="onPickerSearchEnter($event)">검색</button>
+                <div class="search-input-wrapper">
+                  <input [(ngModel)]="pickerQuery" (input)="debouncedPickerSearch()" (keydown.arrowDown)="movePickerPointer(1)" (keydown.arrowUp)="movePickerPointer(-1)" (keydown.enter)="onPickerSearchEnter($event)" placeholder="INCI/국문명 검색" />
+                  <div class="search-spinner" *ngIf="pickerSearchLoading"></div>
+                </div>
               </div>
               <div class="table-scroll small">
                 <table class="grid">
@@ -153,7 +155,8 @@ import { TabService } from '../../services/tab.service';
                       <td>{{ r.cas_no || '' }}</td>
                       <td class="col-act"><button class="btn mini filled-light" (click)="addPicked(r)">추가</button></td>
                     </tr>
-                    <tr *ngIf="pickerRows.length===0"><td colspan="4" class="empty">검색 결과가 없습니다.</td></tr>
+                    <tr *ngIf="pickerRows.length===0 && !pickerSearchLoading"><td colspan="4" class="empty">검색 결과가 없습니다.</td></tr>
+                    <tr *ngIf="pickerSearchLoading"><td colspan="4" class="empty">검색 중...</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -412,6 +415,9 @@ import { TabService } from '../../services/tab.service';
     .modal-close:hover{ background:#f3f4f6; color:#111827; }
     .modal-body{ padding:10px; display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
     .modal .search-bar{ display:flex; gap:8px; margin-bottom:8px; flex-shrink:0; }
+    .modal .search-bar .search-input-wrapper{ position:relative; flex:1; }
+    .modal .search-bar .search-input-wrapper input{ width:100%; }
+    .modal .search-bar .search-spinner{ position:absolute; right:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; border:2px solid #e5e7eb; border-top-color:#3b82f6; border-radius:50%; animation:spin 0.8s linear infinite; }
     .modal .search-bar .search-btn{ background:#f3f4f6; color:#374151; border-color:#d1d5db; white-space:nowrap; flex-shrink:0; }
     .modal .search-bar .search-btn:hover{ background:#e5e7eb; }
     .modal .table-scroll.small{ flex:1; overflow:auto; min-height:0; }
@@ -506,6 +512,7 @@ export class ProductFormComponent implements OnInit {
   pickerRows: Array<{ id: string; inci_name: string; korean_name?: string; chinese_name?: string; cas_no?: string }> = [];
   private pickerTimer: any = null;
   private pickerDefaultsCache: Array<{ id: string; inci_name: string; korean_name?: string; chinese_name?: string; cas_no?: string }> | null = null;
+  pickerSearchLoading = false;
   saved = false;
   saving = false;
   pickerPointer = -1;
@@ -764,39 +771,48 @@ export class ProductFormComponent implements OnInit {
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
   }
-  closePicker(){ this.pickerOpen = false; }
+  closePicker(){ this.pickerOpen = false; this.pickerSearchLoading = false; }
   async runPickerSearch(){
-    const q = (this.pickerQuery||'').trim();
-    if (!q){
-      // default showcase list when no query (fixed order)
-      const defaults = ['Water','1,2-Hexanediol','Ethylhexylglycerin','Butylene Glycol','Sodium Hyaluronate','Sodium DNA'];
-      if (this.pickerDefaultsCache){
-        this.pickerRows = this.pickerDefaultsCache.slice();
+    this.pickerSearchLoading = true;
+    try {
+      const q = (this.pickerQuery||'').trim();
+      if (!q){
+        // default showcase list when no query (fixed order)
+        const defaults = ['Water','1,2-Hexanediol','Ethylhexylglycerin','Butylene Glycol','Sodium Hyaluronate','Sodium DNA'];
+        if (this.pickerDefaultsCache){
+          this.pickerRows = this.pickerDefaultsCache.slice();
+          this.pickerPointer = -1; this.pickerPointerMoved = false;
+          setTimeout(()=>{ const modalInput = document.querySelector('.modal input') as HTMLInputElement | null; modalInput?.focus(); }, 0);
+          return;
+        }
+        try{
+          const { data } = await this.erpData.getIngredientsByNames(defaults);
+          const arr = Array.isArray(data) ? data : [];
+          // Keep the desired order even if DB returns unordered
+          const ordered = defaults
+            .map(name => arr.find((d:any)=> (d?.inci_name||'').toLowerCase() === name.toLowerCase()))
+            .filter(Boolean) as any[];
+          this.pickerDefaultsCache = ordered;
+          this.pickerRows = ordered.slice();
+        }catch{ this.pickerRows = []; }
+        // keep pointer at none when showing defaults and ensure input focus remains
         this.pickerPointer = -1; this.pickerPointerMoved = false;
         setTimeout(()=>{ const modalInput = document.querySelector('.modal input') as HTMLInputElement | null; modalInput?.focus(); }, 0);
         return;
       }
-      try{
-        const { data } = await this.erpData.getIngredientsByNames(defaults);
-        const arr = Array.isArray(data) ? data : [];
-        // Keep the desired order even if DB returns unordered
-        const ordered = defaults
-          .map(name => arr.find((d:any)=> (d?.inci_name||'').toLowerCase() === name.toLowerCase()))
-          .filter(Boolean) as any[];
-        this.pickerDefaultsCache = ordered;
-        this.pickerRows = ordered.slice();
-      }catch{ this.pickerRows = []; }
-      // keep pointer at none when showing defaults and ensure input focus remains
-      this.pickerPointer = -1; this.pickerPointerMoved = false;
-      setTimeout(()=>{ const modalInput = document.querySelector('.modal input') as HTMLInputElement | null; modalInput?.focus(); }, 0);
-      return;
+      // reuse existing ingredient search; ideally include chinese_name, cas_no
+      const { data } = await this.erpData.listIngredients({ page: 1, pageSize: 20, keyword: q, keywordOp: 'AND' }) as any;
+      this.pickerRows = (data||[]).map((r:any)=>({ id: r.id, inci_name: r.inci_name, korean_name: r.korean_name, chinese_name: r.chinese_name, cas_no: r.cas_no }));
+      this.pickerPointer = (this.pickerRows.length > 0 && this.pickerPointerMoved) ? 0 : -1;
+    } finally {
+      this.pickerSearchLoading = false;
     }
-    // reuse existing ingredient search; ideally include chinese_name, cas_no
-    const { data } = await this.erpData.listIngredients({ page: 1, pageSize: 20, keyword: q, keywordOp: 'AND' }) as any;
-    this.pickerRows = (data||[]).map((r:any)=>({ id: r.id, inci_name: r.inci_name, korean_name: r.korean_name, chinese_name: r.chinese_name, cas_no: r.cas_no }));
-    this.pickerPointer = (this.pickerRows.length > 0 && this.pickerPointerMoved) ? 0 : -1;
   }
-  debouncedPickerSearch(){ if (this.pickerTimer) clearTimeout(this.pickerTimer); this.pickerTimer = setTimeout(()=> this.runPickerSearch(), 250); }
+  debouncedPickerSearch(){ 
+    if (this.pickerTimer) clearTimeout(this.pickerTimer); 
+    this.pickerSearchLoading = true;
+    this.pickerTimer = setTimeout(()=> this.runPickerSearch(), 350); 
+  }
   onPickerSearchEnter(ev:any){
     if (ev?.preventDefault) ev.preventDefault();
     // If a row is selected via arrow keys, Enter should add it. Otherwise perform search.
@@ -815,9 +831,9 @@ export class ProductFormComponent implements OnInit {
     }
     // keep picker open; reset search to allow adding more items immediately
     this.pickerQuery = '';
-    this.pickerRows = [];
     this.pickerPointer = -1;
     this.pickerPointerMoved = false;
+    this.pickerSearchLoading = false;
     setTimeout(()=>{
       const modalInput = document.querySelector('.modal input') as HTMLInputElement | null;
       modalInput?.focus();

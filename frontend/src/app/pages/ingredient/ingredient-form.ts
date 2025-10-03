@@ -50,7 +50,10 @@ export class AutoGrowDirective implements AfterViewInit {
           </svg>
           <h3>성분 검색</h3>
         </div>
-        <input class="search-input" [(ngModel)]="ingQuery" (focus)="onIngSearchFocus()" (keydown.arrowDown)="moveIngPointer(1)" (keydown.arrowUp)="moveIngPointer(-1)" (keydown.enter)="onIngEnterOrSearch($event)" (keydown.escape)="onIngEsc($event)" placeholder="INCI/성분명/CAS 검색 (공백=AND)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
+        <div class="search-input-wrapper">
+          <input class="search-input" [(ngModel)]="ingQuery" (input)="debouncedIngSearch()" (focus)="onIngSearchFocus()" (keydown.arrowDown)="moveIngPointer(1)" (keydown.arrowUp)="moveIngPointer(-1)" (keydown.enter)="onIngEnterOrSearch($event)" (keydown.escape)="onIngEsc($event)" placeholder="INCI/성분명/CAS 검색 (공백=AND)" spellcheck="false" autocapitalize="none" autocomplete="off" autocorrect="off" />
+          <div class="search-spinner" *ngIf="ingSearchLoading"></div>
+        </div>
         <ul class="search-results" *ngIf="ingResults.length">
           <li *ngFor="let r of ingResults; let i = index" [class.selected]="i===ingPointer" (click)="pickIngredient(r)">
             <div class="result-inci">{{ r.inci_name }}</div>
@@ -59,7 +62,10 @@ export class AutoGrowDirective implements AfterViewInit {
             </div>
           </li>
         </ul>
-        <div class="search-empty" *ngIf="ingSearchExecuted && ingQuery && !ingResults.length">
+        <div class="search-empty" *ngIf="ingSearchLoading && ingQuery">
+          검색 중...
+        </div>
+        <div class="search-empty" *ngIf="!ingSearchLoading && ingSearchExecuted && ingQuery && !ingResults.length">
           검색 결과가 없습니다
         </div>
       </aside>
@@ -70,6 +76,8 @@ export class AutoGrowDirective implements AfterViewInit {
           <div class="grid">
             <label>화장품성분사전 성분코드</label>
             <input [(ngModel)]="model.ingredient_code" />
+            <label>ICID Monograph ID</label>
+            <input [(ngModel)]="model.icid_monograph_id" />
             <label>성분명</label>
             <textarea rows="1" autoGrow class="hl-green" [(ngModel)]="model.korean_name"></textarea>
             <label>구명칭</label>
@@ -136,8 +144,11 @@ export class AutoGrowDirective implements AfterViewInit {
   .search-header{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
   .search-header .search-icon{ color:#6b7280; }
   .search-header h3{ margin:0; font-size:14px; font-weight:700; color:#111827; }
-  .search-input{ width:100%; box-sizing:border-box; border:2px solid #3b82f6; border-radius:8px; padding:8px 12px; font-size:13px; background:#fff; margin-bottom:8px; }
+  .search-input-wrapper{ position:relative; margin-bottom:8px; }
+  .search-input{ width:100%; box-sizing:border-box; border:2px solid #3b82f6; border-radius:8px; padding:8px 12px; font-size:13px; background:#fff; }
   .search-input:focus{ outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(59,130,246,0.1); }
+  .search-spinner{ position:absolute; right:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; border:2px solid #e5e7eb; border-top-color:#3b82f6; border-radius:50%; animation:spin 0.8s linear infinite; }
+  @keyframes spin{ 0%{ transform:translateY(-50%) rotate(0deg); } 100%{ transform:translateY(-50%) rotate(360deg); } }
   .search-results{ list-style:none; margin:0; padding:0; overflow-y:auto; flex:1; }
   .search-results li{ padding:8px 10px; cursor:pointer; border-radius:6px; margin-bottom:4px; background:#fff; border:1px solid #e5e7eb; transition:all 0.15s; }
   .search-results li:hover{ background:#f0f9ff; border-color:#93c5fd; }
@@ -183,6 +194,7 @@ export class IngredientFormComponent implements OnInit {
   ingResults: Array<{ id: string; inci_name: string; korean_name?: string; old_korean_name?: string; cas_no?: string }> = [];
   ingPointer = -1;
   ingSearchExecuted = false; // Track if search has been executed
+  ingSearchLoading = false; // Track if search is in progress
   userRole = signal<string | null>(null); // Current user's role
   
   @HostListener('window:keydown', ['$event'])
@@ -256,7 +268,7 @@ export class IngredientFormComponent implements OnInit {
     
     // Trim all string fields in the model directly first
     const stringFields = [
-      'ingredient_code', 'inci_name', 'korean_name', 'old_korean_name', 'chinese_name', 
+      'icid_monograph_id', 'ingredient_code', 'inci_name', 'korean_name', 'old_korean_name', 'chinese_name', 
       'cas_no', 'einecs_no', 'origin_definition', 'function_kr', 
       'function_en', 'scientific_name', 'origin_abs', 'name_change_history', 'remarks'
     ];
@@ -272,11 +284,23 @@ export class IngredientFormComponent implements OnInit {
     this.cdr.detectChanges();
     
     // Check for duplicates before saving
+    const icidMonographId = (this.model.icid_monograph_id || '').trim();
     const ingredientCode = (this.model.ingredient_code || '').trim();
     const koreanName = (this.model.korean_name || '').trim();
     const inciName = (this.model.inci_name || '').trim();
     
-    // 1. Check ingredient_code duplicate - show confirmation dialog
+    // 1. Check ICID Monograph ID duplicate - show confirmation dialog
+    if (icidMonographId) {
+      const { data: icidCheck } = await this.erpData.checkIcidMonographIdExists(icidMonographId, this.id() || undefined);
+      if (icidCheck && icidCheck.exists) {
+        const confirmed = confirm(`동일한 ICID Monograph ID를 가진 성분이 이미 존재합니다.\nICID Monograph ID: ${icidMonographId}\n\n그래도 저장하시겠습니까?`);
+        if (!confirmed) {
+          return; // User cancelled, don't save
+        }
+      }
+    }
+    
+    // 2. Check ingredient_code duplicate - show confirmation dialog
     if (ingredientCode) {
       const { data: codeCheck } = await this.erpData.checkIngredientCodeExists(ingredientCode, this.id() || undefined);
       if (codeCheck && codeCheck.exists) {
@@ -287,7 +311,7 @@ export class IngredientFormComponent implements OnInit {
       }
     }
     
-    // 2. Check korean_name or inci_name individual duplicates - show confirmation dialog
+    // 3. Check korean_name or inci_name individual duplicates - show confirmation dialog
     let koreanNameDuplicate = false;
     let inciNameDuplicate = false;
     
@@ -313,7 +337,7 @@ export class IngredientFormComponent implements OnInit {
       }
     }
     
-    // 3. Check korean_name + inci_name combination - must be unique (cannot proceed)
+    // 4. Check korean_name + inci_name combination - must be unique (cannot proceed)
     if (koreanName && inciName) {
       const { data: nameCheck } = await this.erpData.checkIngredientNameExists(koreanName, inciName, this.id() || undefined);
       if (nameCheck && nameCheck.exists) {
@@ -460,15 +484,29 @@ export class IngredientFormComponent implements OnInit {
 
   // Bottom search bar behaviors (like product picker)
   debouncedIngTimer: any = null;
-  debouncedIngSearch(){ if (this.debouncedIngTimer) clearTimeout(this.debouncedIngTimer); this.debouncedIngTimer = setTimeout(()=> this.runIngQuickSearch(), 250); }
+  debouncedIngSearch(){ 
+    if (this.debouncedIngTimer) clearTimeout(this.debouncedIngTimer); 
+    this.ingSearchLoading = true;
+    this.debouncedIngTimer = setTimeout(()=> this.runIngQuickSearch(), 350); 
+  }
   async runIngQuickSearch(){
-    const q = (this.ingQuery||'').trim();
-    if (!q){ this.ingResults = []; this.ingPointer = -1; this.ingSearchExecuted = false; return; }
-    const { data } = await this.erpData.listIngredients({ page: 1, pageSize: 20, keyword: q, keywordOp: 'AND' }) as any;
-    const rows = Array.isArray(data) ? data : [];
-    this.ingResults = rows.map((r:any)=> ({ id: r.id, inci_name: r.inci_name, korean_name: r.korean_name, old_korean_name: r.old_korean_name, cas_no: r.cas_no }));
-    this.ingPointer = -1; // Don't auto-select first item
-    this.ingSearchExecuted = true; // Mark that search has been executed
+    this.ingSearchLoading = true;
+    try {
+      const q = (this.ingQuery||'').trim();
+      if (!q){ 
+        this.ingResults = []; 
+        this.ingPointer = -1; 
+        this.ingSearchExecuted = false; 
+        return; 
+      }
+      const { data } = await this.erpData.listIngredients({ page: 1, pageSize: 20, keyword: q, keywordOp: 'AND' }) as any;
+      const rows = Array.isArray(data) ? data : [];
+      this.ingResults = rows.map((r:any)=> ({ id: r.id, inci_name: r.inci_name, korean_name: r.korean_name, old_korean_name: r.old_korean_name, cas_no: r.cas_no }));
+      this.ingPointer = -1; // Don't auto-select first item
+      this.ingSearchExecuted = true; // Mark that search has been executed
+    } finally {
+      this.ingSearchLoading = false;
+    }
   }
   moveIngPointer(delta:number){ 
     const max=this.ingResults.length; 
@@ -506,7 +544,7 @@ export class IngredientFormComponent implements OnInit {
     // When search input is focused, reset pointer to search field
     this.ingPointer = -1; 
   }
-  onIngEsc(ev: Event){ if ((ev as any)?.preventDefault) (ev as any).preventDefault(); this.ingQuery=''; this.ingResults=[]; this.ingPointer=-1; this.ingSearchExecuted=false; }
+  onIngEsc(ev: Event){ if ((ev as any)?.preventDefault) (ev as any).preventDefault(); this.ingQuery=''; this.ingResults=[]; this.ingPointer=-1; this.ingSearchExecuted=false; this.ingSearchLoading=false; }
   async pickIngredient(row: { id: string }){
     try{
       const { data } = await this.erpData.getIngredient(row.id);
@@ -528,6 +566,7 @@ export class IngredientFormComponent implements OnInit {
         this.ingResults = [];
         this.ingPointer = -1;
         this.ingSearchExecuted = false;
+        this.ingSearchLoading = false;
         // Reflect selected id in URL
         try { this.router.navigate([], { relativeTo: this.route, queryParams: { id: this.id() }, replaceUrl: true }); } catch {}
       }

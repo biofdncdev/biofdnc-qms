@@ -478,6 +478,20 @@ export class ErpDataService {
     return { data: { exists: (count || 0) > 0 } };
   }
 
+  async checkIcidMonographIdExists(icidMonographId: string, excludeId?: string) {
+    let query = this.client
+      .from('ingredients')
+      .select('id', { count: 'exact', head: false })
+      .eq('icid_monograph_id', icidMonographId);
+    
+    if (excludeId) {
+      query = query.neq('id', excludeId);
+    }
+    
+    const { data, count } = await query;
+    return { data: { exists: (count || 0) > 0 } };
+  }
+
   async checkIngredientNameExists(koreanName: string, inciName: string, excludeId?: string) {
     let query = this.client
       .from('ingredients')
