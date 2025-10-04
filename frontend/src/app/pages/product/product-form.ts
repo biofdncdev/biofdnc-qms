@@ -78,15 +78,21 @@ import { TabService } from '../../services/tab.service';
             </span>
             <button *ngIf="orderEditMode" class="btn btn-cancel" (click)="cancelOrderEdit()">순서 편집 취소</button>
             <button class="btn" (click)="toggleOrderEditMode()">{{ orderEditMode ? '순서 편집 저장' : '순서 편집' }}</button>
-            <div class="status-wrapper">
-              <div class="spinner" *ngIf="saving"></div>
-              <span class="status" [class.saved]="saved" [class.unsaved]="!saved">{{ saving ? '저장 중...' : (saved? '저장 완료' : '저장되지 않음') }}</span>
+            <div class="save-group">
+              <label class="checkbox-wrapper">
+                <input type="checkbox" [(ngModel)]="fixOrderOnSave" [disabled]="!isEditable()" />
+                <span class="checkbox-label">성분순서 유지</span>
+              </label>
+              <div class="status-wrapper">
+                <div class="spinner" *ngIf="saving"></div>
+                <span class="status" [class.saved]="saved" [class.unsaved]="!saved">{{ saving ? '저장 중...' : (saved? '저장 완료' : '저장되지 않음') }}</span>
+              </div>
+              <button class="btn save-btn" [class.need]="!saved" [class.done]="saved" [disabled]="!isEditable() || saved || saving" (click)="saveCompositions()">저장</button>
             </div>
-            <button class="btn save-btn" [class.need]="!saved" [class.done]="saved" [disabled]="!isEditable() || saved || saving" (click)="saveCompositions()">저장</button>
             <button class="btn btn-light-blue" [disabled]="!isEditable()" (click)="openPicker()">성분 추가</button>
           </div>
           <div class="table-scroll" #compTableRef>
-            <table class="grid">
+            <table class="grid" [class.show-insert]="insertVisible">
               <thead>
                 <tr>
                   <th class="col-no">No.</th>
@@ -106,12 +112,13 @@ import { TabService } from '../../services/tab.service';
                     (dragstart)="onDragStart($event, i)"
                     (dragover)="onDragOver($event, i)"
                     (drop)="onDrop($event, i)"
-                    (dragend)="onDragEnd($event)">
+                    (dragend)="onDragEnd($event)"
+                    (dragleave)="onDragLeave($event, i)">
                   <td class="col-no" [class.drag-handle]="orderEditMode">{{ i+1 }}</td>
                   <td class="col-inci">{{ c.inci_name }}</td>
                   <td class="col-kor">{{ c.korean_name }}</td>
                   <td class="col-cas">{{ c.cas_no || '' }}</td>
-                  <td class="col-pct"><input type="number" step="0.01" [(ngModel)]="c.percent" [disabled]="!isEditable()" (ngModelChange)="onPercentChange()" (keydown.enter)="navigatePercent($event, i, 1)" (keydown.arrowDown)="navigatePercent($event, i, 1)" (keydown.arrowUp)="navigatePercent($event, i, -1)" /></td>
+                  <td class="col-pct"><input type="number" step="0.01" [(ngModel)]="c.percent" [disabled]="!isEditable()" (ngModelChange)="onPercentChange()" (focus)="$event.target.select()" (keydown.enter)="navigatePercent($event, i, 1)" (keydown.arrowDown)="navigatePercent($event, i, 1)" (keydown.arrowUp)="navigatePercent($event, i, -1)" /></td>
                   <td class="col-act"><button class="btn mini" (click)="$event.stopPropagation(); openIngredientFormEdit(c)">성분수정</button></td>
                   <td class="col-act"><button class="btn mini" [disabled]="!isEditable()" (click)="$event.stopPropagation(); removeRow(c)">삭제</button></td>
                 </tr>
@@ -121,6 +128,8 @@ import { TabService } from '../../services/tab.service';
                   </td>
                 </tr>
               </tbody>
+              <!-- floating insert indicator -->
+              <div class="insert-indicator" [style.top.px]="insertY"></div>
               <tfoot>
                 <tr>
                   <td colspan="5" class="sum-label">합계</td>
@@ -370,9 +379,16 @@ import { TabService } from '../../services/tab.service';
     .comp-wrap .toolbar .title{ font-weight:700; }
     .comp-wrap .toolbar .spacer, .right-main .toolbar .spacer{ flex:1; }
     .order-edit-status{ font-size:13px; font-weight:500; color:#059669; padding:4px 8px; background:#d1fae5; border-radius:6px; }
-    .status-wrapper{ display:flex; align-items:center; gap:8px; }
+    .save-group{ display:flex; align-items:center; gap:8px; padding:6px 10px; border:1px solid #d1d5db; border-radius:8px; background:transparent; }
+    .checkbox-wrapper{ display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
+    .checkbox-wrapper input[type="checkbox"]{ cursor:pointer; width:16px; height:16px; }
+    .checkbox-wrapper input[type="checkbox"]:disabled{ opacity:0.5; cursor:not-allowed; }
+    .checkbox-wrapper .checkbox-label{ font-size:12px; color:#374151; font-weight:500; cursor:pointer; white-space:nowrap; }
+    .checkbox-wrapper:has(input:disabled){ opacity:0.6; cursor:not-allowed; }
+    .checkbox-wrapper:has(input:disabled) .checkbox-label{ cursor:not-allowed; }
+    .status-wrapper{ display:flex; align-items:center; gap:6px; }
     .status-wrapper .spinner{ width:14px; height:14px; border:2px solid #e5e7eb; border-top-color:#3b82f6; border-radius:50%; animation:spin 0.8s linear infinite; }
-    .status{ font-size:12px; }
+    .status{ font-size:12px; white-space:nowrap; }
     .status.saved{ color:#2563eb; }
     .status.unsaved{ color:#f97316; }
     .comp-wrap.readonly{ opacity:.6; pointer-events:auto; }
@@ -382,8 +398,11 @@ import { TabService } from '../../services/tab.service';
     .grid tbody tr:last-child td{ border-bottom:1px solid #e5e7eb; }
     .grid thead th{ background:#f9fafb; position:sticky; top:0; z-index:10; border-bottom:1px solid #e5e7eb !important; box-shadow:0 1px 0 0 #e5e7eb; }
     .grid tr.selected td{ background:#eef6ff; }
-    .grid tr.draggable{ cursor:move; }
+    .grid tr.draggable{ cursor:move; position:relative; }
     .grid tr.draggable:hover{ background:#f9fafb; }
+    /* single insert indicator to avoid layout flicker */
+    .grid .insert-indicator{ position:absolute; left:0; right:0; height:2px; background:#93c5fd; box-shadow:0 0 6px rgba(147,197,253,0.9); pointer-events:none; z-index:5; display:none; }
+    .grid.show-insert .insert-indicator{ display:block; }
     .grid td.drag-handle{ cursor:grab; user-select:none; text-align:center; font-weight:700; color:#6b7280; }
     .grid td.drag-handle:active{ cursor:grabbing; }
     .grid .col-no{ width:5%; text-align:center; }
@@ -392,7 +411,8 @@ import { TabService } from '../../services/tab.service';
     .grid .col-cas{ width:10%; }
     .grid .col-pct{ width:8%; }
     .grid .col-act{ width:13.5%; text-align:center; white-space:nowrap; }
-    .grid input[type='number']{ width:100%; box-sizing:border-box; padding:4px 6px; }
+    .grid input[type='number']{ width:100%; box-sizing:border-box; padding:4px 6px; line-height:1.2; height:auto; }
+    .grid input[type='number']::selection{ background:#3b82f6; color:#fff; }
     /* hide number input arrows (Chrome, Edge, Safari) */
     .grid input[type='number']::-webkit-outer-spin-button,
     .grid input[type='number']::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
@@ -517,7 +537,10 @@ export class ProductFormComponent implements OnInit {
   private pickerPointerMoved = false;
   // Order editing
   orderEditMode = false;
+  fixOrderOnSave = false; // Track if user wants to fix/save current order
   private draggedIndex: number | null = null;
+  // Insert indicator state (single floating line to avoid row layout changes)
+  insertVisible = false; insertY = -1000; // absolute Y within the table-scroll
   private orderWasEdited = false; // Track if user has edited order
   // Product picker
   productQuery = '';
@@ -908,7 +931,6 @@ export class ProductFormComponent implements OnInit {
   // Order editing methods
   orderEditStatus: 'idle' | 'editing' | 'completed' = 'idle'; // Track order edit status
   private compositionsBeforeEdit: any[] = []; // Store original order before editing
-  private needsReVerificationBeforeEdit = false; // Store verification flag before editing
   
   toggleOrderEditMode() {
     this.orderEditMode = !this.orderEditMode;
@@ -916,12 +938,15 @@ export class ProductFormComponent implements OnInit {
       // Entering edit mode - save current state
       this.orderEditStatus = 'editing';
       this.compositionsBeforeEdit = JSON.parse(JSON.stringify(this.compositions));
-      this.needsReVerificationBeforeEdit = this.needsReVerification;
     } else {
       // Exiting edit mode - check if order actually changed
       const orderChanged = this.hasOrderChanged();
       if (orderChanged) {
+        // Mark as unsaved when order is changed
+        this.saved = false;
         this.orderEditStatus = 'completed';
+        // Auto-check fixOrderOnSave when user edits order
+        this.fixOrderOnSave = true;
       } else {
         this.orderEditStatus = 'idle';
       }
@@ -947,11 +972,10 @@ export class ProductFormComponent implements OnInit {
   }
   
   cancelOrderEdit() {
-    // Restore original order and verification state
+    // Restore original order
     if (this.compositionsBeforeEdit.length > 0) {
       this.compositions = JSON.parse(JSON.stringify(this.compositionsBeforeEdit));
     }
-    this.needsReVerification = this.needsReVerificationBeforeEdit;
     this.orderEditMode = false;
     this.orderEditStatus = 'idle';
     this.compositionsBeforeEdit = [];
@@ -971,31 +995,64 @@ export class ProductFormComponent implements OnInit {
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = 'move';
     }
+    // floating indicator position (relative to grid container)
+    try{
+      const row = event.currentTarget as HTMLElement | null;
+      const table = row?.closest('.grid') as HTMLElement | null;
+      if (row && table){
+        const rowRect = row.getBoundingClientRect();
+        const tableRect = table.getBoundingClientRect();
+        const y = event.clientY;
+        const topHalf = (y - rowRect.top) < (rowRect.height / 2);
+        this.insertY = (topHalf ? (rowRect.top - tableRect.top) : (rowRect.bottom - tableRect.top)) + table.scrollTop;
+        this.insertVisible = true;
+      }
+    }catch{}
   }
 
   onDrop(event: DragEvent, dropIndex: number) {
     event.preventDefault();
-    if (this.draggedIndex === null || this.draggedIndex === dropIndex) return;
+    // clear indicator
+    this.insertVisible = false; this.insertY = -1000;
+    if (this.draggedIndex === null) return;
+    // compute final insertion index based on hovered edge
+    let targetIndex = dropIndex;
+    try{
+      const row = event.currentTarget as HTMLElement | null;
+      if (row){
+        const rect = row.getBoundingClientRect();
+        const topHalf = (event.clientY - rect.top) < (rect.height/2);
+        if (!topHalf) targetIndex = dropIndex + 1;
+      }
+    }catch{}
+    // if dragging from above and inserting after, adjust removal index to account for shift
+    const from = this.draggedIndex;
+    let to = targetIndex;
+    if (from < targetIndex) to = targetIndex - 1; // account for removal shift
+    if (from === to) return;
     
     // Reorder the array
-    const draggedItem = this.compositions[this.draggedIndex];
+    const draggedItem = this.compositions[from];
     const newCompositions = [...this.compositions];
-    newCompositions.splice(this.draggedIndex, 1);
-    newCompositions.splice(dropIndex, 0, draggedItem);
+    newCompositions.splice(from, 1);
+    newCompositions.splice(to, 0, draggedItem);
     this.compositions = newCompositions;
-    this.draggedIndex = dropIndex;
+    this.draggedIndex = to;
     
     // Mark that order has been edited
     this.orderWasEdited = true;
-    
-    // If composition was verified, require re-verification after order change
-    if (this.verifyLogs && this.verifyLogs.length > 0) {
-      this.needsReVerification = true;
-    }
   }
 
   onDragEnd(event: DragEvent) {
     this.draggedIndex = null;
+    this.insertVisible = false; this.insertY = -1000;
+  }
+  onDragLeave(event: DragEvent, index: number){
+    // avoid flicker when moving within the row
+    const related = event.relatedTarget as HTMLElement | null;
+    const current = event.currentTarget as HTMLElement | null;
+    if (current && related && current.contains(related)) return;
+    this.insertVisible = false; this.insertY = -1000;
   }
   navigatePercent(ev: Event, rowIndex: number, delta: number){
     if (ev?.preventDefault) ev.preventDefault();
@@ -1110,8 +1167,8 @@ export class ProductFormComponent implements OnInit {
         if (c.ingredient_id){ 
           latestData[c.ingredient_id] = { 
             percent: Number(c.percent)||0,
-            // Only save display_order if user has edited the order
-            order: this.orderWasEdited ? (i + 1) : null
+            // Save display_order if user has edited the order OR if fixOrderOnSave is checked
+            order: (this.orderWasEdited || this.fixOrderOnSave) ? (i + 1) : null
           };
         }
         if (c.id && c.ingredient_id){ existingByIngredient[c.ingredient_id] = c.id as any; }
@@ -1158,6 +1215,8 @@ export class ProductFormComponent implements OnInit {
       // Check if display_order exists in saved data and update flag
       const hasDisplayOrder = mapped.some((c:any) => c.display_order != null && c.display_order > 0);
       this.orderWasEdited = hasDisplayOrder;
+      // Update fixOrderOnSave checkbox based on saved display_order
+      this.fixOrderOnSave = hasDisplayOrder;
       
       // Sort based on actual data
       if (hasDisplayOrder) {
@@ -1257,6 +1316,8 @@ export class ProductFormComponent implements OnInit {
     // Check if display_order exists and set orderWasEdited flag
     const hasDisplayOrder = mapped.some((c:any) => c.display_order != null && c.display_order > 0);
     this.orderWasEdited = hasDisplayOrder;
+    // If display_order exists, check the fixOrderOnSave checkbox
+    this.fixOrderOnSave = hasDisplayOrder;
     
     // Sort by display_order if present, otherwise by percent desc
     if (hasDisplayOrder) {
@@ -1315,8 +1376,7 @@ export class ProductFormComponent implements OnInit {
   verifyLogs: Array<{ user: string; time: string }> = [];
   private lastVerifiedAt: string | null = null;
   showAllVerifyLogs = false; // 로그 펼치기 상태
-  needsReVerification = false; // 순서 편집 후 재확인 필요 플래그
-  isVerified(){ return (this.verifyLogs && this.verifyLogs.length > 0) && !this.needsReVerification; }
+  isVerified(){ return (this.verifyLogs && this.verifyLogs.length > 0); }
   onVerifyClick(){
     const err = this.validateBeforeVerify();
     if (err){ alert(err); return; }
@@ -1341,7 +1401,6 @@ export class ProductFormComponent implements OnInit {
       const time = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
       this.verifyLogs = [...this.verifyLogs, { user: name, time }];
       this.lastVerifiedAt = time;
-      this.needsReVerification = false; // 확인 완료 후 플래그 초기화
       this.saveVerifyState();
       const pid = this.id(); if (pid) try{ await this.erpData.setProductVerifyLogs(pid, this.verifyLogs); }catch{}
       this.saveStateSnapshot();
