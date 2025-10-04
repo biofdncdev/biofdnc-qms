@@ -64,9 +64,17 @@ import { StorageService } from '../../services/storage.service';
             </div>
 
             <div class="logs" *ngIf="logs.length">
-              <div class="log-title">저장 로그</div>
+              <div class="log-title">
+                저장 로그
+                <button class="expand-btn" *ngIf="logs.length > 1" (click)="logsExpanded = !logsExpanded">
+                  {{ logsExpanded ? '접기' : '펼쳐보기' }} ({{ logs.length }}건)
+                </button>
+              </div>
               <ul>
-                <li *ngFor="let l of logs">{{ l.time }} · {{ l.user || 'unknown' }}</li>
+                <li *ngIf="!logsExpanded && logs.length > 0">{{ logs[0].time }} · {{ logs[0].user || 'unknown' }}</li>
+                <ng-container *ngIf="logsExpanded">
+                  <li *ngFor="let l of logs">{{ l.time }} · {{ l.user || 'unknown' }}</li>
+                </ng-container>
               </ul>
             </div>
 
@@ -97,7 +105,7 @@ import { StorageService } from '../../services/storage.service';
     .item.active{ background:#eef6ff; border-color:#93c5fd; }
     .item.dim{ color:#9ca3af; border-color:#e5e7eb; cursor:not-allowed; }
     .item.dim[disabled]{ pointer-events:none; }
-    .right{ min-height:360px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; padding:12px; }
+    .right{ min-height:360px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; padding:12px; overflow:auto; max-height:calc(100vh - 80px); }
     .card{ padding:8px; }
     .card h3{ margin:0 0 8px; font-size:16px; }
     .card.dim{ color:#9ca3af; }
@@ -118,11 +126,13 @@ import { StorageService } from '../../services/storage.service';
     .mini.primary{ background:#111827; color:#fff; border-color:#111827; }
     .msg{ color:#0c4a6e; font-size:12px; }
     .logs{ margin-top:12px; }
-    .log-title{ font-weight:700; font-size:12px; color:#374151; margin-bottom:4px; }
+    .log-title{ font-weight:700; font-size:12px; color:#374151; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
+    .expand-btn{ padding:2px 8px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer; font-size:11px; color:#6b7280; }
+    .expand-btn:hover{ background:#f3f4f6; }
     .logs ul{ list-style:none; margin:0; padding:0; }
     .logs li{ font-size:12px; color:#6b7280; padding:2px 0; }
     .preview-title{ margin-top:12px; font-weight:700; font-size:12px; color:#374151; }
-    .preview-wrap{ margin-top:8px; border:1px solid #e5e7eb; border-radius:10px; padding:10px; background:#f9fafb; overflow:auto; }
+    .preview-wrap{ margin-top:8px; border:1px solid #e5e7eb; border-radius:10px; padding:10px; background:#f9fafb; }
     .preview-wrap .no-print{ display:none !important; }
     @media (max-width: 820px){ .split{ grid-template-columns:1fr; } }
   `]
@@ -137,6 +147,7 @@ export class ProductDocTemplatesComponent {
   templateUrl: string | null = null;
   notice: string | null = null;
   logs: Array<{ user: string | null; time: string }> = [];
+  logsExpanded = false; // Track if log history is expanded
 
   constructor(private erpData: ErpDataService,
     private auth: AuthService,

@@ -195,7 +195,9 @@ export class AppShellComponent implements OnDestroy, AfterViewInit {
   private openLeftForKey(key: string) {
     this.selected.set(key);
     const menu = this.menus.find(m => m.key === key);
-    this.sectionMenu = menu?.submenu ?? [];
+    // Filter out adminOnly items for non-admin users
+    this.sectionMenu = (menu?.submenu ?? []).filter(item => !item.adminOnly || this.isAdmin);
+    console.log('[AppShell] openLeftForKey:', key, 'isAdmin:', this.isAdmin, 'filtered menu:', this.sectionMenu);
     if (this.sectionMenu.length > 0) this.leftOpen = true;
   }
 
@@ -224,11 +226,12 @@ export class AppShellComponent implements OnDestroy, AfterViewInit {
   }
 
 
-  onMainClick(menu: { key: string; path?: string; submenu?: Array<{ label: string; path?: string }> }) {
+  onMainClick(menu: { key: string; path?: string; submenu?: Array<{ label: string; path?: string; adminOnly?: boolean }> }) {
     this.selected.set(menu.key);
     if (menu.submenu && menu.submenu.length > 0) {
-      // keep drawer open
-      this.sectionMenu = menu.submenu;
+      // keep drawer open and filter out adminOnly items for non-admin users
+      this.sectionMenu = menu.submenu.filter(item => !item.adminOnly || this.isAdmin);
+      console.log('[AppShell] onMainClick:', menu.key, 'isAdmin:', this.isAdmin, 'filtered menu:', this.sectionMenu);
       this.leftOpen = true;
       if (menu.path) this.router.navigate([menu.path]);
       return;
@@ -237,12 +240,18 @@ export class AppShellComponent implements OnDestroy, AfterViewInit {
     if (menu.path) this.router.navigate([menu.path]);
   }
 
-  onSubClick(item: { label?: string; path?: string; onClick?: () => void; selected?: boolean }) {
+  onSubClick(item: { label?: string; path?: string; onClick?: () => void; selected?: boolean; adminOnly?: boolean }) {
+    // Check admin access for adminOnly items
+    if (item.adminOnly && !this.isAdmin) {
+      console.warn('[AppShell] Access denied: adminOnly item clicked by non-admin user', item);
+      return;
+    }
     // clear previous selections
     this.sectionMenu.forEach(i => i.selected = false);
     item.selected = true;
     if (item?.onClick) { item.onClick(); return; }
     if (item && item.path) {
+      console.log('[AppShell] Opening tab:', item.label, item.path);
       this.openTab(item.label || 'Page', item.path);
     }
   }

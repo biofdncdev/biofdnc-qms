@@ -139,7 +139,7 @@ export const routes: Routes = [
       },
       {
         path: 'product/doc-templates',
-        loadComponent: () => import('./pages/product/product-doc-templates').then((m: any) => (m as any).ProductDocTemplatesComponent),
+        loadComponent: () => import('./pages/product/product-doc-templates').then(m => m.ProductDocTemplatesComponent),
       },
       {
         path: 'product/compose-preview',
